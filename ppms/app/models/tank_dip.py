@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, Float, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
 
 from app.models.base import Base
+from app.core.time import utc_now
 
 
 class TankDip(Base):
@@ -25,6 +25,6 @@ class TankDip(Base):
     loss_gain = Column(Float, nullable=False)
     
     notes = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     tank = relationship("Tank")

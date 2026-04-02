@@ -1,0 +1,71 @@
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from app.core.time import utc_now
+from app.models.fuel_sale import FuelSale
+from app.models.shift import Shift
+from app.models.station import Station
+from app.models.user import User
+from app.schemas.shift import ShiftCreate, ShiftUpdate
+
+
+def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
+    if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this station")
+
+    existing = db.query(Shift).filter(
+        Shift.user_id == current_user.id,
+        Shift.station_id == data.station_id,
+        Shift.status == "open",
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"You already have an open shift (ID: {existing.id}) at this station")
+
+    station = db.query(Station).filter(Station.id == data.station_id).first()
+    if not station:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    shift = Shift(
+        station_id=data.station_id,
+        user_id=current_user.id,
+        initial_cash=data.initial_cash,
+        expected_cash=data.initial_cash,
+        notes=data.notes,
+        status="open",
+        start_time=utc_now(),
+    )
+    db.add(shift)
+    db.commit()
+    db.refresh(shift)
+    return shift
+
+
+def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User) -> Shift:
+    if shift.status == "closed":
+        raise HTTPException(status_code=400, detail="Shift is already closed")
+    if shift.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only close your own shifts")
+
+    sales = db.query(FuelSale).filter(
+        FuelSale.shift_id == shift.id,
+        FuelSale.is_reversed.is_(False),
+    ).all()
+    total_cash = sum(s.total_amount for s in sales if s.sale_type == "cash")
+    total_credit = sum(s.total_amount for s in sales if s.sale_type == "credit")
+
+    shift.total_sales_cash = total_cash
+    shift.total_sales_credit = total_credit
+    shift.expected_cash = shift.initial_cash + total_cash
+    shift.actual_cash_collected = data.actual_cash_collected
+    shift.difference = shift.actual_cash_collected - shift.expected_cash
+    shift.status = "closed"
+    shift.end_time = utc_now()
+    shift.notes = data.notes if data.notes else shift.notes
+    db.commit()
+    db.refresh(shift)
+    return shift
+
+
+def ensure_shift_access(shift: Shift, current_user: User) -> None:
+    if current_user.role.name != "Admin" and current_user.station_id != shift.station_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this shift")

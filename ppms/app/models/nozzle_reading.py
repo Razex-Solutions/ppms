@@ -1,8 +1,7 @@
 from sqlalchemy import Column, Integer, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
-
 from app.models.base import Base
+from app.core.time import utc_now
 
 
 class NozzleReading(Base):
@@ -12,7 +11,7 @@ class NozzleReading(Base):
     nozzle_id = Column(Integer, ForeignKey("nozzles.id"), nullable=False)
     reading = Column(Float, nullable=False)
     sale_id = Column(Integer, ForeignKey("fuel_sales.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     nozzle = relationship("Nozzle")
     sale = relationship("FuelSale")

@@ -1,20 +1,15 @@
-from datetime import date, datetime
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.supplier_payment import SupplierPayment
-from app.models.supplier import Supplier
-from app.models.station import Station
 from app.schemas.supplier_payment import SupplierPaymentCreate, SupplierPaymentResponse
+from app.services.payments import create_supplier_payment as create_supplier_payment_service
+from app.services.payments import ensure_supplier_payment_access, reverse_supplier_payment as reverse_supplier_payment_service
 
 router = APIRouter(prefix="/supplier-payments", tags=["Supplier Payments"])
-
-
-def _ensure_supplier_payment_access(payment: SupplierPayment, current_user) -> None:
-    if current_user.role.name != "Admin" and current_user.station_id != payment.station_id:
-        raise HTTPException(status_code=403, detail="Not authorized for this supplier payment")
 
 
 @router.post("/", response_model=SupplierPaymentResponse)
@@ -23,43 +18,7 @@ def create_supplier_payment(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    # Multi-tenancy check
-    if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
-        raise HTTPException(status_code=403, detail="Not authorized for this station")
-
-    if data.amount <= 0:
-        raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
-
-    supplier = db.query(Supplier).filter(Supplier.id == data.supplier_id).first()
-    if not supplier:
-        raise HTTPException(status_code=404, detail="Supplier not found")
-
-    station = db.query(Station).filter(Station.id == data.station_id).first()
-    if not station:
-        raise HTTPException(status_code=404, detail="Station not found")
-
-    if supplier.payable_balance <= 0:
-        raise HTTPException(status_code=400, detail="Supplier has no payable balance")
-
-    if data.amount > supplier.payable_balance:
-        raise HTTPException(status_code=400, detail="Payment exceeds payable balance")
-
-    payment = SupplierPayment(
-        supplier_id=data.supplier_id,
-        station_id=data.station_id,
-        amount=data.amount,
-        payment_method=data.payment_method,
-        reference_no=data.reference_no,
-        notes=data.notes
-    )
-
-    db.add(payment)
-
-    supplier.payable_balance -= data.amount
-
-    db.commit()
-    db.refresh(payment)
-    return payment
+    return create_supplier_payment_service(db, data, current_user)
 
 
 @router.get("/", response_model=list[SupplierPaymentResponse])
@@ -99,7 +58,7 @@ def get_supplier_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Supplier payment not found")
 
-    _ensure_supplier_payment_access(payment, current_user)
+    ensure_supplier_payment_access(payment, current_user)
     return payment
 
 
@@ -113,20 +72,4 @@ def reverse_supplier_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Supplier payment not found")
 
-    _ensure_supplier_payment_access(payment, current_user)
-
-    if payment.is_reversed:
-        raise HTTPException(status_code=400, detail="Supplier payment is already reversed")
-
-    supplier = db.query(Supplier).filter(Supplier.id == payment.supplier_id).first()
-    if supplier is None:
-        raise HTTPException(status_code=400, detail="Cannot reverse payment because the supplier record is missing")
-
-    supplier.payable_balance += payment.amount
-    payment.is_reversed = True
-    payment.reversed_at = datetime.utcnow()
-    payment.reversed_by = current_user.id
-
-    db.commit()
-    db.refresh(payment)
-    return payment
+    return reverse_supplier_payment_service(db, payment, current_user)

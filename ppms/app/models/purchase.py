@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, Float, ForeignKey, DateTime, String, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.models.base import Base
+from app.core.time import utc_now
 
 
 class Purchase(Base):
@@ -24,6 +24,6 @@ class Purchase(Base):
     reversed_at = Column(DateTime, nullable=True)
     reversed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     tank = relationship("Tank")

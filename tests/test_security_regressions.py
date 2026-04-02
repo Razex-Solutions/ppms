@@ -408,3 +408,86 @@ def test_operator_cannot_read_other_station_customer_or_expense(client):
 
     expense_response = test_client.get(f"/expenses/{foreign_expense_id}", headers=headers)
     assert expense_response.status_code == 403
+
+
+def test_purchase_reverse_updates_payables_dashboard(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    db = session_local()
+    try:
+        supplier = db.query(Supplier).filter(Supplier.code == "SUP-A").first()
+        supplier_id = supplier.id
+    finally:
+        db.close()
+
+    purchase_response = test_client.post(
+        "/purchases/",
+        headers=headers,
+        json={
+            "supplier_id": supplier_id,
+            "tank_id": data["tank_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "quantity": 20,
+            "rate_per_liter": 5,
+        },
+    )
+    assert purchase_response.status_code == 200, purchase_response.text
+    purchase_id = purchase_response.json()["id"]
+
+    dashboard_before = test_client.get("/dashboard/", headers=headers)
+    assert dashboard_before.status_code == 200
+    assert dashboard_before.json()["payables"] == 100
+
+    reverse_response = test_client.post(f"/purchases/{purchase_id}/reverse", headers=headers)
+    assert reverse_response.status_code == 200
+    assert reverse_response.json()["is_reversed"] is True
+
+    dashboard_after = test_client.get("/dashboard/", headers=headers)
+    assert dashboard_after.status_code == 200
+    assert dashboard_after.json()["payables"] == 0
+
+
+def test_shift_close_ignores_reversed_sales(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    shift_response = test_client.post(
+        "/shifts/",
+        headers=headers,
+        json={"station_id": data["station_a_id"], "initial_cash": 50},
+    )
+    assert shift_response.status_code == 200, shift_response.text
+    shift_id = shift_response.json()["id"]
+
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1005,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+            "shift_id": shift_id,
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+    sale_id = sale_response.json()["id"]
+
+    reverse_response = test_client.post(f"/fuel-sales/{sale_id}/reverse", headers=headers)
+    assert reverse_response.status_code == 200
+
+    close_response = test_client.post(
+        f"/shifts/{shift_id}/close",
+        headers=headers,
+        json={"actual_cash_collected": 50},
+    )
+    assert close_response.status_code == 200, close_response.text
+    closed_shift = close_response.json()
+    assert closed_shift["total_sales_cash"] == 0
+    assert closed_shift["expected_cash"] == 50
+    assert closed_shift["difference"] == 0

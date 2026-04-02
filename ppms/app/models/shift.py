@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, Float, String, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
 
 from app.models.base import Base
+from app.core.time import utc_now
 
 
 class Shift(Base):
@@ -12,7 +12,7 @@ class Shift(Base):
     station_id = Column(Integer, ForeignKey("stations.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
-    start_time = Column(DateTime, default=datetime.utcnow)
+    start_time = Column(DateTime, default=utc_now)
     end_time = Column(DateTime, nullable=True)
     
     status = Column(String, default="open")  # open / closed
