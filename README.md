@@ -212,6 +212,16 @@ venv\Scripts\python.exe -m pytest tests
   - `POST /customers/{id}/approve-credit-override`
   - `POST /customers/{id}/reject-credit-override`
 
+## Report Export Jobs
+
+- Reports can now be exported as persisted CSV jobs.
+- Export jobs follow the same organization/station access rules as report reads.
+- Endpoints:
+  - `POST /report-exports/`
+  - `GET /report-exports/`
+  - `GET /report-exports/{id}`
+  - `GET /report-exports/{id}/download`
+
 ## Auth Password Management
 
 - `POST /auth/change-password`: authenticated user changes their own password by supplying the current password.

@@ -23,3 +23,4 @@ from app.models.pos_sale_item import POSSaleItem
 from app.models.hardware_device import HardwareDevice
 from app.models.hardware_event import HardwareEvent
 from app.models.audit_log import AuditLog
+from app.models.report_export_job import ReportExportJob

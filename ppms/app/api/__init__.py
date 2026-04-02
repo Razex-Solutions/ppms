@@ -15,6 +15,7 @@ from app.api.organization import router as organization_router
 from app.api.purchase import router as purchase_router
 from app.api.pos_product import router as pos_product_router
 from app.api.pos_sale import router as pos_sale_router
+from app.api.report_export import router as report_export_router
 from app.api.role import router as role_router
 from app.api.reports import router as reports_router
 from app.api.shift import router as shift_router
@@ -49,6 +50,7 @@ ROUTER_REGISTRY = [
     {"name": "expenses", "router": expense_router, "protected": True},
     {"name": "accounting", "router": accounting_router, "protected": True},
     {"name": "reports", "router": reports_router, "protected": True},
+    {"name": "report_exports", "router": report_export_router, "protected": True},
     {"name": "customer_payments", "router": customer_payment_router, "protected": True},
     {"name": "supplier_payments", "router": supplier_payment_router, "protected": True},
     {"name": "ledger", "router": ledger_router, "protected": True},

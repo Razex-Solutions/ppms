@@ -452,6 +452,109 @@ def test_expense_approval_workflow_controls_financial_reporting(client):
     assert reject_after_approval.status_code == 400
 
 
+def test_report_exports_create_and_download_csv(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    manager_headers = login(test_client, "manager", "manager123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1005,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+    report_date = sale_response.json()["created_at"][:10]
+
+    expense_response = test_client.post(
+        "/expenses/",
+        headers=manager_headers,
+        json={
+            "title": "CSV Expense",
+            "category": "Ops",
+            "amount": 15,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert expense_response.status_code == 200, expense_response.text
+
+    expense_approval = test_client.post(
+        f"/expenses/{expense_response.json()['id']}/approve",
+        headers=head_office_headers,
+        json={"reason": "Approved for export"},
+    )
+    assert expense_approval.status_code == 200, expense_approval.text
+
+    export_response = test_client.post(
+        "/report-exports/",
+        headers=head_office_headers,
+        json={"report_type": "daily_closing", "report_date": report_date, "format": "csv"},
+    )
+    assert export_response.status_code == 200, export_response.text
+    export_job = export_response.json()
+    assert export_job["report_type"] == "daily_closing"
+    assert export_job["status"] == "completed"
+
+    list_response = test_client.get("/report-exports/", headers=head_office_headers)
+    assert list_response.status_code == 200, list_response.text
+    assert any(job["id"] == export_job["id"] for job in list_response.json())
+
+    download_response = test_client.get(f"/report-exports/{export_job['id']}/download", headers=head_office_headers)
+    assert download_response.status_code == 200, download_response.text
+    assert download_response.headers["content-type"].startswith("text/csv")
+    assert "field,value" in download_response.text
+    assert "fuel_cash_sales,50" in download_response.text
+
+
+def test_head_office_cannot_access_foreign_organization_report_exports(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    foreign_manager_headers = login(test_client, "foreignmanager", "foreign123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+
+        foreign_customer = Customer(
+            name="Foreign Export Customer",
+            code="CUST-FX",
+            customer_type="company",
+            phone="888",
+            address="Foreign Addr",
+            credit_limit=500,
+            outstanding_balance=75,
+            station_id=data["station_c_id"],
+        )
+        db.add(foreign_customer)
+        db.commit()
+    finally:
+        db.close()
+
+    foreign_export = test_client.post(
+        "/report-exports/",
+        headers=foreign_manager_headers,
+        json={"report_type": "customer_balances", "format": "csv"},
+    )
+    assert foreign_export.status_code == 200, foreign_export.text
+    foreign_job_id = foreign_export.json()["id"]
+
+    forbidden_get = test_client.get(f"/report-exports/{foreign_job_id}", headers=head_office_headers)
+    assert forbidden_get.status_code == 403
+
+    forbidden_download = test_client.get(f"/report-exports/{foreign_job_id}/download", headers=head_office_headers)
+    assert forbidden_download.status_code == 403
+
+
 def test_validation_errors_include_request_id(client):
     test_client, _ = client
 
