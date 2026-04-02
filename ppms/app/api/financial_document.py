@@ -7,6 +7,7 @@ from app.core.permissions import require_permission
 from app.models.customer import Customer
 from app.models.customer_payment import CustomerPayment
 from app.models.financial_document_dispatch import FinancialDocumentDispatch
+from app.models.fuel_sale import FuelSale
 from app.models.station import Station
 from app.models.supplier import Supplier
 from app.models.supplier_payment import SupplierPayment
@@ -22,6 +23,7 @@ from app.services.financial_documents import (
     render_document_pdf_bytes,
     render_customer_ledger_statement,
     render_customer_payment_receipt,
+    render_fuel_sale_invoice,
     render_supplier_ledger_statement,
     render_supplier_payment_voucher,
     retry_document_dispatch,
@@ -50,6 +52,57 @@ def get_customer_payment_receipt(
     if not payment:
         raise HTTPException(status_code=404, detail="Customer payment not found")
     return render_customer_payment_receipt(db, payment, current_user)
+
+
+@router.get("/fuel-sales/{sale_id}", response_model=FinancialDocumentResponse)
+def get_fuel_sale_invoice(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view financial documents")
+    sale = db.query(FuelSale).filter(FuelSale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Fuel sale not found")
+    return render_fuel_sale_invoice(db, sale, current_user)
+
+
+@router.get("/fuel-sales/{sale_id}/pdf")
+def download_fuel_sale_invoice_pdf(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view financial documents")
+    sale = db.query(FuelSale).filter(FuelSale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Fuel sale not found")
+    return _pdf_response(render_fuel_sale_invoice(db, sale, current_user))
+
+
+@router.post("/fuel-sales/{sale_id}/send", response_model=FinancialDocumentDispatchResponse)
+def send_fuel_sale_invoice(
+    sale_id: int,
+    data: FinancialDocumentDispatchCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to send financial documents")
+    sale = db.query(FuelSale).filter(FuelSale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Fuel sale not found")
+    document = render_fuel_sale_invoice(db, sale, current_user)
+    return dispatch_document(
+        db,
+        current_user=current_user,
+        document=document,
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        channel=data.channel,
+        output_format=data.format,
+        recipient_name=data.recipient_name or document.recipient_name,
+        recipient_contact=data.recipient_contact or document.recipient_contact,
+    )
 
 
 @router.get("/customer-payments/{payment_id}/pdf")

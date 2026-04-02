@@ -786,15 +786,24 @@ def test_notification_preferences_and_financial_documents(client):
         headers=manager_headers,
         json={
             "business_name": "My Pump Pvt Ltd",
+            "legal_name": "My Pump Private Limited",
             "logo_url": "https://example.com/logo.png",
+            "registration_no": "REG-4455",
+            "tax_registration_no": "TAX-7788",
             "tax_label_1": "NTN",
             "tax_value_1": "1234567-8",
             "tax_label_2": "GST",
             "tax_value_2": "GST-9988",
+            "default_tax_rate": 18,
+            "tax_inclusive": False,
             "contact_email": "billing@mypump.test",
             "contact_phone": "03001234567",
             "footer_text": "Thank you for your business",
             "invoice_prefix": "MPP",
+            "invoice_series": "2026",
+            "invoice_number_width": 5,
+            "payment_terms": "Payment due within 7 days",
+            "sale_invoice_notes": "Keep this invoice for tax record.",
         },
     )
     assert profile_response.status_code == 200, profile_response.text
@@ -849,14 +858,41 @@ def test_notification_preferences_and_financial_documents(client):
     assert customer_receipt.status_code == 200, customer_receipt.text
     assert "My Pump Pvt Ltd" in customer_receipt.json()["rendered_html"]
     assert "NTN" in customer_receipt.json()["rendered_html"]
-    assert customer_receipt.json()["document_number"].startswith("MPP-CP-")
+    assert customer_receipt.json()["document_number"].startswith("MPP-2026-CP-")
 
     supplier_voucher = test_client.get(
         f"/financial-documents/supplier-payments/{supplier_payment_id}",
         headers=accountant_headers,
     )
     assert supplier_voucher.status_code == 200, supplier_voucher.text
-    assert supplier_voucher.json()["document_number"].startswith("MPP-SP-")
+    assert supplier_voucher.json()["document_number"].startswith("MPP-2026-SP-")
+
+    fuel_sale = test_client.post(
+        "/fuel-sales/",
+        headers=login(test_client, "operator", "operator123"),
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "customer_id": data["customer_id"],
+            "closing_meter": 1008,
+            "rate_per_liter": 10,
+            "sale_type": "credit",
+        },
+    )
+    assert fuel_sale.status_code == 200, fuel_sale.text
+    fuel_sale_id = fuel_sale.json()["id"]
+
+    sale_invoice = test_client.get(
+        f"/financial-documents/fuel-sales/{fuel_sale_id}",
+        headers=accountant_headers,
+    )
+    assert sale_invoice.status_code == 200, sale_invoice.text
+    assert sale_invoice.json()["document_number"].startswith("MPP-2026-FS-")
+    assert "Fuel Sale Invoice" in sale_invoice.json()["rendered_html"]
+    assert "GST" in sale_invoice.json()["rendered_html"] or "NTN" in sale_invoice.json()["rendered_html"]
+    assert "Payment due within 7 days" in sale_invoice.json()["rendered_html"]
+    assert "Total: 35.40" in sale_invoice.json()["rendered_html"]
 
     customer_receipt_pdf = test_client.get(
         f"/financial-documents/customer-payments/{customer_payment_id}/pdf",
@@ -874,6 +910,14 @@ def test_notification_preferences_and_financial_documents(client):
     assert supplier_ledger_pdf.headers["content-type"].startswith("application/pdf")
     assert supplier_ledger_pdf.content.startswith(b"%PDF")
 
+    sale_invoice_pdf = test_client.get(
+        f"/financial-documents/fuel-sales/{fuel_sale_id}/pdf",
+        headers=accountant_headers,
+    )
+    assert sale_invoice_pdf.status_code == 200, sale_invoice_pdf.text
+    assert sale_invoice_pdf.headers["content-type"].startswith("application/pdf")
+    assert sale_invoice_pdf.content.startswith(b"%PDF")
+
     customer_dispatch = test_client.post(
         f"/financial-documents/customer-payments/{customer_payment_id}/send",
         headers=accountant_headers,
@@ -890,9 +934,17 @@ def test_notification_preferences_and_financial_documents(client):
     assert supplier_dispatch.status_code == 200, supplier_dispatch.text
     assert supplier_dispatch.json()["status"] == "sent"
 
+    sale_dispatch = test_client.post(
+        f"/financial-documents/fuel-sales/{fuel_sale_id}/send",
+        headers=accountant_headers,
+        json={"channel": "print", "format": "pdf"},
+    )
+    assert sale_dispatch.status_code == 200, sale_dispatch.text
+    assert sale_dispatch.json()["status"] == "sent"
+
     dispatch_list = test_client.get("/financial-documents/dispatches", headers=accountant_headers)
     assert dispatch_list.status_code == 200, dispatch_list.text
-    assert len(dispatch_list.json()) >= 2
+    assert len(dispatch_list.json()) >= 3
 
     export_response = test_client.post(
         "/report-exports/",

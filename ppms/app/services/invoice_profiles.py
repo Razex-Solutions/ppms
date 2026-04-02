@@ -30,6 +30,9 @@ def get_or_create_invoice_profile(db: Session, station: Station) -> InvoiceProfi
             station_id=station.id,
             business_name=station.name,
             invoice_prefix=station.code,
+            invoice_number_width=6,
+            default_tax_rate=0,
+            tax_inclusive=False,
         )
         db.add(profile)
         db.commit()

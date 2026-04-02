@@ -38,9 +38,13 @@ def _get_profile(db: Session, station: Station) -> InvoiceProfile | None:
 
 
 def _profile_block(profile: InvoiceProfile | None, station: Station) -> str:
-    business_name = profile.business_name if profile else station.name
+    business_name = profile.legal_name if profile and profile.legal_name else profile.business_name if profile else station.name
     logo_html = f"<img src='{profile.logo_url}' alt='logo' style='max-height:64px;' />" if profile and profile.logo_url else ""
     taxes = []
+    if profile and profile.registration_no:
+        taxes.append(f"<div>Registration No: {profile.registration_no}</div>")
+    if profile and profile.tax_registration_no:
+        taxes.append(f"<div>Tax Registration No: {profile.tax_registration_no}</div>")
     if profile and profile.tax_label_1 and profile.tax_value_1:
         taxes.append(f"<div>{profile.tax_label_1}: {profile.tax_value_1}</div>")
     if profile and profile.tax_label_2 and profile.tax_value_2:
@@ -63,7 +67,32 @@ def _profile_block(profile: InvoiceProfile | None, station: Station) -> str:
 
 def _build_document_number(profile: InvoiceProfile | None, suffix: str) -> str:
     prefix = profile.invoice_prefix if profile and profile.invoice_prefix else "DOC"
-    return f"{prefix}-{suffix}"
+    series = profile.invoice_series if profile and profile.invoice_series else None
+    parts = [prefix]
+    if series:
+        parts.append(series)
+    parts.append(suffix)
+    return "-".join(parts)
+
+
+def _build_numbered_suffix(profile: InvoiceProfile | None, code: str, entity_id: int) -> str:
+    width = profile.invoice_number_width if profile and profile.invoice_number_width else 6
+    return f"{code}-{str(entity_id).zfill(width)}"
+
+
+def _calculate_tax_breakdown(profile: InvoiceProfile | None, amount: float) -> tuple[float, float, float]:
+    rate = profile.default_tax_rate if profile else 0
+    if not rate:
+        return round(amount, 2), 0.0, round(amount, 2)
+    if profile and profile.tax_inclusive:
+        subtotal = amount / (1 + (rate / 100))
+        tax_amount = amount - subtotal
+        total = amount
+    else:
+        subtotal = amount
+        tax_amount = amount * (rate / 100)
+        total = subtotal + tax_amount
+    return round(subtotal, 2), round(tax_amount, 2), round(total, 2)
 
 
 def render_customer_payment_receipt(db: Session, payment: CustomerPayment, current_user: User | None = None) -> FinancialDocumentResponse:
@@ -76,7 +105,7 @@ def render_customer_payment_receipt(db: Session, payment: CustomerPayment, curre
     <html><body>
     {_profile_block(profile, station)}
     <h3>Customer Payment Receipt</h3>
-    <div>Receipt No: {_build_document_number(profile, f'CP-{payment.id}')}</div>
+    <div>Receipt No: {_build_document_number(profile, _build_numbered_suffix(profile, 'CP', payment.id))}</div>
     <div>Date: {payment.created_at.isoformat()}</div>
     <div>Customer: {customer.name}</div>
     <div>Amount Received: {payment.amount:.2f}</div>
@@ -91,7 +120,7 @@ def render_customer_payment_receipt(db: Session, payment: CustomerPayment, curre
         document_type="customer_payment_receipt",
         station_id=station.id,
         title="Customer Payment Receipt",
-        document_number=_build_document_number(profile, f"CP-{payment.id}"),
+        document_number=_build_document_number(profile, _build_numbered_suffix(profile, "CP", payment.id)),
         recipient_name=customer.name,
         recipient_contact=customer.phone,
         total_amount=round(payment.amount, 2),
@@ -111,7 +140,7 @@ def render_supplier_payment_voucher(db: Session, payment: SupplierPayment, curre
     <html><body>
     {_profile_block(profile, station)}
     <h3>Supplier Payment Voucher</h3>
-    <div>Voucher No: {_build_document_number(profile, f'SP-{payment.id}')}</div>
+    <div>Voucher No: {_build_document_number(profile, _build_numbered_suffix(profile, 'SP', payment.id))}</div>
     <div>Date: {payment.created_at.isoformat()}</div>
     <div>Supplier: {supplier.name if supplier else payment.supplier_id}</div>
     <div>Amount Paid: {payment.amount:.2f}</div>
@@ -126,7 +155,7 @@ def render_supplier_payment_voucher(db: Session, payment: SupplierPayment, curre
         document_type="supplier_payment_voucher",
         station_id=station.id,
         title="Supplier Payment Voucher",
-        document_number=_build_document_number(profile, f"SP-{payment.id}"),
+        document_number=_build_document_number(profile, _build_numbered_suffix(profile, "SP", payment.id)),
         recipient_name=supplier.name if supplier else f"Supplier {payment.supplier_id}",
         recipient_contact=supplier.phone if supplier else None,
         total_amount=round(payment.amount, 2),
@@ -158,7 +187,7 @@ def render_customer_ledger_statement(db: Session, customer: Customer, current_us
     <html><body>
     {_profile_block(profile, station)}
     <h3>Customer Ledger Statement</h3>
-    <div>Statement No: {_build_document_number(profile, f'CL-{customer.id}')}</div>
+    <div>Statement No: {_build_document_number(profile, _build_numbered_suffix(profile, 'CL', customer.id))}</div>
     <div>Customer: {customer.name}</div>
     <table border='1' cellpadding='4' cellspacing='0'>
       <tr><th>Date</th><th>Entry</th><th>Amount</th><th>Balance</th></tr>
@@ -171,7 +200,7 @@ def render_customer_ledger_statement(db: Session, customer: Customer, current_us
         document_type="customer_ledger_statement",
         station_id=station.id,
         title="Customer Ledger Statement",
-        document_number=_build_document_number(profile, f"CL-{customer.id}"),
+        document_number=_build_document_number(profile, _build_numbered_suffix(profile, "CL", customer.id)),
         recipient_name=customer.name,
         recipient_contact=customer.phone,
         total_amount=None,
@@ -211,7 +240,7 @@ def render_supplier_ledger_statement(db: Session, supplier: Supplier, station: S
     <html><body>
     {_profile_block(profile, station)}
     <h3>Supplier Ledger Statement</h3>
-    <div>Statement No: {_build_document_number(profile, f'SL-{supplier.id}')}</div>
+    <div>Statement No: {_build_document_number(profile, _build_numbered_suffix(profile, 'SL', supplier.id))}</div>
     <div>Supplier: {supplier.name}</div>
     <table border='1' cellpadding='4' cellspacing='0'>
       <tr><th>Date</th><th>Entry</th><th>Amount</th><th>Balance</th></tr>
@@ -224,11 +253,56 @@ def render_supplier_ledger_statement(db: Session, supplier: Supplier, station: S
         document_type="supplier_ledger_statement",
         station_id=station.id,
         title="Supplier Ledger Statement",
-        document_number=_build_document_number(profile, f"SL-{supplier.id}"),
+        document_number=_build_document_number(profile, _build_numbered_suffix(profile, "SL", supplier.id)),
         recipient_name=supplier.name,
         recipient_contact=supplier.phone,
         total_amount=None,
         balance=round(running, 2),
+        generated_at=utc_now(),
+        rendered_html=rendered_html,
+    )
+
+
+def render_fuel_sale_invoice(db: Session, sale: FuelSale, current_user: User | None = None) -> FinancialDocumentResponse:
+    station = sale.station
+    if current_user is not None:
+        _ensure_station_access(current_user, station)
+    profile = _get_profile(db, station)
+    subtotal, tax_amount, grand_total = _calculate_tax_breakdown(profile, sale.total_amount)
+    customer_name = sale.customer.name if sale.customer else "Walk-in Customer"
+    customer_contact = sale.customer.phone if sale.customer else None
+    tax_label = profile.tax_label_1 if profile and profile.tax_label_1 else "Tax"
+    payment_terms = profile.payment_terms if profile and profile.payment_terms else "Payment due as per station policy."
+    notes = profile.sale_invoice_notes if profile and profile.sale_invoice_notes else ""
+    rendered_html = f"""
+    <html><body>
+    {_profile_block(profile, station)}
+    <h3>Fuel Sale Invoice</h3>
+    <div>Invoice No: {_build_document_number(profile, _build_numbered_suffix(profile, 'FS', sale.id))}</div>
+    <div>Date: {sale.created_at.isoformat()}</div>
+    <div>Customer: {customer_name}</div>
+    <div>Sale Type: {sale.sale_type.title()}</div>
+    <table border='1' cellpadding='4' cellspacing='0'>
+      <tr><th>Fuel Type</th><th>Quantity (L)</th><th>Rate / Liter</th><th>Subtotal</th></tr>
+      <tr><td>{sale.fuel_type.name}</td><td>{sale.quantity:.2f}</td><td>{sale.rate_per_liter:.2f}</td><td>{subtotal:.2f}</td></tr>
+    </table>
+    <div>Subtotal: {subtotal:.2f}</div>
+    <div>{tax_label}: {tax_amount:.2f}</div>
+    <div>Total: {grand_total:.2f}</div>
+    <div>Payment Terms: {payment_terms}</div>
+    <div>Notes: {notes or '-'}</div>
+    <div>{profile.footer_text if profile and profile.footer_text else ''}</div>
+    </body></html>
+    """
+    return FinancialDocumentResponse(
+        document_type="fuel_sale_invoice",
+        station_id=station.id,
+        title="Fuel Sale Invoice",
+        document_number=_build_document_number(profile, _build_numbered_suffix(profile, "FS", sale.id)),
+        recipient_name=customer_name,
+        recipient_contact=customer_contact,
+        total_amount=grand_total,
+        balance=round(sale.customer.outstanding_balance, 2) if sale.customer else None,
         generated_at=utc_now(),
         rendered_html=rendered_html,
     )
@@ -362,6 +436,11 @@ def _resolve_document_for_dispatch(db: Session, dispatch: FinancialDocumentDispa
         if not station:
             raise HTTPException(status_code=404, detail="Station not found")
         return render_supplier_ledger_statement(db, supplier, station)
+    if dispatch.entity_type == "fuel_sale":
+        sale = db.query(FuelSale).filter(FuelSale.id == dispatch.entity_id).first()
+        if not sale:
+            raise HTTPException(status_code=404, detail="Fuel sale not found")
+        return render_fuel_sale_invoice(db, sale)
     raise HTTPException(status_code=400, detail="Unsupported financial document entity type")
 
 
