@@ -84,8 +84,13 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
     pip install -r requirements.txt
     ```
 
-4.  **Initialize the database**:
-    Run the seeding script to create the database tables and an initial admin user.
+4.  **Run database migrations**:
+    ```bash
+    venv\Scripts\python.exe -m alembic upgrade head
+    ```
+
+5.  **Initialize seed data**:
+    Run the seeding script to create the initial roles, station, and admin user.
     ```bash
     cd ppms
     python seed.py
@@ -118,7 +123,7 @@ The API will be available at `http://127.0.0.1:8000`.
 The application uses `ppms/app/core/config.py` for configuration.
 - **DATABASE_URL**: The database connection string.
   - Default: `sqlite:///./ppms.db`
-  - To use a different database, you can set an environment variable or modify `config.py`.
+  - To use a different database, set the environment variable before running Alembic or the app.
 - **SECRET_KEY**: JWT signing secret for authentication tokens.
 - **ACCESS_TOKEN_EXPIRE_MINUTES**: Token lifetime in minutes.
 - **ENABLED_MODULES**: Comma-separated module list to enable selected backend areas for testing.
@@ -142,6 +147,15 @@ Use automated tests instead of hardcoded localhost verification scripts. The pro
 
 ```bash
 venv\Scripts\python.exe -m pytest tests\test_security_regressions.py
+```
+
+## Database Migrations
+
+Schema changes are now managed with Alembic instead of automatic table creation at app startup.
+
+```bash
+venv\Scripts\python.exe -m alembic upgrade head
+venv\Scripts\python.exe -m alembic current
 ```
 
 ## License

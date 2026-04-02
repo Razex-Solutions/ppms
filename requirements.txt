@@ -8,3 +8,4 @@ typing_extensions~=4.15.0
 requests
 httpx
 pytest
+alembic

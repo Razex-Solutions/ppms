@@ -2,14 +2,26 @@
 Run once to create the initial admin user and required setup.
 Usage: python seed.py
 """
-from app.core.database import SessionLocal, engine
-from app.core.database import Base
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
+
+from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.role import Role
 from app.models.station import Station
 from app.models.user import User
 
-Base.metadata.create_all(bind=engine)
+
+def run_migrations() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    config = Config(str(repo_root / "alembic.ini"))
+    config.set_main_option("script_location", str(repo_root / "alembic"))
+    command.upgrade(config, "head")
+
+
+run_migrations()
 
 db = SessionLocal()
 
