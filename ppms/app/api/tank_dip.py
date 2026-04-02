@@ -7,6 +7,8 @@ from app.core.dependencies import get_current_user
 from app.models.tank_dip import TankDip
 from app.models.tank import Tank
 from app.schemas.tank_dip import TankDipCreate, TankDipResponse
+from app.services.tank_dips import create_tank_dip as create_tank_dip_service
+from app.services.tank_dips import ensure_tank_dip_access
 
 router = APIRouter(prefix="/tank-dips", tags=["Tank Dips"])
 
@@ -17,34 +19,7 @@ def create_tank_dip(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    tank = db.query(Tank).filter(Tank.id == data.tank_id).first()
-    if not tank:
-        raise HTTPException(status_code=404, detail="Tank not found")
-
-    # Multi-tenancy check
-    if current_user.role.name != "Admin" and current_user.station_id != tank.station_id:
-        raise HTTPException(status_code=403, detail="Not authorized for this tank")
-
-    system_volume = tank.current_volume
-    loss_gain = data.calculated_volume - system_volume
-
-    dip = TankDip(
-        tank_id=data.tank_id,
-        dip_reading_mm=data.dip_reading_mm,
-        calculated_volume=data.calculated_volume,
-        system_volume=system_volume,
-        loss_gain=loss_gain,
-        notes=data.notes
-    )
-
-    db.add(dip)
-    
-    # We update the system volume to match the manual reading (reconciliation)
-    tank.current_volume = data.calculated_volume
-    
-    db.commit()
-    db.refresh(dip)
-    return dip
+    return create_tank_dip_service(db, data, current_user)
 
 
 @router.get("/", response_model=list[TankDipResponse])
@@ -85,8 +60,6 @@ def get_tank_dip(
     if not dip:
         raise HTTPException(status_code=404, detail="Tank dip reading not found")
 
-    # Multi-tenancy check
-    if current_user.role.name != "Admin" and current_user.station_id != dip.tank.station_id:
-        raise HTTPException(status_code=403, detail="Not authorized for this tank dip")
+    ensure_tank_dip_access(dip, current_user)
 
     return dip

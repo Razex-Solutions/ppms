@@ -6,9 +6,10 @@ from app.core.access import require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.expense import Expense
-from app.models.station import Station
 from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseResponse
+from app.services.expenses import create_expense as create_expense_service
+from app.services.expenses import update_expense as update_expense_service
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
@@ -19,27 +20,7 @@ def create_expense(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_station_access(current_user, data.station_id)
-
-    if data.amount <= 0:
-        raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
-
-    station = db.query(Station).filter(Station.id == data.station_id).first()
-    if not station:
-        raise HTTPException(status_code=404, detail="Station not found")
-
-    expense = Expense(
-        title=data.title,
-        category=data.category,
-        amount=data.amount,
-        notes=data.notes,
-        station_id=data.station_id
-    )
-
-    db.add(expense)
-    db.commit()
-    db.refresh(expense)
-    return expense
+    return create_expense_service(db, data, current_user)
 
 
 @router.get("/", response_model=list[ExpenseResponse])
@@ -92,11 +73,7 @@ def update_expense(
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     require_station_access(current_user, expense.station_id, detail="Not authorized for this expense")
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(expense, field, value)
-    db.commit()
-    db.refresh(expense)
-    return expense
+    return update_expense_service(expense, data, db)
 
 
 @router.delete("/{expense_id}")
