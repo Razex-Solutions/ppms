@@ -20,6 +20,7 @@ from app.api.role import router as role_router
 from app.api.reports import router as reports_router
 from app.api.shift import router as shift_router
 from app.api.station import router as station_router
+from app.api.station_module import router as station_module_router
 from app.api.supplier import router as supplier_router
 from app.api.supplier_payment import router as supplier_payment_router
 from app.api.tank import router as tank_router
@@ -34,6 +35,7 @@ ROUTER_REGISTRY = [
     {"name": "roles", "router": role_router, "protected": True},
     {"name": "organizations", "router": organization_router, "protected": True},
     {"name": "stations", "router": station_router, "protected": True},
+    {"name": "station_modules", "router": station_module_router, "protected": True},
     {"name": "users", "router": user_router, "protected": True},
     {"name": "fuel_types", "router": fuel_type_router, "protected": True},
     {"name": "tanks", "router": tank_router, "protected": True},

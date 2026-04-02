@@ -27,6 +27,10 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "delete": {"Admin"},
         "read": {"Admin", "HeadOffice"},
     },
+    "station_modules": {
+        "read": {"Admin", "HeadOffice"},
+        "update": {"Admin", "HeadOffice"},
+    },
     "fuel_types": {
         "create": {"Admin"},
         "update": {"Admin"},
@@ -48,9 +52,14 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "delete": {"Admin", "Manager"},
     },
     "tankers": {
+        "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
         "create": {"Admin", "Manager"},
         "update": {"Admin", "Manager"},
         "delete": {"Admin", "Manager"},
+        "trip_create": {"Admin", "Manager", "Operator"},
+        "delivery_create": {"Admin", "Manager", "Operator"},
+        "expense_create": {"Admin", "Manager", "Operator", "Accountant"},
+        "complete": {"Admin", "Manager", "Operator"},
     },
     "customers": {
         "create": {"Admin", "Manager", "Accountant"},

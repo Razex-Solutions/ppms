@@ -204,3 +204,28 @@ def test_head_office_can_read_only_own_organization_users_and_stations(client):
         headers=head_office_headers,
     )
     assert forbidden_organization.status_code == 403
+
+
+def test_head_office_can_manage_station_modules_per_station(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    station_modules = test_client.get(f"/station-modules/{data['station_a_id']}", headers=head_office_headers)
+    assert station_modules.status_code == 200, station_modules.text
+    assert any(module["module_name"] == "tanker_operations" and module["is_enabled"] for module in station_modules.json())
+
+    disable_response = test_client.put(
+        f"/station-modules/{data['station_a_id']}",
+        headers=head_office_headers,
+        json={"module_name": "tanker_operations", "is_enabled": False},
+    )
+    assert disable_response.status_code == 200, disable_response.text
+    assert disable_response.json()["is_enabled"] is False
+
+    forbidden_other_org = test_client.put(
+        f"/station-modules/{data['station_c_id']}",
+        headers=head_office_headers,
+        json={"module_name": "tanker_operations", "is_enabled": False},
+    )
+    assert forbidden_other_org.status_code == 403

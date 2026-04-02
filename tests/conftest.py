@@ -23,6 +23,7 @@ from app.models.organization import Organization  # noqa: E402
 from app.models.role import Role  # noqa: E402
 from app.models.shift import Shift  # noqa: E402
 from app.models.station import Station  # noqa: E402
+from app.models.station_module_setting import StationModuleSetting  # noqa: E402
 from app.models.supplier import Supplier  # noqa: E402
 from app.models.tank import Tank  # noqa: E402
 from app.models.user import User  # noqa: E402
@@ -108,6 +109,14 @@ def seed_base_data(session_local):
             is_head_office=True,
         )
         db.add(station_c)
+        db.flush()
+        db.add_all(
+            [
+                StationModuleSetting(station_id=station_a.id, module_name="tanker_operations", is_enabled=True),
+                StationModuleSetting(station_id=station_b.id, module_name="tanker_operations", is_enabled=False),
+                StationModuleSetting(station_id=station_c.id, module_name="tanker_operations", is_enabled=True),
+            ]
+        )
         db.flush()
 
         admin = User(

@@ -24,3 +24,7 @@ from app.models.hardware_device import HardwareDevice
 from app.models.hardware_event import HardwareEvent
 from app.models.audit_log import AuditLog
 from app.models.report_export_job import ReportExportJob
+from app.models.station_module_setting import StationModuleSetting
+from app.models.tanker_trip import TankerTrip
+from app.models.tanker_delivery import TankerDelivery
+from app.models.tanker_trip_expense import TankerTripExpense

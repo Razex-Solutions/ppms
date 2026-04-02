@@ -12,6 +12,7 @@ class Tanker(Base):
     name = Column(String, nullable=False)
     capacity = Column(Float, nullable=False)
 
+    ownership_type = Column(String, nullable=False, default="owned")
     owner_name = Column(String, nullable=True)
     driver_name = Column(String, nullable=True)
     driver_phone = Column(String, nullable=True)

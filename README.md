@@ -222,6 +222,33 @@ venv\Scripts\python.exe -m pytest tests
   - `GET /report-exports/{id}`
   - `GET /report-exports/{id}/download`
 
+## Tanker Operations Module
+
+- `tanker_operations` is now a station-level optional module.
+- Storage tanks remain fixed station infrastructure.
+- Tanker vehicles are treated separately as mobile logistics assets.
+- The module supports:
+  - tanker vehicle CRUD
+  - tanker trips
+  - tanker trip expenses
+  - tanker deliveries
+  - supplier-to-station completion that posts into approved purchases
+  - supplier-to-customer completion that updates customer outstanding balances for credit deliveries
+- Endpoints:
+  - `GET /station-modules/{station_id}`
+  - `PUT /station-modules/{station_id}`
+  - `POST /tankers/`
+  - `GET /tankers/`
+  - `GET /tankers/{id}`
+  - `PUT /tankers/{id}`
+  - `DELETE /tankers/{id}`
+  - `POST /tankers/trips`
+  - `GET /tankers/trips`
+  - `GET /tankers/trips/{id}`
+  - `POST /tankers/trips/{id}/deliveries`
+  - `POST /tankers/trips/{id}/expenses`
+  - `POST /tankers/trips/{id}/complete`
+
 ## Auth Password Management
 
 - `POST /auth/change-password`: authenticated user changes their own password by supplying the current password.

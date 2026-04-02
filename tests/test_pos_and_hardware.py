@@ -223,3 +223,189 @@ def test_hardware_device_and_simulator_flow(client, tmp_path):
         assert disabled.status_code == 404
 
     hardware_only_app.dependency_overrides.clear()
+
+
+def test_tanker_module_workflows_and_station_toggle(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    manager_headers = login(test_client, "manager", "manager123")
+    foreign_manager_headers = login(test_client, "foreignmanager", "foreign123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    disabled_tanker = test_client.post(
+        "/tankers/",
+        headers=admin_headers,
+        json={
+            "registration_no": "TK-DISABLED",
+            "name": "Disabled Tanker",
+            "capacity": 5000,
+            "station_id": data["station_b_id"],
+            "fuel_type_id": data["fuel_type_id"],
+        },
+    )
+    assert disabled_tanker.status_code == 403
+
+    tanker_response = test_client.post(
+        "/tankers/",
+        headers=manager_headers,
+        json={
+            "registration_no": "TK-001",
+            "name": "Owned Tanker",
+            "capacity": 5000,
+            "ownership_type": "owned",
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+        },
+    )
+    assert tanker_response.status_code == 200, tanker_response.text
+    tanker_id = tanker_response.json()["id"]
+
+    supplier_station_trip = test_client.post(
+        "/tankers/trips",
+        headers=manager_headers,
+        json={
+            "tanker_id": tanker_id,
+            "supplier_id": 1,
+            "fuel_type_id": data["fuel_type_id"],
+            "trip_type": "supplier_to_station",
+            "linked_tank_id": data["tank_id"],
+            "destination_name": "Station Storage",
+        },
+    )
+    assert supplier_station_trip.status_code == 200, supplier_station_trip.text
+    trip_id = supplier_station_trip.json()["id"]
+
+    add_delivery = test_client.post(
+        f"/tankers/trips/{trip_id}/deliveries",
+        headers=manager_headers,
+        json={
+            "destination_name": "Main Station Tank",
+            "quantity": 20,
+            "fuel_rate": 5,
+            "delivery_charge": 0,
+            "sale_type": "cash",
+            "paid_amount": 100,
+        },
+    )
+    assert add_delivery.status_code == 200, add_delivery.text
+
+    add_expense = test_client.post(
+        f"/tankers/trips/{trip_id}/expenses",
+        headers=manager_headers,
+        json={"expense_type": "toll", "amount": 10, "notes": "Bridge toll"},
+    )
+    assert add_expense.status_code == 200, add_expense.text
+
+    complete_trip = test_client.post(
+        f"/tankers/trips/{trip_id}/complete",
+        headers=manager_headers,
+        json={"reason": "Delivery completed"},
+    )
+    assert complete_trip.status_code == 200, complete_trip.text
+    completed_trip = complete_trip.json()
+    assert completed_trip["status"] == "completed"
+    assert completed_trip["linked_purchase_id"] is not None
+    assert completed_trip["net_profit"] == -10
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+        from app.models.supplier import Supplier
+        from app.models.tank import Tank
+
+        tank = db.query(Tank).filter(Tank.id == data["tank_id"]).first()
+        supplier = db.query(Supplier).filter(Supplier.id == 1).first()
+        assert tank.current_volume == 120
+        assert supplier.payable_balance == 100
+
+        foreign_customer = Customer(
+            name="Pump Buyer",
+            code="PUMP-BUYER",
+            customer_type="company",
+            phone="777",
+            address="Buyer Station",
+            credit_limit=1000,
+            outstanding_balance=0,
+            station_id=data["station_c_id"],
+        )
+        db.add(foreign_customer)
+        db.commit()
+        foreign_customer_id = foreign_customer.id
+    finally:
+        db.close()
+
+    foreign_tanker = test_client.post(
+        "/tankers/",
+        headers=foreign_manager_headers,
+        json={
+            "registration_no": "TK-002",
+            "name": "Foreign Tanker",
+            "capacity": 7000,
+            "ownership_type": "third_party",
+            "station_id": data["station_c_id"],
+            "fuel_type_id": data["fuel_type_id"],
+        },
+    )
+    assert foreign_tanker.status_code == 200, foreign_tanker.text
+    foreign_tanker_id = foreign_tanker.json()["id"]
+
+    direct_sale_trip = test_client.post(
+        "/tankers/trips",
+        headers=foreign_manager_headers,
+        json={
+            "tanker_id": foreign_tanker_id,
+            "supplier_id": 1,
+            "fuel_type_id": data["fuel_type_id"],
+            "trip_type": "supplier_to_customer",
+            "destination_name": "Other Pump",
+        },
+    )
+    assert direct_sale_trip.status_code == 200, direct_sale_trip.text
+    direct_trip_id = direct_sale_trip.json()["id"]
+
+    direct_delivery = test_client.post(
+        f"/tankers/trips/{direct_trip_id}/deliveries",
+        headers=foreign_manager_headers,
+        json={
+            "customer_id": foreign_customer_id,
+            "destination_name": "Other Pump",
+            "quantity": 15,
+            "fuel_rate": 8,
+            "delivery_charge": 20,
+            "sale_type": "credit",
+            "paid_amount": 0,
+        },
+    )
+    assert direct_delivery.status_code == 200, direct_delivery.text
+
+    direct_expense = test_client.post(
+        f"/tankers/trips/{direct_trip_id}/expenses",
+        headers=foreign_manager_headers,
+        json={"expense_type": "driver", "amount": 12, "notes": "Driver allowance"},
+    )
+    assert direct_expense.status_code == 200, direct_expense.text
+
+    complete_direct_trip = test_client.post(
+        f"/tankers/trips/{direct_trip_id}/complete",
+        headers=foreign_manager_headers,
+        json={"reason": "Customer delivery completed"},
+    )
+    assert complete_direct_trip.status_code == 200, complete_direct_trip.text
+    assert complete_direct_trip.json()["status"] == "completed"
+    assert complete_direct_trip.json()["net_profit"] == 128
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+
+        foreign_customer = db.query(Customer).filter(Customer.id == foreign_customer_id).first()
+        assert foreign_customer.outstanding_balance == 140
+    finally:
+        db.close()
+
+    head_office_trip_list = test_client.get("/tankers/trips", headers=head_office_headers)
+    assert head_office_trip_list.status_code == 200, head_office_trip_list.text
+    trip_ids = {trip["id"] for trip in head_office_trip_list.json()}
+    assert trip_id in trip_ids
+    assert direct_trip_id not in trip_ids

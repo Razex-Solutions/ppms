@@ -12,6 +12,7 @@ from app.models.organization import Organization
 from app.core.security import hash_password
 from app.models.role import Role
 from app.models.station import Station
+from app.models.station_module_setting import StationModuleSetting
 from app.models.user import User
 
 
@@ -71,6 +72,14 @@ if not station:
 elif station.organization_id is None:
     station.organization_id = organization.id
     station.is_head_office = True
+    db.commit()
+
+tanker_module = db.query(StationModuleSetting).filter(
+    StationModuleSetting.station_id == station.id,
+    StationModuleSetting.module_name == "tanker_operations",
+).first()
+if not tanker_module:
+    db.add(StationModuleSetting(station_id=station.id, module_name="tanker_operations", is_enabled=True))
     db.commit()
 
 # Create admin user
