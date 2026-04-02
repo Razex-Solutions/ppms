@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.supplier import Supplier
+from app.models.purchase import Purchase
+from app.models.supplier_payment import SupplierPayment
 from app.schemas.supplier import SupplierCreate, SupplierUpdate, SupplierResponse
 
 router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
@@ -81,6 +83,11 @@ def delete_supplier(
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
+
+    has_purchases = db.query(Purchase).filter(Purchase.supplier_id == supplier.id).first()
+    has_payments = db.query(SupplierPayment).filter(SupplierPayment.supplier_id == supplier.id).first()
+    if has_purchases or has_payments:
+        raise HTTPException(status_code=400, detail="Supplier cannot be deleted while transaction history exists")
 
     db.delete(supplier)
     db.commit()

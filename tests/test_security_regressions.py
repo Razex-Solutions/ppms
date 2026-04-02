@@ -491,3 +491,153 @@ def test_shift_close_ignores_reversed_sales(client):
     assert closed_shift["total_sales_cash"] == 0
     assert closed_shift["expected_cash"] == 50
     assert closed_shift["difference"] == 0
+
+
+def test_master_data_delete_is_blocked_when_history_exists(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    operator_headers = login(test_client, "operator", "operator123")
+
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "customer_id": data["customer_id"],
+            "closing_meter": 1002,
+            "rate_per_liter": 10,
+            "sale_type": "credit",
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+
+    db = session_local()
+    try:
+        supplier = db.query(Supplier).filter(Supplier.code == "SUP-A").first()
+        supplier.payable_balance = 50
+        db.commit()
+        supplier_id = supplier.id
+    finally:
+        db.close()
+
+    supplier_payment_response = test_client.post(
+        "/supplier-payments/",
+        headers=admin_headers,
+        json={
+            "supplier_id": supplier_id,
+            "station_id": data["station_a_id"],
+            "amount": 20,
+            "payment_method": "cash",
+        },
+    )
+    assert supplier_payment_response.status_code == 200, supplier_payment_response.text
+
+    customer_delete = test_client.delete(f"/customers/{data['customer_id']}", headers=operator_headers)
+    assert customer_delete.status_code == 400
+
+    supplier_delete = test_client.delete(f"/suppliers/{supplier_id}", headers=admin_headers)
+    assert supplier_delete.status_code == 400
+
+    tank_delete = test_client.delete(f"/tanks/{data['tank_id']}", headers=operator_headers)
+    assert tank_delete.status_code == 400
+
+    fuel_type_delete = test_client.delete(f"/fuel-types/{data['fuel_type_id']}", headers=admin_headers)
+    assert fuel_type_delete.status_code == 400
+
+    station_delete = test_client.delete(f"/stations/{data['station_a_id']}", headers=admin_headers)
+    assert station_delete.status_code == 400
+
+
+def test_pos_product_and_sale_flow_with_reverse_and_module_toggle(client, tmp_path):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    product_response = test_client.post(
+        "/pos-products/",
+        headers=operator_headers,
+        json={
+            "name": "Engine Oil",
+            "code": "POS-001",
+            "category": "Lubricants",
+            "module": "mart",
+            "price": 25,
+            "stock_quantity": 10,
+            "track_inventory": True,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert product_response.status_code == 200, product_response.text
+    product_id = product_response.json()["id"]
+
+    sale_response = test_client.post(
+        "/pos-sales/",
+        headers=operator_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "module": "mart",
+            "payment_method": "cash",
+            "items": [{"product_id": product_id, "quantity": 2}],
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+    sale = sale_response.json()
+    assert sale["total_amount"] == 50
+    assert len(sale["items"]) == 1
+
+    db = session_local()
+    try:
+        from app.models.pos_product import POSProduct
+
+        product = db.query(POSProduct).filter(POSProduct.id == product_id).first()
+        assert product.stock_quantity == 8
+    finally:
+        db.close()
+
+    reverse_response = test_client.post(f"/pos-sales/{sale['id']}/reverse", headers=operator_headers)
+    assert reverse_response.status_code == 200, reverse_response.text
+    assert reverse_response.json()["is_reversed"] is True
+
+    db = session_local()
+    try:
+        from app.models.pos_product import POSProduct
+
+        product = db.query(POSProduct).filter(POSProduct.id == product_id).first()
+        assert product.stock_quantity == 10
+    finally:
+        db.close()
+
+    delete_response = test_client.delete(f"/pos-products/{product_id}", headers=operator_headers)
+    assert delete_response.status_code == 400
+
+    toggle_db_path = tmp_path / "pos_toggle.db"
+    engine = create_engine(
+        f"sqlite:///{toggle_db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    pos_only_app = create_app(enabled_modules="auth,pos_products,pos_sales")
+
+    def override_get_db():
+        db = testing_session_local()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    pos_only_app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(pos_only_app) as pos_client:
+        health = pos_client.get("/health")
+        assert health.status_code == 200
+        assert "pos_products" in health.json()["enabled_modules"]
+        assert "customers" not in health.json()["enabled_modules"]
+        disabled = pos_client.get("/customers/")
+        assert disabled.status_code == 404
+
+    pos_only_app.dependency_overrides.clear()

@@ -4,7 +4,12 @@ from sqlalchemy.orm import Session
 from app.core.access import require_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.models.customer import Customer
+from app.models.dispenser import Dispenser
+from app.models.expense import Expense
 from app.models.station import Station
+from app.models.tank import Tank
+from app.models.tanker import Tanker
 from app.models.user import User
 from app.schemas.station import StationCreate, StationUpdate, StationResponse
 
@@ -91,6 +96,13 @@ def delete_station(
         raise HTTPException(status_code=404, detail="Station not found")
     if station.users:
         raise HTTPException(status_code=400, detail="Station cannot be deleted while users are assigned to it")
+    has_tanks = db.query(Tank).filter(Tank.station_id == station.id).first()
+    has_dispensers = db.query(Dispenser).filter(Dispenser.station_id == station.id).first()
+    has_customers = db.query(Customer).filter(Customer.station_id == station.id).first()
+    has_expenses = db.query(Expense).filter(Expense.station_id == station.id).first()
+    has_tankers = db.query(Tanker).filter(Tanker.station_id == station.id).first()
+    if has_tanks or has_dispensers or has_customers or has_expenses or has_tankers:
+        raise HTTPException(status_code=400, detail="Station cannot be deleted while dependent records exist")
     db.delete(station)
     db.commit()
     return {"message": "Station deleted"}

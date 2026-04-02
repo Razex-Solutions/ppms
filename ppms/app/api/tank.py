@@ -7,6 +7,9 @@ from app.core.dependencies import get_current_user
 from app.models.tank import Tank
 from app.models.station import Station
 from app.models.fuel_type import FuelType
+from app.models.nozzle import Nozzle
+from app.models.purchase import Purchase
+from app.models.tank_dip import TankDip
 from app.models.user import User
 from app.schemas.tank import TankCreate, TankUpdate, TankResponse
 
@@ -112,6 +115,11 @@ def delete_tank(
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
     require_station_access(current_user, tank.station_id, detail="Not authorized for this tank")
+    has_nozzles = db.query(Nozzle).filter(Nozzle.tank_id == tank.id).first()
+    has_purchases = db.query(Purchase).filter(Purchase.tank_id == tank.id).first()
+    has_dips = db.query(TankDip).filter(TankDip.tank_id == tank.id).first()
+    if has_nozzles or has_purchases or has_dips:
+        raise HTTPException(status_code=400, detail="Tank cannot be deleted while dependent records exist")
     db.delete(tank)
     db.commit()
     return {"message": "Tank deleted"}

@@ -5,6 +5,8 @@ from app.core.access import require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.customer import Customer
+from app.models.customer_payment import CustomerPayment
+from app.models.fuel_sale import FuelSale
 from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
 from app.services.customers import create_customer as create_customer_service
@@ -82,6 +84,10 @@ def delete_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
+    has_sales = db.query(FuelSale).filter(FuelSale.customer_id == customer.id).first()
+    has_payments = db.query(CustomerPayment).filter(CustomerPayment.customer_id == customer.id).first()
+    if has_sales or has_payments:
+        raise HTTPException(status_code=400, detail="Customer cannot be deleted while transaction history exists")
     db.delete(customer)
     db.commit()
     return {"message": "Customer deleted"}

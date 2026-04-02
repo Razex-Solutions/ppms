@@ -16,3 +16,6 @@ from app.models.supplier_payment import SupplierPayment
 from app.models.shift import Shift
 from app.models.tank_dip import TankDip
 from app.models.nozzle_reading import NozzleReading
+from app.models.pos_product import POSProduct
+from app.models.pos_sale import POSSale
+from app.models.pos_sale_item import POSSaleItem
