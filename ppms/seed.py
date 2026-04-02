@@ -1,0 +1,57 @@
+"""
+Run once to create the initial admin user and required setup.
+Usage: python seed.py
+"""
+from app.core.database import SessionLocal, engine
+from app.core.database import Base
+from app.core.security import hash_password
+from app.models.role import Role
+from app.models.station import Station
+from app.models.user import User
+
+Base.metadata.create_all(bind=engine)
+
+db = SessionLocal()
+
+# Create default roles
+roles_data = [
+    {"name": "Admin", "description": "Full system access"},
+    {"name": "Manager", "description": "Station management access"},
+    {"name": "Operator", "description": "Daily operations access"},
+    {"name": "Accountant", "description": "Financial access only"},
+]
+
+for r in roles_data:
+    if not db.query(Role).filter(Role.name == r["name"]).first():
+        db.add(Role(**r))
+db.commit()
+
+admin_role = db.query(Role).filter(Role.name == "Admin").first()
+
+# Create default station
+station = db.query(Station).filter(Station.code == "HQ").first()
+if not station:
+    station = Station(name="Main Station", code="HQ", address="Head Office", city="Karachi")
+    db.add(station)
+    db.commit()
+    db.refresh(station)
+
+# Create admin user
+if not db.query(User).filter(User.username == "admin").first():
+    admin = User(
+        full_name="System Admin",
+        username="admin",
+        email="admin@ppms.com",
+        hashed_password=hash_password("admin123"),
+        is_active=True,
+        role_id=admin_role.id,
+        station_id=station.id,
+    )
+    db.add(admin)
+    db.commit()
+    print("Admin user created: username=admin  password=admin123")
+else:
+    print("Admin user already exists.")
+
+db.close()
+print("Seed complete.")

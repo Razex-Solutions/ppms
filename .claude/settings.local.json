@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill /F /IM uvicorn.exe)",
+      "Bash(taskkill /F /PID 4760)",
+      "Bash(taskkill /F /PID 9456)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(../venv/Scripts/uvicorn app.main:app --reload --port 8000)",
+      "Bash(curl -s http://127.0.0.1:8000/openapi.json)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('\\\\n'.join\\(sorted\\(d['paths'].keys\\(\\)\\)\\)\\)\")",
+      "Bash(curl -s http://127.0.0.1:8000/roles/)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"username\\\\\":\\\\\"admin\\\\\",\\\\\"password\\\\\":\\\\\"wrong\\\\\"}\")",
+      "Bash(curl:*)",
+      "Bash(../venv/Scripts/python.exe seed.py)",
+      "Bash(../venv/Scripts/python.exe -c ':*)",
+      "Bash(taskkill //F //PID 35684 //PID 38024)",
+      "Bash(../venv/Scripts/uvicorn app.main:app --port 8000)",
+      "Bash(../venv/Scripts/uvicorn app.main:app --port 8001)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+from app.api.accounting import router as accounting_router
+from app.api.auth import router as auth_router
+from app.api.customer import router as customer_router
+from app.api.customer_payment import router as customer_payment_router
+from app.api.dashboard import router as dashboard_router
+from app.api.dispenser import router as dispenser_router
+from app.api.expense import router as expense_router
+from app.api.fuel_sale import router as fuel_sale_router
+from app.api.fuel_type import router as fuel_type_router
+from app.api.ledger import router as ledger_router
+from app.api.nozzle import router as nozzle_router
+from app.api.purchase import router as purchase_router
+from app.api.role import router as role_router
+from app.api.shift import router as shift_router
+from app.api.station import router as station_router
+from app.api.supplier import router as supplier_router
+from app.api.supplier_payment import router as supplier_payment_router
+from app.api.tank import router as tank_router
+from app.api.tank_dip import router as tank_dip_router
+from app.api.tanker import router as tanker_router
+from app.api.user import router as user_router
+
+
+ROUTER_REGISTRY = [
+    {"name": "auth", "router": auth_router, "protected": False},
+    {"name": "roles", "router": role_router, "protected": True},
+    {"name": "stations", "router": station_router, "protected": True},
+    {"name": "users", "router": user_router, "protected": True},
+    {"name": "fuel_types", "router": fuel_type_router, "protected": True},
+    {"name": "tanks", "router": tank_router, "protected": True},
+    {"name": "dispensers", "router": dispenser_router, "protected": True},
+    {"name": "nozzles", "router": nozzle_router, "protected": True},
+    {"name": "fuel_sales", "router": fuel_sale_router, "protected": True},
+    {"name": "customers", "router": customer_router, "protected": True},
+    {"name": "suppliers", "router": supplier_router, "protected": True},
+    {"name": "purchases", "router": purchase_router, "protected": True},
+    {"name": "tankers", "router": tanker_router, "protected": True},
+    {"name": "expenses", "router": expense_router, "protected": True},
+    {"name": "accounting", "router": accounting_router, "protected": True},
+    {"name": "customer_payments", "router": customer_payment_router, "protected": True},
+    {"name": "supplier_payments", "router": supplier_payment_router, "protected": True},
+    {"name": "ledger", "router": ledger_router, "protected": True},
+    {"name": "shifts", "router": shift_router, "protected": True},
+    {"name": "tank_dips", "router": tank_dip_router, "protected": True},
+    {"name": "dashboard", "router": dashboard_router, "protected": True},
+]

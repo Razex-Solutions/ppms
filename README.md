@@ -1,0 +1,143 @@
+# Petrol Pump Management System (PPMS)
+
+A comprehensive backend API for managing petrol pump operations, including sales, inventory, accounting, and employee shifts. Built with FastAPI and SQLAlchemy.
+
+## Overview
+
+The Petrol Pump Management System (PPMS) provides a robust RESTful API to streamline the daily operations of a fuel station. Key features include:
+- **Authentication & Authorization**: Role-based access control (Admin, Manager, Operator, Accountant) with station-level data isolation.
+- **Asset Management**: Tracking stations, tanks, dispensers, and nozzles.
+- **Sales Tracking**: Monitoring fuel sales (cash/credit), shift-wise nozzle readings, and daily summaries.
+- **Inventory Management**: Handling fuel types, purchases, tanker deliveries, and tank dip readings.
+- **Financials**: Managing customer/supplier payments, expenses, and ledger entries with profit analysis.
+- **Monitoring**: Real-time dashboard for sales, expenses, net profit, low-stock alerts, and credit-limit notifications.
+- **Multi-tenancy**: Admins can manage all stations, while Managers/Operators/Accountants are restricted to their assigned station data.
+
+## API Endpoints & Features
+
+### Dashboard
+- **GET /dashboard/**: Real-time summaries including total sales (cash/credit), expenses, net profit, and total fuel stock.
+- **Alerts**: Automated alerts for low fuel stock and customers approaching their credit limit.
+
+### Core Modules
+- **Authentication**: JWT-based login, role management (Admin, Manager, Operator, Accountant), and station assignment.
+- **Shift Management**: Tracking employee shifts, including initial cash, sales, and end-of-shift cash reconciliation with difference detection.
+- **Sales**: Management of fuel sales (cash/credit), automatic meter reading updates, and nozzle history.
+- **Inventory & Assets**: 
+  - Full CRUD for stations, tanks, dispensers, and nozzles.
+  - Tracking fuel types and real-time stock levels.
+  - **Tanker Management**: Managing fuel deliveries and associated tanker information.
+- **Operations**:
+  - **Nozzle Readings**: Shift-wise tracking of start and end meter readings.
+  - **Tank Dips**: Manual stick readings (mm) with automated volume calculation and loss/gain (evaporation/leakage) analysis.
+- **Accounting & Financials**:
+  - **Ledgers**: Detailed customer and supplier ledgers with running balances.
+  - **Payments**: Processing customer payments (receivables) and supplier payments (payables).
+  - **Expenses**: Tracking station-wise operational expenses.
+  - **Profit Analysis**: Real-time calculation of net profit based on sales and expenses.
+
+## Requirements
+
+- Python 3.10+
+- SQLite (default) or any SQLAlchemy-supported database.
+- Dependencies listed in `requirements.txt`.
+
+## Project Structure
+
+```text
+.
+├── ppms/
+│   ├── app/
+│   │   ├── api/          # API Route handlers (Auth, Dashboard, Inventory, Accounting, etc.)
+│   │   ├── core/         # Database engine, Security (JWT/Hashing), and Config
+│   │   ├── models/       # SQLAlchemy models defining the schema
+│   │   ├── schemas/      # Pydantic models for data validation and API documentation
+│   │   ├── services/     # Business logic layer (currently minimal)
+│   │   └── main.py       # FastAPI application entry point
+│   ├── seed.py           # Initial data seeding script
+│   └── requirements.txt  # (Empty, use root requirements.txt)
+├── Docs/                 # Project documentation (PDF/DOCX)
+├── main.py               # (Empty/TBD)
+├── requirements.txt      # Project dependencies
+└── ppms.db               # SQLite database (generated)
+```
+
+## Setup and Installation
+
+1.  **Clone the repository**:
+    ```bash
+    git clone <repository-url>
+    cd <repository-name>
+    ```
+
+2.  **Create and activate a virtual environment**:
+    ```bash
+    python -m venv venv
+    .\venv\Scripts\activate  # Windows
+    # source venv/bin/activate  # Linux/Mac
+    ```
+
+3.  **Install dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Initialize the database**:
+    Run the seeding script to create the database tables and an initial admin user.
+    ```bash
+    cd ppms
+    python seed.py
+    ```
+    - Default Admin Username: `admin`
+    - Default Admin Password: `admin123`
+
+## Running the Application
+
+To start the FastAPI server, use `uvicorn`:
+
+```bash
+cd ppms
+uvicorn app.main:app --reload --port 8000
+```
+
+The API will be available at `http://127.0.0.1:8000`.
+- **Interactive Documentation (Swagger UI)**: `http://127.0.0.1:8000/docs`
+- **Alternative Documentation (Redoc)**: `http://127.0.0.1:8000/redoc`
+
+## Scripts
+
+-   **`ppms/seed.py`**: Initializes the database with default roles, a head office station, and a system administrator account.
+-   **`ppms/post.py`**: A comprehensive testing and demonstration script for creating all system entities (stations, users, fuel sales, tankers, etc.) and checking the profit summary.
+-   **`read_docx.py`**: Helper script to read project documentation from `.docx` files.
+-   **`main.py`**: Entry point for running the application if not using `uvicorn` directly (Note: current root `main.py` is placeholder).
+
+## Configuration & Environment Variables
+
+The application uses `ppms/app/core/config.py` for configuration.
+- **DATABASE_URL**: The database connection string.
+  - Default: `sqlite:///./ppms.db`
+  - To use a different database, you can set an environment variable or modify `config.py`.
+- **SECRET_KEY**: JWT signing secret for authentication tokens.
+- **ACCESS_TOKEN_EXPIRE_MINUTES**: Token lifetime in minutes.
+- **ENABLED_MODULES**: Comma-separated module list to enable selected backend areas for testing.
+  - Default: `*`
+  - Example: `ENABLED_MODULES=auth,customers,expenses`
+
+## Modular Testing
+
+The backend now supports module-based startup for focused testing. The `/health` and `/` endpoints report the active module set.
+
+Example:
+
+```bash
+set ENABLED_MODULES=auth,customers,expenses
+uvicorn app.main:app --reload --port 8000
+```
+
+## Tests
+
+Use automated tests instead of hardcoded localhost verification scripts. The project now includes the dependencies needed for in-process API testing with FastAPI's test client.
+
+## License
+
+TODO: Specify the license for this project.

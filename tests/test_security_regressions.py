@@ -1,0 +1,410 @@
+import sys
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT = PROJECT_ROOT / "ppms"
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
+from app.core.database import Base, get_db  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
+from app.main import app, create_app  # noqa: E402
+from app.models.customer import Customer  # noqa: E402
+from app.models.expense import Expense  # noqa: E402
+from app.models.dispenser import Dispenser  # noqa: E402
+from app.models.fuel_type import FuelType  # noqa: E402
+from app.models.nozzle import Nozzle  # noqa: E402
+from app.models.role import Role  # noqa: E402
+from app.models.shift import Shift  # noqa: E402
+from app.models.station import Station  # noqa: E402
+from app.models.supplier import Supplier  # noqa: E402
+from app.models.tank import Tank  # noqa: E402
+from app.models.user import User  # noqa: E402
+
+
+@pytest.fixture()
+def client(tmp_path):
+    db_path = tmp_path / "test_ppms.db"
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    def override_get_db():
+        db = testing_session_local()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as test_client:
+        yield test_client, testing_session_local
+
+    app.dependency_overrides.clear()
+
+
+def seed_base_data(session_local):
+    db = session_local()
+    try:
+        admin_role = Role(name="Admin", description="Full access")
+        operator_role = Role(name="Operator", description="Daily operations")
+        db.add_all([admin_role, operator_role])
+        db.flush()
+
+        station_a = Station(name="Station A", code="STA", address="Addr A", city="City A")
+        station_b = Station(name="Station B", code="STB", address="Addr B", city="City B")
+        db.add_all([station_a, station_b])
+        db.flush()
+
+        admin = User(
+            full_name="Admin User",
+            username="admin",
+            email="admin@example.com",
+            hashed_password=hash_password("admin123"),
+            is_active=True,
+            role_id=admin_role.id,
+            station_id=station_a.id,
+        )
+        operator = User(
+            full_name="Operator User",
+            username="operator",
+            email="operator@example.com",
+            hashed_password=hash_password("operator123"),
+            is_active=True,
+            role_id=operator_role.id,
+            station_id=station_a.id,
+        )
+        db.add_all([admin, operator])
+        db.flush()
+
+        fuel_type = FuelType(name="Petrol", description="Fuel")
+        db.add(fuel_type)
+        db.flush()
+
+        tank = Tank(
+            name="Tank A",
+            code="TANK-A",
+            capacity=1000,
+            current_volume=100,
+            low_stock_threshold=20,
+            location="Underground",
+            station_id=station_a.id,
+            fuel_type_id=fuel_type.id,
+        )
+        db.add(tank)
+        db.flush()
+
+        dispenser = Dispenser(
+            name="Dispenser A",
+            code="DISP-A",
+            location="Front",
+            station_id=station_a.id,
+        )
+        db.add(dispenser)
+        db.flush()
+
+        nozzle = Nozzle(
+            name="Nozzle A",
+            code="NOZ-A",
+            meter_reading=1000,
+            dispenser_id=dispenser.id,
+            tank_id=tank.id,
+            fuel_type_id=fuel_type.id,
+        )
+        db.add(nozzle)
+
+        customer = Customer(
+            name="Customer A",
+            code="CUST-A",
+            customer_type="company",
+            phone="123",
+            address="Addr",
+            credit_limit=500,
+            outstanding_balance=0,
+            station_id=station_a.id,
+        )
+        db.add(customer)
+
+        supplier = Supplier(name="Supplier A", code="SUP-A", phone="123", address="Addr", payable_balance=0)
+        db.add(supplier)
+
+        foreign_shift = Shift(
+            station_id=station_b.id,
+            user_id=admin.id,
+            status="open",
+            initial_cash=0,
+            expected_cash=0,
+        )
+        db.add(foreign_shift)
+
+        db.commit()
+        return {
+            "station_a_id": station_a.id,
+            "station_b_id": station_b.id,
+            "fuel_type_id": fuel_type.id,
+            "tank_id": tank.id,
+            "nozzle_id": nozzle.id,
+            "customer_id": customer.id,
+            "foreign_shift_id": foreign_shift.id,
+        }
+    finally:
+        db.close()
+
+
+def login(client: TestClient, username: str, password: str) -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": password})
+    assert response.status_code == 200, response.text
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_non_admin_cannot_manage_users(client):
+    test_client, session_local = client
+    seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    response = test_client.get("/users/", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin access required"
+
+
+def test_shift_details_are_scoped_by_station(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    response = test_client.get(f"/shifts/{data['foreign_shift_id']}", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not authorized for this shift"
+
+
+def test_supplier_endpoints_no_longer_reference_missing_station_fields(client):
+    test_client, session_local = client
+    seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    response = test_client.get("/suppliers/", headers=headers)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+def test_fuel_sale_rejects_cross_station_or_invalid_stock(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    wrong_station_response = test_client.post(
+        "/fuel-sales/",
+        headers=headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_b_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1010,
+            "rate_per_liter": 270,
+            "sale_type": "cash",
+        },
+    )
+
+    assert wrong_station_response.status_code == 403
+
+    stock_response = test_client.post(
+        "/fuel-sales/",
+        headers=headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1200,
+            "rate_per_liter": 270,
+            "sale_type": "cash",
+        },
+    )
+
+    assert stock_response.status_code == 400
+    assert stock_response.json()["detail"] == "Insufficient tank stock for this sale"
+
+
+def test_fuel_sale_can_be_fetched_and_reversed_safely(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    create_response = test_client.post(
+        "/fuel-sales/",
+        headers=headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "customer_id": data["customer_id"],
+            "closing_meter": 1010,
+            "rate_per_liter": 10,
+            "sale_type": "credit",
+        },
+    )
+
+    assert create_response.status_code == 200, create_response.text
+    sale = create_response.json()
+
+    get_response = test_client.get(f"/fuel-sales/{sale['id']}", headers=headers)
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == sale["id"]
+
+    reverse_response = test_client.post(f"/fuel-sales/{sale['id']}/reverse", headers=headers)
+    assert reverse_response.status_code == 200, reverse_response.text
+    assert reverse_response.json()["is_reversed"] is True
+
+    db = session_local()
+    try:
+        tank = db.query(Tank).filter(Tank.id == data["tank_id"]).first()
+        nozzle = db.query(Nozzle).filter(Nozzle.id == data["nozzle_id"]).first()
+        customer = db.query(Customer).filter(Customer.id == data["customer_id"]).first()
+        assert tank.current_volume == 100
+        assert nozzle.meter_reading == 1000
+        assert customer.outstanding_balance == 0
+    finally:
+        db.close()
+
+
+def test_customer_and_supplier_payments_have_detail_and_reverse_flows(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    db = session_local()
+    try:
+        customer = db.query(Customer).filter(Customer.id == data["customer_id"]).first()
+        supplier = db.query(Supplier).filter(Supplier.code == "SUP-A").first()
+        customer.outstanding_balance = 80
+        supplier.payable_balance = 90
+        db.commit()
+        supplier_id = supplier.id
+    finally:
+        db.close()
+
+    customer_payment = test_client.post(
+        "/customer-payments/",
+        headers=headers,
+        json={
+            "customer_id": data["customer_id"],
+            "station_id": data["station_a_id"],
+            "amount": 30,
+            "payment_method": "cash",
+        },
+    )
+    assert customer_payment.status_code == 200, customer_payment.text
+    customer_payment_id = customer_payment.json()["id"]
+
+    customer_payment_detail = test_client.get(f"/customer-payments/{customer_payment_id}", headers=headers)
+    assert customer_payment_detail.status_code == 200
+
+    customer_payment_reverse = test_client.post(f"/customer-payments/{customer_payment_id}/reverse", headers=headers)
+    assert customer_payment_reverse.status_code == 200
+    assert customer_payment_reverse.json()["is_reversed"] is True
+
+    supplier_payment = test_client.post(
+        "/supplier-payments/",
+        headers=headers,
+        json={
+            "supplier_id": supplier_id,
+            "station_id": data["station_a_id"],
+            "amount": 40,
+            "payment_method": "cash",
+        },
+    )
+    assert supplier_payment.status_code == 200, supplier_payment.text
+    supplier_payment_id = supplier_payment.json()["id"]
+
+    supplier_payment_detail = test_client.get(f"/supplier-payments/{supplier_payment_id}", headers=headers)
+    assert supplier_payment_detail.status_code == 200
+
+    supplier_payment_reverse = test_client.post(f"/supplier-payments/{supplier_payment_id}/reverse", headers=headers)
+    assert supplier_payment_reverse.status_code == 200
+    assert supplier_payment_reverse.json()["is_reversed"] is True
+
+
+def test_module_toggle_can_disable_routes(tmp_path):
+    db_path = tmp_path / "toggle_test.db"
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    module_app = create_app(enabled_modules="auth,customers")
+
+    def override_get_db():
+        db = testing_session_local()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    module_app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(module_app) as test_client:
+        health = test_client.get("/health")
+        assert health.status_code == 200
+        assert "customers" in health.json()["enabled_modules"]
+        assert "expenses" not in health.json()["enabled_modules"]
+
+        disabled = test_client.get("/expenses/")
+        assert disabled.status_code == 404
+
+    module_app.dependency_overrides.clear()
+
+
+def test_operator_cannot_read_other_station_customer_or_expense(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    headers = login(test_client, "operator", "operator123")
+
+    db = session_local()
+    try:
+        foreign_customer = Customer(
+            name="Customer B",
+            code="CUST-B",
+            customer_type="company",
+            phone="456",
+            address="Addr B",
+            credit_limit=100,
+            outstanding_balance=0,
+            station_id=data["station_b_id"],
+        )
+        db.add(foreign_customer)
+        db.flush()
+
+        foreign_expense = Expense(
+            title="Foreign Expense",
+            category="Ops",
+            amount=20,
+            notes="Other station",
+            station_id=data["station_b_id"],
+        )
+        db.add(foreign_expense)
+        db.commit()
+        foreign_customer_id = foreign_customer.id
+        foreign_expense_id = foreign_expense.id
+    finally:
+        db.close()
+
+    customer_response = test_client.get(f"/customers/{foreign_customer_id}", headers=headers)
+    assert customer_response.status_code == 403
+
+    expense_response = test_client.get(f"/expenses/{foreign_expense_id}", headers=headers)
+    assert expense_response.status_code == 403

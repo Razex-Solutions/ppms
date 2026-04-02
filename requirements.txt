@@ -1,0 +1,10 @@
+fastapi~=0.135.2
+uvicorn
+sqlalchemy
+pydantic
+python-dotenv
+pip~=25.1.1
+typing_extensions~=4.15.0
+requests
+httpx
+pytest
