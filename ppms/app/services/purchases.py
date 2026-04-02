@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.access import get_user_organization_id, is_head_office_user
 from app.core.time import utc_now
 from app.models.fuel_type import FuelType
 from app.models.purchase import Purchase
@@ -13,11 +14,18 @@ from app.services.audit import log_audit_event
 
 
 def ensure_purchase_access(purchase: Purchase, current_user: User) -> None:
-    if current_user.role.name != "Admin" and current_user.station_id != purchase.tank.station_id:
+    if current_user.role.name == "Admin":
+        return
+    station_id = purchase.tank.station_id
+    if is_head_office_user(current_user):
+        if purchase.tank.station.organization_id == get_user_organization_id(current_user):
+            return
+        raise HTTPException(status_code=403, detail="Not authorized for this purchase")
+    if current_user.station_id != station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this purchase")
 
 
-def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Purchase:
+def _validate_purchase_inputs(db: Session, data: PurchaseCreate, current_user: User) -> tuple[Tank, Supplier, FuelType, Tanker | None, float]:
     tank = db.query(Tank).filter(Tank.id == data.tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
@@ -48,6 +56,20 @@ def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Pu
         raise HTTPException(status_code=400, detail="Tank capacity exceeded")
 
     total_amount = data.quantity * data.rate_per_liter
+    return tank, supplier, fuel_type, tanker, total_amount
+
+
+def _apply_purchase_effects(purchase: Purchase, tank: Tank, supplier: Supplier, tanker: Tanker | None) -> None:
+    tank.current_volume += purchase.quantity
+    supplier.payable_balance += purchase.total_amount
+    if tanker:
+        tanker.status = "active"
+
+
+def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Purchase:
+    tank, supplier, _, tanker, total_amount = _validate_purchase_inputs(db, data, current_user)
+    is_auto_approved = current_user.role.name == "Admin"
+
     purchase = Purchase(
         supplier_id=data.supplier_id,
         tank_id=data.tank_id,
@@ -58,9 +80,15 @@ def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Pu
         total_amount=total_amount,
         reference_no=data.reference_no,
         notes=data.notes,
+        status="approved" if is_auto_approved else "pending",
+        submitted_by_user_id=current_user.id,
+        approved_by_user_id=current_user.id if is_auto_approved else None,
+        approved_at=utc_now() if is_auto_approved else None,
     )
     db.add(purchase)
     db.flush()
+    if is_auto_approved:
+        _apply_purchase_effects(purchase, tank, supplier, tanker)
     log_audit_event(
         db,
         current_user=current_user,
@@ -69,12 +97,71 @@ def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Pu
         entity_type="purchase",
         entity_id=purchase.id,
         station_id=tank.station_id,
-        details={"total_amount": total_amount, "quantity": data.quantity},
+        details={"total_amount": total_amount, "quantity": data.quantity, "status": purchase.status},
     )
-    tank.current_volume += data.quantity
-    if tanker:
-        tanker.status = "active"
-    supplier.payable_balance += total_amount
+    db.commit()
+    db.refresh(purchase)
+    return purchase
+
+
+def approve_purchase(db: Session, purchase: Purchase, current_user: User, reason: str | None = None) -> Purchase:
+    ensure_purchase_access(purchase, current_user)
+    if purchase.status == "approved":
+        raise HTTPException(status_code=400, detail="Purchase is already approved")
+    if purchase.status == "rejected":
+        raise HTTPException(status_code=400, detail="Rejected purchases cannot be approved")
+
+    tank = db.query(Tank).filter(Tank.id == purchase.tank_id).first()
+    supplier = db.query(Supplier).filter(Supplier.id == purchase.supplier_id).first()
+    tanker = db.query(Tanker).filter(Tanker.id == purchase.tanker_id).first() if purchase.tanker_id is not None else None
+    if tank is None or supplier is None:
+        raise HTTPException(status_code=400, detail="Cannot approve purchase because related records are missing")
+    if tank.current_volume + purchase.quantity > tank.capacity:
+        raise HTTPException(status_code=400, detail="Approving this purchase would exceed tank capacity")
+
+    purchase.status = "approved"
+    purchase.approved_by_user_id = current_user.id
+    purchase.approved_at = utc_now()
+    purchase.rejected_at = None
+    purchase.rejection_reason = None
+    _apply_purchase_effects(purchase, tank, supplier, tanker)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.approve",
+        entity_type="purchase",
+        entity_id=purchase.id,
+        station_id=tank.station_id,
+        details={"reason": reason, "total_amount": purchase.total_amount},
+    )
+    db.commit()
+    db.refresh(purchase)
+    return purchase
+
+
+def reject_purchase(db: Session, purchase: Purchase, current_user: User, reason: str | None = None) -> Purchase:
+    ensure_purchase_access(purchase, current_user)
+    if purchase.status == "approved":
+        raise HTTPException(status_code=400, detail="Approved purchases cannot be rejected")
+    if purchase.status == "rejected":
+        raise HTTPException(status_code=400, detail="Purchase is already rejected")
+
+    purchase.status = "rejected"
+    purchase.approved_by_user_id = None
+    purchase.approved_at = None
+    purchase.rejected_at = utc_now()
+    purchase.rejection_reason = reason
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.reject",
+        entity_type="purchase",
+        entity_id=purchase.id,
+        station_id=purchase.tank.station_id,
+        details={"reason": reason},
+    )
     db.commit()
     db.refresh(purchase)
     return purchase
@@ -82,6 +169,10 @@ def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Pu
 
 def reverse_purchase(db: Session, purchase: Purchase, current_user: User) -> Purchase:
     ensure_purchase_access(purchase, current_user)
+    if purchase.status != "approved":
+        raise HTTPException(status_code=400, detail="Only approved purchases can be reversed")
+    if purchase.reversal_request_status != "approved" and current_user.role.name != "Admin":
+        raise HTTPException(status_code=400, detail="Purchase reversal must be approved first")
     if purchase.is_reversed:
         raise HTTPException(status_code=400, detail="Purchase is already reversed")
 
@@ -108,6 +199,85 @@ def reverse_purchase(db: Session, purchase: Purchase, current_user: User) -> Pur
         entity_id=purchase.id,
         station_id=tank.station_id,
         details={"total_amount": purchase.total_amount, "quantity": purchase.quantity},
+    )
+    db.commit()
+    db.refresh(purchase)
+    return purchase
+
+
+def request_purchase_reversal(db: Session, purchase: Purchase, current_user: User, reason: str | None = None) -> Purchase:
+    ensure_purchase_access(purchase, current_user)
+    if purchase.status != "approved":
+        raise HTTPException(status_code=400, detail="Only approved purchases can request reversal")
+    if purchase.is_reversed:
+        raise HTTPException(status_code=400, detail="Purchase is already reversed")
+    if purchase.reversal_request_status == "pending":
+        raise HTTPException(status_code=400, detail="Purchase reversal is already pending approval")
+    purchase.reversal_request_status = "pending"
+    purchase.reversal_requested_at = utc_now()
+    purchase.reversal_requested_by = current_user.id
+    purchase.reversal_request_reason = reason
+    purchase.reversal_reviewed_at = None
+    purchase.reversal_reviewed_by = None
+    purchase.reversal_rejection_reason = None
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.request_reversal",
+        entity_type="purchase",
+        entity_id=purchase.id,
+        station_id=purchase.tank.station_id,
+        details={"reason": reason},
+    )
+    db.commit()
+    db.refresh(purchase)
+    return purchase
+
+
+def approve_purchase_reversal(db: Session, purchase: Purchase, current_user: User, reason: str | None = None) -> Purchase:
+    ensure_purchase_access(purchase, current_user)
+    if purchase.is_reversed:
+        raise HTTPException(status_code=400, detail="Purchase is already reversed")
+    if purchase.reversal_request_status not in {"pending", "approved"}:
+        raise HTTPException(status_code=400, detail="Purchase reversal has not been requested")
+    purchase.reversal_request_status = "approved"
+    purchase.reversal_reviewed_at = utc_now()
+    purchase.reversal_reviewed_by = current_user.id
+    purchase.reversal_rejection_reason = None
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.approve_reversal",
+        entity_type="purchase",
+        entity_id=purchase.id,
+        station_id=purchase.tank.station_id,
+        details={"reason": reason},
+    )
+    db.flush()
+    return reverse_purchase(db, purchase, current_user)
+
+
+def reject_purchase_reversal(db: Session, purchase: Purchase, current_user: User, reason: str | None = None) -> Purchase:
+    ensure_purchase_access(purchase, current_user)
+    if purchase.is_reversed:
+        raise HTTPException(status_code=400, detail="Purchase is already reversed")
+    if purchase.reversal_request_status != "pending":
+        raise HTTPException(status_code=400, detail="Purchase reversal is not pending approval")
+    purchase.reversal_request_status = "rejected"
+    purchase.reversal_reviewed_at = utc_now()
+    purchase.reversal_reviewed_by = current_user.id
+    purchase.reversal_rejection_reason = reason
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.reject_reversal",
+        entity_type="purchase",
+        entity_id=purchase.id,
+        station_id=purchase.tank.station_id,
+        details={"reason": reason},
     )
     db.commit()
     db.refresh(purchase)

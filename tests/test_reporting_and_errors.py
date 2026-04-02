@@ -14,6 +14,7 @@ def test_audit_logs_capture_transaction_and_report_activity(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
     operator_headers = login(test_client, "operator", "operator123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
     admin_headers = login(test_client, "admin", "admin123")
     manager_headers = login(test_client, "manager", "manager123")
     sale_response = test_client.post(
@@ -32,8 +33,18 @@ def test_audit_logs_capture_transaction_and_report_activity(client):
     sale_id = sale_response.json()["id"]
     report_date = sale_response.json()["created_at"][:10]
 
-    reverse_response = test_client.post(f"/fuel-sales/{sale_id}/reverse", headers=operator_headers)
+    reverse_response = test_client.post(
+        f"/fuel-sales/{sale_id}/reverse",
+        headers=operator_headers,
+        json={"reason": "Requested for audit flow"},
+    )
     assert reverse_response.status_code == 200, reverse_response.text
+    approve_response = test_client.post(
+        f"/fuel-sales/{sale_id}/approve-reversal",
+        headers=head_office_headers,
+        json={"reason": "Approved for audit flow"},
+    )
+    assert approve_response.status_code == 200, approve_response.text
 
     report_response = test_client.get(
         "/reports/daily-closing",
@@ -46,6 +57,8 @@ def test_audit_logs_capture_transaction_and_report_activity(client):
     assert audit_response.status_code == 200, audit_response.text
     actions = {entry["action"] for entry in audit_response.json()}
     assert "fuel_sales.create" in actions
+    assert "fuel_sales.request_reversal" in actions
+    assert "fuel_sales.approve_reversal" in actions
     assert "fuel_sales.reverse" in actions
 
     report_audit_response = test_client.get("/audit-logs/", params={"module": "reports"}, headers=admin_headers)
@@ -153,6 +166,7 @@ def test_report_permissions_and_financial_reports(client):
     operator_headers = login(test_client, "operator", "operator123")
     manager_headers = login(test_client, "manager", "manager123")
     accountant_headers = login(test_client, "accountant", "accountant123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
     forbidden_report = test_client.get(
         "/reports/daily-closing",
         params={"report_date": date.today().isoformat()},
@@ -186,6 +200,15 @@ def test_report_permissions_and_financial_reports(client):
         },
     )
     assert expense_response.status_code == 200, expense_response.text
+    assert expense_response.json()["status"] == "pending"
+
+    expense_approval = test_client.post(
+        f"/expenses/{expense_response.json()['id']}/approve",
+        headers=head_office_headers,
+        json={"reason": "Approved for reporting"},
+    )
+    assert expense_approval.status_code == 200, expense_approval.text
+    assert expense_approval.json()["status"] == "approved"
 
     purchase_response = test_client.post(
         "/purchases/",
@@ -199,6 +222,12 @@ def test_report_permissions_and_financial_reports(client):
         },
     )
     assert purchase_response.status_code == 200, purchase_response.text
+    purchase_approval = test_client.post(
+        f"/purchases/{purchase_response.json()['id']}/approve",
+        headers=head_office_headers,
+        json={"reason": "Approved delivery"},
+    )
+    assert purchase_approval.status_code == 200, purchase_approval.text
 
     daily_report = test_client.get(
         "/reports/daily-closing",
@@ -255,6 +284,12 @@ def test_head_office_reports_and_dashboard_are_organization_scoped(client):
         },
     )
     assert local_expense.status_code == 200, local_expense.text
+    local_expense_approval = test_client.post(
+        f"/expenses/{local_expense.json()['id']}/approve",
+        headers=head_office_headers,
+        json={"reason": "Approved for org dashboard"},
+    )
+    assert local_expense_approval.status_code == 200, local_expense_approval.text
 
     db = session_local()
     try:
@@ -355,6 +390,66 @@ def test_head_office_reports_and_dashboard_are_organization_scoped(client):
     assert dashboard_response.status_code == 200, dashboard_response.text
     assert dashboard_response.json()["filters"]["organization_id"] == data["organization_id"]
     assert dashboard_response.json()["sales"]["total"] == 40
+
+
+def test_expense_approval_workflow_controls_financial_reporting(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    pending_expense = test_client.post(
+        "/expenses/",
+        headers=manager_headers,
+        json={
+            "title": "Pending Expense",
+            "category": "Ops",
+            "amount": 25,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert pending_expense.status_code == 200, pending_expense.text
+    expense_id = pending_expense.json()["id"]
+    assert pending_expense.json()["status"] == "pending"
+
+    pending_report = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": pending_expense.json()["created_at"][:10]},
+        headers=accountant_headers,
+    )
+    assert pending_report.status_code == 200
+    assert pending_report.json()["expenses"] == 0
+
+    manager_approve_attempt = test_client.post(
+        f"/expenses/{expense_id}/approve",
+        headers=manager_headers,
+        json={"reason": "Self approval"},
+    )
+    assert manager_approve_attempt.status_code == 403
+
+    approval_response = test_client.post(
+        f"/expenses/{expense_id}/approve",
+        headers=head_office_headers,
+        json={"reason": "Approved by head office"},
+    )
+    assert approval_response.status_code == 200, approval_response.text
+    assert approval_response.json()["status"] == "approved"
+
+    approved_report = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": pending_expense.json()["created_at"][:10]},
+        headers=accountant_headers,
+    )
+    assert approved_report.status_code == 200
+    assert approved_report.json()["expenses"] == 25
+
+    reject_after_approval = test_client.post(
+        f"/expenses/{expense_id}/reject",
+        headers=head_office_headers,
+        json={"reason": "Too late"},
+    )
+    assert reject_after_approval.status_code == 400
 
 
 def test_validation_errors_include_request_id(client):

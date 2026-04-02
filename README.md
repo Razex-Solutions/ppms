@@ -38,7 +38,7 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
 - **Accounting & Financials**:
   - **Ledgers**: Detailed customer and supplier ledgers with running balances.
   - **Payments**: Processing customer payments (receivables) and supplier payments (payables).
-  - **Expenses**: Tracking station-wise operational expenses.
+  - **Expenses**: Tracking station-wise operational expenses with approval workflow support.
   - **Profit Analysis**: Real-time calculation of net profit based on sales and expenses.
   - **Reports**: Daily closing, shift variance, stock movement, customer balances, and supplier balances with organization-aware filters.
 
@@ -161,6 +161,56 @@ venv\Scripts\python.exe -m pytest tests
 - `HeadOffice` is a read-focused organization role. It can view stations, users, dashboards, and reports within its own organization.
 - `Manager`, `Operator`, and `Accountant` remain station-scoped for operational safety.
 - Report endpoints support `station_id` and `organization_id` filters, but non-admin users are automatically constrained to their allowed scope.
+
+## Expense Approval Workflow
+
+- Station finance users create expenses in `pending` status.
+- `Admin` can create auto-approved expenses.
+- `HeadOffice` and `Admin` can approve or reject submitted expenses.
+- Only approved expenses are included in dashboard and financial report totals.
+- Endpoints:
+  - `POST /expenses/`
+  - `POST /expenses/{expense_id}/approve`
+  - `POST /expenses/{expense_id}/reject`
+
+## Reversal Approval Workflow
+
+- Station roles can request reversals for fuel sales, purchases, customer payments, and supplier payments.
+- `HeadOffice` and `Admin` approve or reject those reversal requests.
+- Actual stock and balance rollback only happens after approval.
+- Endpoints:
+  - `POST /fuel-sales/{id}/reverse`
+  - `POST /fuel-sales/{id}/approve-reversal`
+  - `POST /fuel-sales/{id}/reject-reversal`
+  - `POST /purchases/{id}/reverse`
+  - `POST /purchases/{id}/approve-reversal`
+  - `POST /purchases/{id}/reject-reversal`
+  - `POST /customer-payments/{id}/reverse`
+  - `POST /customer-payments/{id}/approve-reversal`
+  - `POST /customer-payments/{id}/reject-reversal`
+  - `POST /supplier-payments/{id}/reverse`
+  - `POST /supplier-payments/{id}/approve-reversal`
+  - `POST /supplier-payments/{id}/reject-reversal`
+
+## Purchase Approval Workflow
+
+- Station roles create purchases in `pending` status.
+- `HeadOffice` and `Admin` approve or reject those purchases.
+- Only approved purchases affect tank stock, supplier payables, dashboard totals, and reporting.
+- Endpoints:
+  - `POST /purchases/`
+  - `POST /purchases/{id}/approve`
+  - `POST /purchases/{id}/reject`
+
+## Customer Credit Override Workflow
+
+- Station finance roles can request a temporary credit override for a customer.
+- `HeadOffice` and `Admin` can approve or reject the override.
+- Approved override headroom is consumed by over-limit credit sales.
+- Endpoints:
+  - `POST /customers/{id}/request-credit-override`
+  - `POST /customers/{id}/approve-credit-override`
+  - `POST /customers/{id}/reject-credit-override`
 
 ## Auth Password Management
 

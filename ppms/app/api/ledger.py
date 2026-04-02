@@ -82,6 +82,7 @@ def supplier_ledger(supplier_id: int, db: Session = Depends(get_db)):
     # Purchases
     purchases = db.query(Purchase).filter(
         Purchase.supplier_id == supplier_id,
+        Purchase.status == "approved",
         Purchase.is_reversed.is_(False)
     ).all()
 

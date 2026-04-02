@@ -60,6 +60,7 @@ def build_daily_closing_report(
         SupplierPayment.created_at < end,
     )
     expenses_query = db.query(func.sum(Expense.amount)).filter(
+        Expense.status == "approved",
         Expense.created_at >= start,
         Expense.created_at < end,
     )
@@ -163,6 +164,7 @@ def build_stock_movement_report(
     for tank in tanks_query.order_by(Tank.id.asc()).all():
         purchases_query = db.query(func.sum(Purchase.quantity)).filter(
             Purchase.tank_id == tank.id,
+            Purchase.status == "approved",
             Purchase.is_reversed.is_(False),
         )
         sales_query = db.query(func.sum(FuelSale.quantity)).join(Nozzle, Nozzle.id == FuelSale.nozzle_id).filter(
@@ -219,6 +221,7 @@ def build_supplier_balance_report(db: Session, station_id: int | None, organizat
         Purchase.supplier_id.label("supplier_id"),
         func.sum(Purchase.total_amount).label("purchased_total"),
     ).filter(Purchase.is_reversed.is_(False))
+    purchase_balances = purchase_balances.filter(Purchase.status == "approved")
     if station_id is not None:
         purchase_balances = purchase_balances.join(Tank, Tank.id == Purchase.tank_id).filter(Tank.station_id == station_id)
     elif organization_id is not None:

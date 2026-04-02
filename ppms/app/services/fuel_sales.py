@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.access import get_user_organization_id, is_head_office_user
 from app.core.time import utc_now
 from app.models.customer import Customer
 from app.models.fuel_sale import FuelSale
@@ -15,7 +16,13 @@ from app.services.audit import log_audit_event
 
 
 def ensure_sale_access(sale: FuelSale, current_user: User) -> None:
-    if current_user.role.name != "Admin" and current_user.station_id != sale.station_id:
+    if current_user.role.name == "Admin":
+        return
+    if is_head_office_user(current_user):
+        if sale.station and sale.station.organization_id == get_user_organization_id(current_user):
+            return
+        raise HTTPException(status_code=403, detail="Not authorized for this fuel sale")
+    if current_user.station_id != sale.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this fuel sale")
 
 
@@ -118,9 +125,23 @@ def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User)
         nozzle.tank.current_volume -= quantity
 
     if sale.sale_type == "credit" and customer is not None:
-        customer.outstanding_balance += total_amount
-        if customer.credit_limit > 0 and customer.outstanding_balance > customer.credit_limit:
+        projected_balance = customer.outstanding_balance + total_amount
+        allowed_limit = customer.credit_limit + (customer.credit_override_amount or 0)
+        if customer.credit_limit > 0 and projected_balance > allowed_limit:
             raise HTTPException(status_code=400, detail="Credit limit exceeded")
+        customer.outstanding_balance = projected_balance
+        if projected_balance > customer.credit_limit and customer.credit_override_amount > 0:
+            excess_amount = projected_balance - customer.credit_limit
+            customer.credit_override_amount = max(customer.credit_override_amount - excess_amount, 0)
+            if customer.credit_override_amount == 0:
+                customer.credit_override_status = None
+            customer.credit_override_requested_amount = 0
+            customer.credit_override_requested_at = None
+            customer.credit_override_requested_by = None
+            customer.credit_override_reason = None
+            customer.credit_override_reviewed_at = None
+            customer.credit_override_reviewed_by = None
+            customer.credit_override_rejection_reason = None
 
     db.commit()
     db.refresh(sale)
@@ -129,6 +150,8 @@ def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User)
 
 def reverse_fuel_sale(db: Session, sale: FuelSale, current_user: User) -> FuelSale:
     ensure_sale_access(sale, current_user)
+    if sale.reversal_request_status != "approved" and current_user.role.name != "Admin":
+        raise HTTPException(status_code=400, detail="Fuel sale reversal must be approved first")
     if sale.is_reversed:
         raise HTTPException(status_code=400, detail="Fuel sale is already reversed")
 
@@ -168,6 +191,86 @@ def reverse_fuel_sale(db: Session, sale: FuelSale, current_user: User) -> FuelSa
         entity_id=sale.id,
         station_id=sale.station_id,
         details={"total_amount": sale.total_amount, "quantity": sale.quantity},
+    )
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def request_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, reason: str | None = None) -> FuelSale:
+    ensure_sale_access(sale, current_user)
+    if sale.is_reversed:
+        raise HTTPException(status_code=400, detail="Fuel sale is already reversed")
+    if sale.reversal_request_status == "pending":
+        raise HTTPException(status_code=400, detail="Fuel sale reversal is already pending approval")
+
+    sale.reversal_request_status = "pending"
+    sale.reversal_requested_at = utc_now()
+    sale.reversal_requested_by = current_user.id
+    sale.reversal_request_reason = reason
+    sale.reversal_reviewed_at = None
+    sale.reversal_reviewed_by = None
+    sale.reversal_rejection_reason = None
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="fuel_sales",
+        action="fuel_sales.request_reversal",
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        station_id=sale.station_id,
+        details={"reason": reason},
+    )
+    db.commit()
+    db.refresh(sale)
+    return sale
+
+
+def approve_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, reason: str | None = None) -> FuelSale:
+    ensure_sale_access(sale, current_user)
+    if sale.is_reversed:
+        raise HTTPException(status_code=400, detail="Fuel sale is already reversed")
+    if sale.reversal_request_status not in {"pending", "approved"}:
+        raise HTTPException(status_code=400, detail="Fuel sale reversal has not been requested")
+
+    sale.reversal_request_status = "approved"
+    sale.reversal_reviewed_at = utc_now()
+    sale.reversal_reviewed_by = current_user.id
+    sale.reversal_rejection_reason = None
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="fuel_sales",
+        action="fuel_sales.approve_reversal",
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        station_id=sale.station_id,
+        details={"reason": reason},
+    )
+    db.flush()
+    return reverse_fuel_sale(db, sale, current_user)
+
+
+def reject_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, reason: str | None = None) -> FuelSale:
+    ensure_sale_access(sale, current_user)
+    if sale.is_reversed:
+        raise HTTPException(status_code=400, detail="Fuel sale is already reversed")
+    if sale.reversal_request_status != "pending":
+        raise HTTPException(status_code=400, detail="Fuel sale reversal is not pending approval")
+
+    sale.reversal_request_status = "rejected"
+    sale.reversal_reviewed_at = utc_now()
+    sale.reversal_reviewed_by = current_user.id
+    sale.reversal_rejection_reason = reason
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="fuel_sales",
+        action="fuel_sales.reject_reversal",
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        station_id=sale.station_id,
+        details={"reason": reason},
     )
     db.commit()
     db.refresh(sale)

@@ -135,6 +135,84 @@ def test_operator_cannot_view_audit_logs_or_create_expenses(client):
     )
     assert expense_response.status_code == 403
 
+    approve_response = test_client.post("/expenses/1/approve", headers=operator_headers, json={"reason": "No access"})
+    assert approve_response.status_code == 403
+
+
+def test_operator_cannot_approve_transaction_reversals(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1001,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+    sale_id = sale_response.json()["id"]
+
+    request_response = test_client.post(
+        f"/fuel-sales/{sale_id}/reverse",
+        headers=operator_headers,
+        json={"reason": "Request"},
+    )
+    assert request_response.status_code == 200
+
+    approve_response = test_client.post(
+        f"/fuel-sales/{sale_id}/approve-reversal",
+        headers=operator_headers,
+        json={"reason": "Not allowed"},
+    )
+    assert approve_response.status_code == 403
+
+
+def test_operator_cannot_approve_purchases(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    purchase_response = test_client.post(
+        "/purchases/",
+        headers=operator_headers,
+        json={
+            "supplier_id": 1,
+            "tank_id": data["tank_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "quantity": 10,
+            "rate_per_liter": 5,
+        },
+    )
+    assert purchase_response.status_code == 200, purchase_response.text
+    purchase_id = purchase_response.json()["id"]
+
+    approve_response = test_client.post(
+        f"/purchases/{purchase_id}/approve",
+        headers=operator_headers,
+        json={"reason": "No access"},
+    )
+    assert approve_response.status_code == 403
+
+
+def test_operator_cannot_approve_credit_overrides(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    approve_response = test_client.post(
+        f"/customers/{data['customer_id']}/approve-credit-override",
+        headers=operator_headers,
+        json={"amount": 50, "reason": "No access"},
+    )
+    assert approve_response.status_code == 403
+
 
 def test_operator_cannot_create_customer_or_tanker_master_data(client):
     test_client, session_local = client

@@ -14,6 +14,10 @@ class FuelSaleCreate(BaseModel):
     shift_id: int | None = None
 
 
+class ReversalRequest(BaseModel):
+    reason: str | None = None
+
+
 class FuelSaleResponse(BaseModel):
     id: int
     nozzle_id: int
@@ -29,6 +33,13 @@ class FuelSaleResponse(BaseModel):
     shift_name: str | None = None
     shift_id: int | None = None
     is_reversed: bool
+    reversal_request_status: str | None = None
+    reversal_requested_at: datetime | None = None
+    reversal_requested_by: int | None = None
+    reversal_request_reason: str | None = None
+    reversal_reviewed_at: datetime | None = None
+    reversal_reviewed_by: int | None = None
+    reversal_rejection_reason: str | None = None
     reversed_at: datetime | None = None
     reversed_by: int | None = None
     created_at: datetime

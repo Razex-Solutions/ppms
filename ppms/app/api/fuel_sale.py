@@ -6,9 +6,12 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.fuel_sale import FuelSale
-from app.schemas.fuel_sale import FuelSaleCreate, FuelSaleResponse
+from app.schemas.fuel_sale import FuelSaleCreate, FuelSaleResponse, ReversalRequest
+from app.services.fuel_sales import approve_fuel_sale_reversal as approve_fuel_sale_reversal_service
 from app.services.fuel_sales import create_fuel_sale as create_fuel_sale_service
 from app.services.fuel_sales import ensure_sale_access, reverse_fuel_sale as reverse_fuel_sale_service
+from app.services.fuel_sales import reject_fuel_sale_reversal as reject_fuel_sale_reversal_service
+from app.services.fuel_sales import request_fuel_sale_reversal as request_fuel_sale_reversal_service
 
 router = APIRouter(prefix="/fuel-sales", tags=["Fuel Sales"])
 
@@ -40,6 +43,7 @@ def get_fuel_sale(
 @router.post("/{sale_id}/reverse", response_model=FuelSaleResponse)
 def reverse_fuel_sale(
     sale_id: int,
+    data: ReversalRequest | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -48,7 +52,39 @@ def reverse_fuel_sale(
         raise HTTPException(status_code=404, detail="Fuel sale not found")
 
     require_permission(current_user, "fuel_sales", "reverse", detail="You do not have permission to reverse fuel sales")
-    return reverse_fuel_sale_service(db, sale, current_user)
+    if current_user.role.name == "Admin":
+        return reverse_fuel_sale_service(db, sale, current_user)
+    return request_fuel_sale_reversal_service(db, sale, current_user, data.reason if data else None)
+
+
+@router.post("/{sale_id}/approve-reversal", response_model=FuelSaleResponse)
+def approve_fuel_sale_reversal(
+    sale_id: int,
+    data: ReversalRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    sale = db.query(FuelSale).filter(FuelSale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Fuel sale not found")
+
+    require_permission(current_user, "fuel_sales", "approve_reverse", detail="You do not have permission to approve fuel sale reversals")
+    return approve_fuel_sale_reversal_service(db, sale, current_user, data.reason if data else None)
+
+
+@router.post("/{sale_id}/reject-reversal", response_model=FuelSaleResponse)
+def reject_fuel_sale_reversal(
+    sale_id: int,
+    data: ReversalRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    sale = db.query(FuelSale).filter(FuelSale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Fuel sale not found")
+
+    require_permission(current_user, "fuel_sales", "reject_reverse", detail="You do not have permission to reject fuel sale reversals")
+    return reject_fuel_sale_reversal_service(db, sale, current_user, data.reason if data else None)
 
 
 @router.get("/", response_model=list[FuelSaleResponse])

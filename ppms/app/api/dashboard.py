@@ -96,7 +96,7 @@ def get_dashboard(
     sale_count = sale_count_q.scalar() or 0
 
     # ---------------- EXPENSES ----------------
-    exp_q = db.query(func.sum(Expense.amount))
+    exp_q = db.query(func.sum(Expense.amount)).filter(Expense.status == "approved")
     if station_id:
         exp_q = exp_q.filter(Expense.station_id == station_id)
     elif organization_id:
@@ -128,6 +128,7 @@ def get_dashboard(
 
     # ---------------- PAYABLES ----------------
     purchase_payables_q = db.query(func.sum(Purchase.total_amount)).join(Tank, Purchase.tank_id == Tank.id).filter(
+        Purchase.status == "approved",
         Purchase.is_reversed.is_(False)
     )
     if station_id:

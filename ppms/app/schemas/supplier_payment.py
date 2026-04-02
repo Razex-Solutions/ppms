@@ -11,6 +11,10 @@ class SupplierPaymentCreate(BaseModel):
     notes: str | None = None
 
 
+class ReversalRequest(BaseModel):
+    reason: str | None = None
+
+
 class SupplierPaymentResponse(BaseModel):
     id: int
     supplier_id: int
@@ -20,6 +24,13 @@ class SupplierPaymentResponse(BaseModel):
     reference_no: str | None = None
     notes: str | None = None
     is_reversed: bool
+    reversal_request_status: str | None = None
+    reversal_requested_at: datetime | None = None
+    reversal_requested_by: int | None = None
+    reversal_request_reason: str | None = None
+    reversal_reviewed_at: datetime | None = None
+    reversal_reviewed_by: int | None = None
+    reversal_rejection_reason: str | None = None
     reversed_at: datetime | None = None
     reversed_by: int | None = None
     created_at: datetime

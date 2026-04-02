@@ -9,8 +9,11 @@ from app.models.customer import Customer
 from app.models.customer_payment import CustomerPayment
 from app.models.fuel_sale import FuelSale
 from app.models.user import User
-from app.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
+from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerResponse, CustomerUpdate
+from app.services.customers import approve_credit_override as approve_credit_override_service
 from app.services.customers import create_customer as create_customer_service
+from app.services.customers import reject_credit_override as reject_credit_override_service
+from app.services.customers import request_credit_override as request_credit_override_service
 from app.services.customers import update_customer as update_customer_service
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
@@ -95,3 +98,46 @@ def delete_customer(
     db.delete(customer)
     db.commit()
     return {"message": "Customer deleted"}
+
+
+@router.post("/{customer_id}/request-credit-override", response_model=CustomerResponse)
+def request_credit_override(
+    customer_id: int,
+    data: CreditOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
+    require_permission(current_user, "customers", "request_credit_override", detail="You do not have permission to request credit overrides")
+    return request_credit_override_service(customer, data, db, current_user)
+
+
+@router.post("/{customer_id}/approve-credit-override", response_model=CustomerResponse)
+def approve_credit_override(
+    customer_id: int,
+    data: CreditOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    require_permission(current_user, "customers", "approve_credit_override", detail="You do not have permission to approve credit overrides")
+    return approve_credit_override_service(customer, data, db, current_user)
+
+
+@router.post("/{customer_id}/reject-credit-override", response_model=CustomerResponse)
+def reject_credit_override(
+    customer_id: int,
+    data: CreditOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    require_permission(current_user, "customers", "reject_credit_override", detail="You do not have permission to reject credit overrides")
+    return reject_credit_override_service(customer, data, db, current_user)

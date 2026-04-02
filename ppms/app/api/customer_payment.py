@@ -6,9 +6,12 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.customer_payment import CustomerPayment
-from app.schemas.customer_payment import CustomerPaymentCreate, CustomerPaymentResponse
+from app.schemas.customer_payment import CustomerPaymentCreate, CustomerPaymentResponse, ReversalRequest
+from app.services.payments import approve_customer_payment_reversal as approve_customer_payment_reversal_service
 from app.services.payments import create_customer_payment as create_customer_payment_service
 from app.services.payments import ensure_customer_payment_access, reverse_customer_payment as reverse_customer_payment_service
+from app.services.payments import reject_customer_payment_reversal as reject_customer_payment_reversal_service
+from app.services.payments import request_customer_payment_reversal as request_customer_payment_reversal_service
 
 router = APIRouter(prefix="/customer-payments", tags=["Customer Payments"])
 
@@ -66,6 +69,7 @@ def get_customer_payment(
 @router.post("/{payment_id}/reverse", response_model=CustomerPaymentResponse)
 def reverse_customer_payment(
     payment_id: int,
+    data: ReversalRequest | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -74,4 +78,36 @@ def reverse_customer_payment(
         raise HTTPException(status_code=404, detail="Customer payment not found")
 
     require_permission(current_user, "customer_payments", "reverse", detail="You do not have permission to reverse customer payments")
-    return reverse_customer_payment_service(db, payment, current_user)
+    if current_user.role.name == "Admin":
+        return reverse_customer_payment_service(db, payment, current_user)
+    return request_customer_payment_reversal_service(db, payment, current_user, data.reason if data else None)
+
+
+@router.post("/{payment_id}/approve-reversal", response_model=CustomerPaymentResponse)
+def approve_customer_payment_reversal(
+    payment_id: int,
+    data: ReversalRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    payment = db.query(CustomerPayment).filter(CustomerPayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Customer payment not found")
+
+    require_permission(current_user, "customer_payments", "approve_reverse", detail="You do not have permission to approve customer payment reversals")
+    return approve_customer_payment_reversal_service(db, payment, current_user, data.reason if data else None)
+
+
+@router.post("/{payment_id}/reject-reversal", response_model=CustomerPaymentResponse)
+def reject_customer_payment_reversal(
+    payment_id: int,
+    data: ReversalRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    payment = db.query(CustomerPayment).filter(CustomerPayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Customer payment not found")
+
+    require_permission(current_user, "customer_payments", "reject_reverse", detail="You do not have permission to reject customer payment reversals")
+    return reject_customer_payment_reversal_service(db, payment, current_user, data.reason if data else None)

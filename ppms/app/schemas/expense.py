@@ -17,6 +17,10 @@ class ExpenseUpdate(BaseModel):
     notes: str | None = None
 
 
+class ExpenseApprovalRequest(BaseModel):
+    reason: str | None = None
+
+
 class ExpenseResponse(BaseModel):
     id: int
     title: str
@@ -24,6 +28,12 @@ class ExpenseResponse(BaseModel):
     amount: float
     notes: str | None = None
     station_id: int
+    status: str
+    submitted_by_user_id: int | None = None
+    approved_by_user_id: int | None = None
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
+    rejection_reason: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -56,6 +56,9 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "create": {"Admin", "Manager", "Accountant"},
         "update": {"Admin", "Manager", "Accountant"},
         "delete": {"Admin", "Manager"},
+        "request_credit_override": {"Admin", "Manager", "Accountant"},
+        "approve_credit_override": {"Admin", "HeadOffice"},
+        "reject_credit_override": {"Admin", "HeadOffice"},
     },
     "suppliers": {
         "create": {"Admin", "Manager", "Accountant"},
@@ -65,18 +68,28 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
     "fuel_sales": {
         "create": {"Admin", "Manager", "Operator"},
         "reverse": {"Admin", "Manager", "Operator"},
+        "approve_reverse": {"Admin", "HeadOffice"},
+        "reject_reverse": {"Admin", "HeadOffice"},
     },
     "purchases": {
         "create": {"Admin", "Manager", "Operator"},
+        "approve": {"Admin", "HeadOffice"},
+        "reject": {"Admin", "HeadOffice"},
         "reverse": {"Admin", "Manager", "Operator"},
+        "approve_reverse": {"Admin", "HeadOffice"},
+        "reject_reverse": {"Admin", "HeadOffice"},
     },
     "customer_payments": {
         "create": {"Admin", "Manager", "Operator", "Accountant"},
         "reverse": {"Admin", "Manager", "Operator", "Accountant"},
+        "approve_reverse": {"Admin", "HeadOffice"},
+        "reject_reverse": {"Admin", "HeadOffice"},
     },
     "supplier_payments": {
         "create": {"Admin", "Manager", "Operator", "Accountant"},
         "reverse": {"Admin", "Manager", "Operator", "Accountant"},
+        "approve_reverse": {"Admin", "HeadOffice"},
+        "reject_reverse": {"Admin", "HeadOffice"},
     },
     "shifts": {
         "open": {"Admin", "Manager", "Operator"},
@@ -104,6 +117,8 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "create": {"Admin", "Manager", "Accountant"},
         "update": {"Admin", "Manager", "Accountant"},
         "delete": {"Admin", "Manager", "Accountant"},
+        "approve": {"Admin", "HeadOffice"},
+        "reject": {"Admin", "HeadOffice"},
     },
     "hardware": {
         "create": {"Admin", "Manager"},
