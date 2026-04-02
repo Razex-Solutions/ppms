@@ -19,3 +19,5 @@ from app.models.nozzle_reading import NozzleReading
 from app.models.pos_product import POSProduct
 from app.models.pos_sale import POSSale
 from app.models.pos_sale_item import POSSaleItem
+from app.models.hardware_device import HardwareDevice
+from app.models.hardware_event import HardwareEvent

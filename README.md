@@ -9,6 +9,7 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
 - **Asset Management**: Tracking stations, tanks, dispensers, and nozzles.
 - **Sales Tracking**: Monitoring fuel sales (cash/credit), shift-wise nozzle readings, and daily summaries.
 - **Inventory Management**: Handling fuel types, purchases, tanker deliveries, and tank dip readings.
+- **POS & Hardware Foundations**: Supporting POS stock/sales workflows plus simulator-friendly hardware device registration and reading ingestion.
 - **Financials**: Managing customer/supplier payments, expenses, and ledger entries with profit analysis.
 - **Monitoring**: Real-time dashboard for sales, expenses, net profit, low-stock alerts, and credit-limit notifications.
 - **Multi-tenancy**: Admins can manage all stations, while Managers/Operators/Accountants are restricted to their assigned station data.
@@ -30,6 +31,7 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
 - **Operations**:
   - **Nozzle Readings**: Shift-wise tracking of start and end meter readings.
   - **Tank Dips**: Manual stick readings (mm) with automated volume calculation and loss/gain (evaporation/leakage) analysis.
+  - **Hardware Module**: Registry and event logging for dispenser and tank-probe devices, including safe simulator endpoints for backend testing.
 - **Accounting & Financials**:
   - **Ledgers**: Detailed customer and supplier ledgers with running balances.
   - **Payments**: Processing customer payments (receivables) and supplier payments (payables).
@@ -121,7 +123,7 @@ The application uses `ppms/app/core/config.py` for configuration.
 - **ACCESS_TOKEN_EXPIRE_MINUTES**: Token lifetime in minutes.
 - **ENABLED_MODULES**: Comma-separated module list to enable selected backend areas for testing.
   - Default: `*`
-  - Example: `ENABLED_MODULES=auth,customers,expenses`
+  - Example: `ENABLED_MODULES=auth,customers,expenses,hardware`
 
 ## Modular Testing
 
@@ -130,13 +132,17 @@ The backend now supports module-based startup for focused testing. The `/health`
 Example:
 
 ```bash
-set ENABLED_MODULES=auth,customers,expenses
+set ENABLED_MODULES=auth,customers,expenses,hardware
 uvicorn app.main:app --reload --port 8000
 ```
 
 ## Tests
 
 Use automated tests instead of hardcoded localhost verification scripts. The project now includes the dependencies needed for in-process API testing with FastAPI's test client.
+
+```bash
+venv\Scripts\python.exe -m pytest tests\test_security_regressions.py
+```
 
 ## License
 
