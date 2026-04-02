@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.purchase import Purchase
 from app.models.tank import Tank
 from app.schemas.purchase import PurchaseCreate, PurchaseResponse
@@ -19,6 +20,7 @@ def create_purchase(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "purchases", "create", detail="You do not have permission to create purchases")
     return create_purchase_service(db, data, current_user)
 
 
@@ -77,4 +79,5 @@ def reverse_purchase(
     if not purchase:
         raise HTTPException(status_code=404, detail="Purchase not found")
 
+    require_permission(current_user, "purchases", "reverse", detail="You do not have permission to reverse purchases")
     return reverse_purchase_service(db, purchase, current_user)

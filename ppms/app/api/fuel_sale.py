@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.fuel_sale import FuelSale
 from app.schemas.fuel_sale import FuelSaleCreate, FuelSaleResponse
 from app.services.fuel_sales import create_fuel_sale as create_fuel_sale_service
@@ -18,6 +19,7 @@ def create_fuel_sale(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "fuel_sales", "create", detail="You do not have permission to create fuel sales")
     return create_fuel_sale_service(db, sale_data, current_user)
 
 
@@ -45,6 +47,7 @@ def reverse_fuel_sale(
     if not sale:
         raise HTTPException(status_code=404, detail="Fuel sale not found")
 
+    require_permission(current_user, "fuel_sales", "reverse", detail="You do not have permission to reverse fuel sales")
     return reverse_fuel_sale_service(db, sale, current_user)
 
 

@@ -7,6 +7,7 @@ from app.core.dependencies import get_current_user
 from app.models.customer import Customer
 from app.models.dispenser import Dispenser
 from app.models.expense import Expense
+from app.models.organization import Organization
 from app.models.station import Station
 from app.models.tank import Tank
 from app.models.tanker import Tanker
@@ -27,12 +28,24 @@ def create_station(
     existing_station = db.query(Station).filter(Station.code == station_data.code).first()
     if existing_station:
         raise HTTPException(status_code=400, detail="Station code already exists")
+    organization = db.query(Organization).filter(Organization.id == station_data.organization_id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if station_data.is_head_office:
+        existing_head_office = db.query(Station).filter(
+            Station.organization_id == station_data.organization_id,
+            Station.is_head_office.is_(True),
+        ).first()
+        if existing_head_office:
+            raise HTTPException(status_code=400, detail="Organization already has a head office station")
 
     station = Station(
         name=station_data.name,
         code=station_data.code,
         address=station_data.address,
-        city=station_data.city
+        city=station_data.city,
+        organization_id=station_data.organization_id,
+        is_head_office=station_data.is_head_office,
     )
     db.add(station)
     db.commit()
@@ -44,12 +57,16 @@ def create_station(
 def list_stations(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
+    organization_id: int | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role.name != "Admin":
         return db.query(Station).filter(Station.id == current_user.station_id).offset(skip).limit(limit).all()
-    return db.query(Station).offset(skip).limit(limit).all()
+    query = db.query(Station)
+    if organization_id is not None:
+        query = query.filter(Station.organization_id == organization_id)
+    return query.offset(skip).limit(limit).all()
 
 
 @router.get("/{station_id}", response_model=StationResponse)
@@ -77,7 +94,22 @@ def update_station(
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    new_organization_id = updates.get("organization_id", station.organization_id)
+    if new_organization_id is not None:
+        organization = db.query(Organization).filter(Organization.id == new_organization_id).first()
+        if not organization:
+            raise HTTPException(status_code=404, detail="Organization not found")
+    new_is_head_office = updates.get("is_head_office", station.is_head_office)
+    if new_is_head_office and new_organization_id is not None:
+        existing_head_office = db.query(Station).filter(
+            Station.organization_id == new_organization_id,
+            Station.is_head_office.is_(True),
+            Station.id != station.id,
+        ).first()
+        if existing_head_office:
+            raise HTTPException(status_code=400, detail="Organization already has a head office station")
+    for field, value in updates.items():
         setattr(station, field, value)
     db.commit()
     db.refresh(station)

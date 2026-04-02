@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.supplier import Supplier
 from app.models.purchase import Purchase
 from app.models.supplier_payment import SupplierPayment
@@ -17,6 +18,7 @@ def create_supplier(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "suppliers", "create", detail="You do not have permission to create suppliers")
     existing = db.query(Supplier).filter(Supplier.code == data.code).first()
     if existing:
         raise HTTPException(status_code=400, detail="Supplier already exists")
@@ -67,6 +69,7 @@ def update_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
+    require_permission(current_user, "suppliers", "update", detail="You do not have permission to update suppliers")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(supplier, field, value)
     db.commit()
@@ -84,6 +87,7 @@ def delete_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
+    require_permission(current_user, "suppliers", "delete", detail="You do not have permission to delete suppliers")
     has_purchases = db.query(Purchase).filter(Purchase.supplier_id == supplier.id).first()
     has_payments = db.query(SupplierPayment).filter(SupplierPayment.supplier_id == supplier.id).first()
     if has_purchases or has_payments:

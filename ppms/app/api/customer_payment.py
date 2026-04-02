@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.customer_payment import CustomerPayment
 from app.schemas.customer_payment import CustomerPaymentCreate, CustomerPaymentResponse
 from app.services.payments import create_customer_payment as create_customer_payment_service
@@ -18,6 +19,7 @@ def create_customer_payment(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    require_permission(current_user, "customer_payments", "create", detail="You do not have permission to create customer payments")
     return create_customer_payment_service(db, data, current_user)
 
 
@@ -71,4 +73,5 @@ def reverse_customer_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Customer payment not found")
 
+    require_permission(current_user, "customer_payments", "reverse", detail="You do not have permission to reverse customer payments")
     return reverse_customer_payment_service(db, payment, current_user)

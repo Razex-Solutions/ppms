@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.access import require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.pos_product import POSProduct
 from app.models.pos_sale_item import POSSaleItem
 from app.models.user import User
@@ -20,6 +21,7 @@ def create_pos_product(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    require_permission(current_user, "pos_products", "create", detail="You do not have permission to create POS products")
     return create_pos_product_service(db, data, current_user)
 
 
@@ -70,6 +72,7 @@ def update_pos_product(
     if not product:
         raise HTTPException(status_code=404, detail="POS product not found")
     require_station_access(current_user, product.station_id, detail="Not authorized for this POS product")
+    require_permission(current_user, "pos_products", "update", detail="You do not have permission to update POS products")
     return update_pos_product_service(db, product, data)
 
 
@@ -83,6 +86,7 @@ def delete_pos_product(
     if not product:
         raise HTTPException(status_code=404, detail="POS product not found")
     require_station_access(current_user, product.station_id, detail="Not authorized for this POS product")
+    require_permission(current_user, "pos_products", "delete", detail="You do not have permission to delete POS products")
     if db.query(POSSaleItem).filter(POSSaleItem.product_id == product.id).first():
         raise HTTPException(status_code=400, detail="POS product cannot be deleted while sale history exists")
     db.delete(product)

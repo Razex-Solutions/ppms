@@ -6,6 +6,8 @@ class StationCreate(BaseModel):
     code: str
     address: str | None = None
     city: str | None = None
+    organization_id: int
+    is_head_office: bool = False
 
 
 class StationUpdate(BaseModel):
@@ -13,6 +15,8 @@ class StationUpdate(BaseModel):
     code: str | None = None
     address: str | None = None
     city: str | None = None
+    organization_id: int | None = None
+    is_head_office: bool | None = None
 
 
 class StationResponse(BaseModel):
@@ -21,5 +25,7 @@ class StationResponse(BaseModel):
     code: str
     address: str | None = None
     city: str | None = None
+    organization_id: int | None = None
+    is_head_office: bool
 
     model_config = ConfigDict(from_attributes=True)

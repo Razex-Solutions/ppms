@@ -4,6 +4,88 @@ from app.models.user import User
 
 
 PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
+    "users": {
+        "create": {"Admin"},
+        "update": {"Admin"},
+        "delete": {"Admin"},
+    },
+    "roles": {
+        "create": {"Admin"},
+        "update": {"Admin"},
+        "delete": {"Admin"},
+    },
+    "stations": {
+        "create": {"Admin"},
+        "update": {"Admin"},
+        "delete": {"Admin"},
+    },
+    "fuel_types": {
+        "create": {"Admin"},
+        "update": {"Admin"},
+        "delete": {"Admin"},
+    },
+    "tanks": {
+        "create": {"Admin", "Manager"},
+        "update": {"Admin", "Manager"},
+        "delete": {"Admin", "Manager"},
+    },
+    "dispensers": {
+        "create": {"Admin", "Manager"},
+        "update": {"Admin", "Manager"},
+        "delete": {"Admin", "Manager"},
+    },
+    "nozzles": {
+        "create": {"Admin", "Manager"},
+        "update": {"Admin", "Manager"},
+        "delete": {"Admin", "Manager"},
+    },
+    "tankers": {
+        "create": {"Admin", "Manager"},
+        "update": {"Admin", "Manager"},
+        "delete": {"Admin", "Manager"},
+    },
+    "customers": {
+        "create": {"Admin", "Manager", "Accountant"},
+        "update": {"Admin", "Manager", "Accountant"},
+        "delete": {"Admin", "Manager"},
+    },
+    "suppliers": {
+        "create": {"Admin", "Manager", "Accountant"},
+        "update": {"Admin", "Manager", "Accountant"},
+        "delete": {"Admin", "Manager"},
+    },
+    "fuel_sales": {
+        "create": {"Admin", "Manager", "Operator"},
+        "reverse": {"Admin", "Manager", "Operator"},
+    },
+    "purchases": {
+        "create": {"Admin", "Manager", "Operator"},
+        "reverse": {"Admin", "Manager", "Operator"},
+    },
+    "customer_payments": {
+        "create": {"Admin", "Manager", "Operator", "Accountant"},
+        "reverse": {"Admin", "Manager", "Operator", "Accountant"},
+    },
+    "supplier_payments": {
+        "create": {"Admin", "Manager", "Operator", "Accountant"},
+        "reverse": {"Admin", "Manager", "Operator", "Accountant"},
+    },
+    "shifts": {
+        "open": {"Admin", "Manager", "Operator"},
+        "close": {"Admin", "Manager", "Operator"},
+    },
+    "tank_dips": {
+        "create": {"Admin", "Manager", "Operator"},
+    },
+    "pos_products": {
+        "create": {"Admin", "Manager"},
+        "update": {"Admin", "Manager"},
+        "delete": {"Admin", "Manager"},
+    },
+    "pos_sales": {
+        "create": {"Admin", "Manager", "Operator"},
+        "reverse": {"Admin", "Manager", "Operator"},
+    },
     "audit_logs": {
         "read": {"Admin", "Manager", "Accountant"},
     },

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.access import require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.customer import Customer
 from app.models.customer_payment import CustomerPayment
 from app.models.fuel_sale import FuelSale
@@ -21,6 +22,7 @@ def create_customer(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    require_permission(current_user, "customers", "create", detail="You do not have permission to create customers")
     return create_customer_service(db, customer_data, current_user)
 
 
@@ -71,6 +73,7 @@ def update_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
+    require_permission(current_user, "customers", "update", detail="You do not have permission to update customers")
     return update_customer_service(customer, data, db)
 
 
@@ -84,6 +87,7 @@ def delete_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
+    require_permission(current_user, "customers", "delete", detail="You do not have permission to delete customers")
     has_sales = db.query(FuelSale).filter(FuelSale.customer_id == customer.id).first()
     has_payments = db.query(CustomerPayment).filter(CustomerPayment.customer_id == customer.id).first()
     if has_sales or has_payments:

@@ -13,6 +13,7 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
 - **Financials**: Managing customer/supplier payments, expenses, and ledger entries with profit analysis.
 - **Monitoring**: Real-time dashboard for sales, expenses, net profit, low-stock alerts, and credit-limit notifications.
 - **Multi-tenancy**: Admins can manage all stations, while Managers/Operators/Accountants are restricted to their assigned station data.
+- **Organization Foundation**: Stations can now belong to an organization, with head-office station designation for future centralized governance.
 
 ## API Endpoints & Features
 
@@ -22,10 +23,11 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
 
 ### Core Modules
 - **Authentication**: JWT-based login, role management (Admin, Manager, Operator, Accountant), and station assignment.
+  - Password management includes self-service password change and admin password reset endpoints.
 - **Shift Management**: Tracking employee shifts, including initial cash, sales, and end-of-shift cash reconciliation with difference detection.
 - **Sales**: Management of fuel sales (cash/credit), automatic meter reading updates, and nozzle history.
 - **Inventory & Assets**: 
-  - Full CRUD for stations, tanks, dispensers, and nozzles.
+  - Full CRUD for organizations, stations, tanks, dispensers, and nozzles.
   - Tracking fuel types and real-time stock levels.
   - **Tanker Management**: Managing fuel deliveries and associated tanker information.
 - **Operations**:
@@ -129,6 +131,8 @@ The application uses `ppms/app/core/config.py` for configuration.
 - **ENABLED_MODULES**: Comma-separated module list to enable selected backend areas for testing.
   - Default: `*`
   - Example: `ENABLED_MODULES=auth,customers,expenses,hardware`
+- **APP_ENV**: Runtime environment label used in health output and structured logs.
+- **LOG_LEVEL**: Logging verbosity for structured app logs.
 
 ## Modular Testing
 
@@ -146,8 +150,13 @@ uvicorn app.main:app --reload --port 8000
 Use automated tests instead of hardcoded localhost verification scripts. The project now includes the dependencies needed for in-process API testing with FastAPI's test client.
 
 ```bash
-venv\Scripts\python.exe -m pytest tests\test_security_regressions.py
+venv\Scripts\python.exe -m pytest tests
 ```
+
+## Auth Password Management
+
+- `POST /auth/change-password`: authenticated user changes their own password by supplying the current password.
+- `POST /auth/admin-reset-password/{user_id}`: admin resets another user's password.
 
 ## Database Migrations
 
@@ -157,6 +166,12 @@ Schema changes are now managed with Alembic instead of automatic table creation 
 venv\Scripts\python.exe -m alembic upgrade head
 venv\Scripts\python.exe -m alembic current
 ```
+
+## Logging And Error Handling
+
+- Requests now emit structured JSON logs with method, path, status, duration, and `request_id`.
+- Responses include `X-Request-ID` to help trace failures.
+- Validation errors, HTTP exceptions, and unexpected server errors are handled centrally.
 
 ## License
 

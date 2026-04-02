@@ -56,6 +56,7 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    user.organization_id = user.station.organization_id if user.station else None
     return user
 
 
@@ -78,7 +79,10 @@ def list_users(
         q = q.filter(User.role_id == role_id)
     if is_active is not None:
         q = q.filter(User.is_active == is_active)
-    return q.offset(skip).limit(limit).all()
+    users = q.offset(skip).limit(limit).all()
+    for user in users:
+        user.organization_id = user.station.organization_id if user.station else None
+    return users
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -92,6 +96,7 @@ def get_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    user.organization_id = user.station.organization_id if user.station else None
     return user
 
 
@@ -107,10 +112,17 @@ def update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if "station_id" in data.model_dump(exclude_unset=True):
+        station_id = data.model_dump(exclude_unset=True)["station_id"]
+        if station_id is not None:
+            station = db.query(Station).filter(Station.id == station_id).first()
+            if not station:
+                raise HTTPException(status_code=404, detail="Station not found")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(user, field, value)
     db.commit()
     db.refresh(user)
+    user.organization_id = user.station.organization_id if user.station else None
     return user
 
 

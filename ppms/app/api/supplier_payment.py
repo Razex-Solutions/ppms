@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.supplier_payment import SupplierPayment
 from app.schemas.supplier_payment import SupplierPaymentCreate, SupplierPaymentResponse
 from app.services.payments import create_supplier_payment as create_supplier_payment_service
@@ -18,6 +19,7 @@ def create_supplier_payment(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "supplier_payments", "create", detail="You do not have permission to create supplier payments")
     return create_supplier_payment_service(db, data, current_user)
 
 
@@ -72,4 +74,5 @@ def reverse_supplier_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Supplier payment not found")
 
+    require_permission(current_user, "supplier_payments", "reverse", detail="You do not have permission to reverse supplier payments")
     return reverse_supplier_payment_service(db, payment, current_user)

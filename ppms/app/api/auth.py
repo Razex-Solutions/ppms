@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.access import require_admin
 from app.core.database import get_db
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, create_access_token, hash_password
 from app.core.dependencies import get_current_user
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse
+from app.schemas.auth import (
+    AdminResetPasswordRequest,
+    ChangePasswordRequest,
+    LoginRequest,
+    PasswordActionResponse,
+    TokenResponse,
+)
 from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -52,4 +59,65 @@ def get_me(current_user: User = Depends(get_current_user)):
         "is_active": current_user.is_active,
         "role_id": current_user.role_id,
         "station_id": current_user.station_id,
+        "organization_id": current_user.station.organization_id if current_user.station else None,
     }
+
+
+@router.post("/change-password", response_model=PasswordActionResponse)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New password must be different from the current password")
+
+    try:
+        current_user.hashed_password = hash_password(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="auth",
+        action="auth.change_password",
+        entity_type="user",
+        entity_id=current_user.id,
+        station_id=current_user.station_id,
+    )
+    db.commit()
+    return PasswordActionResponse(message="Password changed successfully")
+
+
+@router.post("/admin-reset-password/{user_id}", response_model=PasswordActionResponse)
+def admin_reset_password(
+    user_id: int,
+    payload: AdminResetPasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_admin(current_user)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    try:
+        user.hashed_password = hash_password(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="auth",
+        action="auth.admin_reset_password",
+        entity_type="user",
+        entity_id=user.id,
+        station_id=user.station_id,
+        details={"target_username": user.username},
+    )
+    db.commit()
+    return PasswordActionResponse(message="Password reset successfully")

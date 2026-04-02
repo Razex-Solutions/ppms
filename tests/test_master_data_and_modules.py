@@ -1,0 +1,157 @@
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core.database import Base, get_db
+from app.main import create_app
+
+from tests.conftest import login, seed_base_data
+
+
+def test_module_toggle_can_disable_routes(tmp_path):
+    db_path = tmp_path / "toggle_test.db"
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    module_app = create_app(enabled_modules="auth,customers")
+
+    def override_get_db():
+        db = testing_session_local()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    module_app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(module_app) as test_client:
+        health = test_client.get("/health")
+        assert health.status_code == 200
+        assert "customers" in health.json()["enabled_modules"]
+        assert "expenses" not in health.json()["enabled_modules"]
+
+        disabled = test_client.get("/expenses/")
+        assert disabled.status_code == 404
+
+    module_app.dependency_overrides.clear()
+
+
+def test_master_data_delete_is_blocked_when_history_exists(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    manager_headers = login(test_client, "manager", "manager123")
+    operator_headers = login(test_client, "operator", "operator123")
+
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "customer_id": data["customer_id"],
+            "closing_meter": 1002,
+            "rate_per_liter": 10,
+            "sale_type": "credit",
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+
+    db = session_local()
+    try:
+        from app.models.supplier import Supplier
+
+        supplier = db.query(Supplier).filter(Supplier.code == "SUP-A").first()
+        supplier.payable_balance = 50
+        db.commit()
+        supplier_id = supplier.id
+    finally:
+        db.close()
+
+    supplier_payment_response = test_client.post(
+        "/supplier-payments/",
+        headers=admin_headers,
+        json={
+            "supplier_id": supplier_id,
+            "station_id": data["station_a_id"],
+            "amount": 20,
+            "payment_method": "cash",
+        },
+    )
+    assert supplier_payment_response.status_code == 200, supplier_payment_response.text
+
+    customer_delete = test_client.delete(f"/customers/{data['customer_id']}", headers=manager_headers)
+    assert customer_delete.status_code == 400
+
+    supplier_delete = test_client.delete(f"/suppliers/{supplier_id}", headers=admin_headers)
+    assert supplier_delete.status_code == 400
+
+    tank_delete = test_client.delete(f"/tanks/{data['tank_id']}", headers=manager_headers)
+    assert tank_delete.status_code == 400
+
+    fuel_type_delete = test_client.delete(f"/fuel-types/{data['fuel_type_id']}", headers=admin_headers)
+    assert fuel_type_delete.status_code == 400
+
+    station_delete = test_client.delete(f"/stations/{data['station_a_id']}", headers=admin_headers)
+    assert station_delete.status_code == 400
+
+
+def test_admin_can_manage_organizations_and_station_ownership(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    manager_headers = login(test_client, "manager", "manager123")
+
+    forbidden_org_create = test_client.post(
+        "/organizations/",
+        headers=manager_headers,
+        json={"name": "Forbidden Org", "code": "FORBID", "description": "Nope"},
+    )
+    assert forbidden_org_create.status_code == 403
+
+    org_response = test_client.post(
+        "/organizations/",
+        headers=admin_headers,
+        json={"name": "Org B", "code": "ORG-B", "description": "Secondary org"},
+    )
+    assert org_response.status_code == 200, org_response.text
+    organization_id = org_response.json()["id"]
+
+    station_response = test_client.post(
+        "/stations/",
+        headers=admin_headers,
+        json={
+            "name": "Station C",
+            "code": "STC",
+            "address": "Addr C",
+            "city": "City C",
+            "organization_id": organization_id,
+            "is_head_office": True,
+        },
+    )
+    assert station_response.status_code == 200, station_response.text
+    assert station_response.json()["organization_id"] == organization_id
+    assert station_response.json()["is_head_office"] is True
+
+    duplicate_head_office = test_client.post(
+        "/stations/",
+        headers=admin_headers,
+        json={
+            "name": "Station D",
+            "code": "STD",
+            "address": "Addr D",
+            "city": "City D",
+            "organization_id": organization_id,
+            "is_head_office": True,
+        },
+    )
+    assert duplicate_head_office.status_code == 400
+
+    org_stations = test_client.get(f"/stations/?organization_id={organization_id}", headers=admin_headers)
+    assert org_stations.status_code == 200
+    assert any(station["code"] == "STC" for station in org_stations.json())

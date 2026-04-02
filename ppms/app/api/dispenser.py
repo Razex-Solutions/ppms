@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.dispenser import Dispenser
 from app.models.station import Station
 from app.schemas.dispenser import DispenserCreate, DispenserUpdate, DispenserResponse
@@ -16,6 +17,7 @@ def create_dispenser(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "dispensers", "create", detail="You do not have permission to create dispensers")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != dispenser_data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
@@ -68,6 +70,7 @@ def get_dispenser(
     if not dispenser:
         raise HTTPException(status_code=404, detail="Dispenser not found")
 
+    require_permission(current_user, "dispensers", "update", detail="You do not have permission to update dispensers")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != dispenser.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this dispenser")
@@ -86,6 +89,7 @@ def update_dispenser(
     if not dispenser:
         raise HTTPException(status_code=404, detail="Dispenser not found")
 
+    require_permission(current_user, "dispensers", "delete", detail="You do not have permission to delete dispensers")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != dispenser.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this dispenser")

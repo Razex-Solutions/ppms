@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.shift import Shift
 from app.models.user import User
 from app.schemas.shift import ShiftCreate, ShiftUpdate, ShiftResponse
@@ -19,6 +20,7 @@ def open_shift(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    require_permission(current_user, "shifts", "open", detail="You do not have permission to open shifts")
     return create_shift_service(db, data, current_user)
 
 
@@ -32,6 +34,7 @@ def close_shift(
     shift = db.query(Shift).filter(Shift.id == shift_id).first()
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
+    require_permission(current_user, "shifts", "close", detail="You do not have permission to close shifts")
     return close_shift_service(db, shift, data, current_user)
 
 

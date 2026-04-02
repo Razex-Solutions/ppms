@@ -26,5 +26,6 @@ class UserResponse(BaseModel):
     is_active: bool
     role_id: int
     station_id: int | None = None
+    organization_id: int | None = None
 
     model_config = ConfigDict(from_attributes=True)

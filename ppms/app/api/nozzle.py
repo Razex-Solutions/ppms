@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.nozzle import Nozzle
 from app.models.dispenser import Dispenser
 from app.models.tank import Tank
@@ -20,6 +21,7 @@ def create_nozzle(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "nozzles", "create", detail="You do not have permission to create nozzles")
     dispenser = db.query(Dispenser).filter(Dispenser.id == nozzle_data.dispenser_id).first()
     if not dispenser:
         raise HTTPException(status_code=404, detail="Dispenser not found")
@@ -92,6 +94,7 @@ def get_nozzle(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
+    require_permission(current_user, "nozzles", "update", detail="You do not have permission to update nozzles")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != nozzle.dispenser.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this nozzle")
@@ -110,6 +113,7 @@ def update_nozzle(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
+    require_permission(current_user, "nozzles", "delete", detail="You do not have permission to delete nozzles")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != nozzle.dispenser.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this nozzle")

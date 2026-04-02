@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.access import require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.tank import Tank
 from app.models.station import Station
 from app.models.fuel_type import FuelType
@@ -22,6 +23,7 @@ def create_tank(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    require_permission(current_user, "tanks", "create", detail="You do not have permission to create tanks")
     require_station_access(current_user, tank_data.station_id)
 
     existing = db.query(Tank).filter(Tank.code == tank_data.code).first()
@@ -98,6 +100,7 @@ def update_tank(
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
     require_station_access(current_user, tank.station_id, detail="Not authorized for this tank")
+    require_permission(current_user, "tanks", "update", detail="You do not have permission to update tanks")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(tank, field, value)
     db.commit()
@@ -115,6 +118,7 @@ def delete_tank(
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
     require_station_access(current_user, tank.station_id, detail="Not authorized for this tank")
+    require_permission(current_user, "tanks", "delete", detail="You do not have permission to delete tanks")
     has_nozzles = db.query(Nozzle).filter(Nozzle.tank_id == tank.id).first()
     has_purchases = db.query(Purchase).filter(Purchase.tank_id == tank.id).first()
     has_dips = db.query(TankDip).filter(TankDip.tank_id == tank.id).first()

@@ -8,6 +8,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.core.database import SessionLocal
+from app.models.organization import Organization
 from app.core.security import hash_password
 from app.models.role import Role
 from app.models.station import Station
@@ -41,12 +42,35 @@ db.commit()
 admin_role = db.query(Role).filter(Role.name == "Admin").first()
 
 # Create default station
+organization = db.query(Organization).filter(Organization.code == "DEFAULT").first()
+if not organization:
+    organization = Organization(
+        name="Default Organization",
+        code="DEFAULT",
+        description="Default head-office organization",
+        is_active=True,
+    )
+    db.add(organization)
+    db.commit()
+    db.refresh(organization)
+
 station = db.query(Station).filter(Station.code == "HQ").first()
 if not station:
-    station = Station(name="Main Station", code="HQ", address="Head Office", city="Karachi")
+    station = Station(
+        name="Main Station",
+        code="HQ",
+        address="Head Office",
+        city="Karachi",
+        organization_id=organization.id,
+        is_head_office=True,
+    )
     db.add(station)
     db.commit()
     db.refresh(station)
+elif station.organization_id is None:
+    station.organization_id = organization.id
+    station.is_head_office = True
+    db.commit()
 
 # Create admin user
 if not db.query(User).filter(User.username == "admin").first():

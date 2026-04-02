@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.tank_dip import TankDip
 from app.models.tank import Tank
 from app.schemas.tank_dip import TankDipCreate, TankDipResponse
@@ -19,6 +20,7 @@ def create_tank_dip(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "tank_dips", "create", detail="You do not have permission to record tank dips")
     return create_tank_dip_service(db, data, current_user)
 
 

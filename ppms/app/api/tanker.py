@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.tanker import Tanker
 from app.models.station import Station
 from app.models.fuel_type import FuelType
@@ -17,6 +18,7 @@ def create_tanker(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    require_permission(current_user, "tankers", "create", detail="You do not have permission to create tankers")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
@@ -82,6 +84,7 @@ def get_tanker(
     if not tanker:
         raise HTTPException(status_code=404, detail="Tanker not found")
 
+    require_permission(current_user, "tankers", "update", detail="You do not have permission to update tankers")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != tanker.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this tanker")
@@ -100,6 +103,7 @@ def update_tanker(
     if not tanker:
         raise HTTPException(status_code=404, detail="Tanker not found")
 
+    require_permission(current_user, "tankers", "delete", detail="You do not have permission to delete tankers")
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != tanker.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this tanker")

@@ -1,4 +1,5 @@
 from app.models.role import Role
+from app.models.organization import Organization
 from app.models.user import User
 from app.models.station import Station
 from app.models.fuel_type import FuelType
