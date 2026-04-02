@@ -113,8 +113,11 @@ def seed_base_data(session_local):
         db.add_all(
             [
                 StationModuleSetting(station_id=station_a.id, module_name="tanker_operations", is_enabled=True),
+                StationModuleSetting(station_id=station_a.id, module_name="meter_adjustments", is_enabled=True),
                 StationModuleSetting(station_id=station_b.id, module_name="tanker_operations", is_enabled=False),
+                StationModuleSetting(station_id=station_b.id, module_name="meter_adjustments", is_enabled=False),
                 StationModuleSetting(station_id=station_c.id, module_name="tanker_operations", is_enabled=True),
+                StationModuleSetting(station_id=station_c.id, module_name="meter_adjustments", is_enabled=True),
             ]
         )
         db.flush()

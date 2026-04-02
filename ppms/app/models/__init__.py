@@ -1,5 +1,6 @@
 from app.models.role import Role
 from app.models.organization import Organization
+from app.models.notification import Notification
 from app.models.user import User
 from app.models.station import Station
 from app.models.fuel_type import FuelType
@@ -17,6 +18,7 @@ from app.models.supplier_payment import SupplierPayment
 from app.models.shift import Shift
 from app.models.tank_dip import TankDip
 from app.models.nozzle_reading import NozzleReading
+from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.pos_product import POSProduct
 from app.models.pos_sale import POSSale
 from app.models.pos_sale_item import POSSaleItem

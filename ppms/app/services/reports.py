@@ -15,6 +15,9 @@ from app.models.station import Station
 from app.models.supplier import Supplier
 from app.models.supplier_payment import SupplierPayment
 from app.models.tank import Tank
+from app.models.tanker_delivery import TankerDelivery
+from app.models.tanker_trip import TankerTrip
+from app.models.tanker_trip_expense import TankerTripExpense
 
 
 def _day_bounds(report_date: date) -> tuple[datetime, datetime]:
@@ -260,3 +263,138 @@ def build_supplier_balance_report(db: Session, station_id: int | None, organizat
     ]
     items.sort(key=lambda item: item["supplier_name"])
     return {"station_id": station_id, "organization_id": organization_id, "count": len(items), "items": items}
+
+
+def build_tanker_profit_report(
+    db: Session,
+    station_id: int | None,
+    from_date: date | None,
+    to_date: date | None,
+    organization_id: int | None = None,
+) -> dict:
+    query = db.query(TankerTrip).filter(TankerTrip.status == "completed")
+    if station_id is not None:
+        query = query.filter(TankerTrip.station_id == station_id)
+    elif organization_id is not None:
+        query = query.join(Station, Station.id == TankerTrip.station_id).filter(Station.organization_id == organization_id)
+    if from_date:
+        query = query.filter(TankerTrip.completed_at >= from_date)
+    if to_date:
+        query = query.filter(TankerTrip.completed_at < to_date)
+
+    trips = query.order_by(TankerTrip.completed_at.desc(), TankerTrip.id.desc()).all()
+    items = [
+        {
+            "trip_id": trip.id,
+            "station_id": trip.station_id,
+            "tanker_id": trip.tanker_id,
+            "trip_type": trip.trip_type,
+            "status": trip.status,
+            "destination_name": trip.destination_name,
+            "completed_at": trip.completed_at,
+            "total_quantity": round(trip.total_quantity or 0.0, 2),
+            "fuel_revenue": round(trip.fuel_revenue or 0.0, 2),
+            "delivery_revenue": round(trip.delivery_revenue or 0.0, 2),
+            "expense_total": round(trip.expense_total or 0.0, 2),
+            "net_profit": round(trip.net_profit or 0.0, 2),
+        }
+        for trip in trips
+    ]
+    return {
+        "station_id": station_id,
+        "organization_id": organization_id,
+        "count": len(items),
+        "total_fuel_revenue": round(sum(item["fuel_revenue"] for item in items), 2),
+        "total_delivery_revenue": round(sum(item["delivery_revenue"] for item in items), 2),
+        "total_expenses": round(sum(item["expense_total"] for item in items), 2),
+        "total_net_profit": round(sum(item["net_profit"] for item in items), 2),
+        "items": items,
+    }
+
+
+def build_tanker_delivery_report(
+    db: Session,
+    station_id: int | None,
+    from_date: date | None,
+    to_date: date | None,
+    organization_id: int | None = None,
+) -> dict:
+    query = db.query(TankerDelivery).join(TankerTrip, TankerTrip.id == TankerDelivery.trip_id)
+    if station_id is not None:
+        query = query.filter(TankerTrip.station_id == station_id)
+    elif organization_id is not None:
+        query = query.join(Station, Station.id == TankerTrip.station_id).filter(Station.organization_id == organization_id)
+    if from_date:
+        query = query.filter(TankerDelivery.created_at >= from_date)
+    if to_date:
+        query = query.filter(TankerDelivery.created_at < to_date)
+
+    deliveries = query.order_by(TankerDelivery.created_at.desc(), TankerDelivery.id.desc()).all()
+    items = [
+        {
+            "delivery_id": delivery.id,
+            "trip_id": delivery.trip_id,
+            "station_id": delivery.trip.station_id,
+            "customer_id": delivery.customer_id,
+            "destination_name": delivery.destination_name,
+            "sale_type": delivery.sale_type,
+            "quantity": round(delivery.quantity or 0.0, 2),
+            "fuel_amount": round(delivery.fuel_amount or 0.0, 2),
+            "delivery_charge": round(delivery.delivery_charge or 0.0, 2),
+            "paid_amount": round(delivery.paid_amount or 0.0, 2),
+            "outstanding_amount": round(delivery.outstanding_amount or 0.0, 2),
+            "created_at": delivery.created_at,
+        }
+        for delivery in deliveries
+    ]
+    return {
+        "station_id": station_id,
+        "organization_id": organization_id,
+        "count": len(items),
+        "total_quantity": round(sum(item["quantity"] for item in items), 2),
+        "fuel_revenue": round(sum(item["fuel_amount"] for item in items), 2),
+        "delivery_revenue": round(sum(item["delivery_charge"] for item in items), 2),
+        "cash_collected": round(sum(item["paid_amount"] for item in items), 2),
+        "credit_outstanding": round(sum(item["outstanding_amount"] for item in items), 2),
+        "items": items,
+    }
+
+
+def build_tanker_expense_report(
+    db: Session,
+    station_id: int | None,
+    from_date: date | None,
+    to_date: date | None,
+    organization_id: int | None = None,
+) -> dict:
+    query = db.query(TankerTripExpense).join(TankerTrip, TankerTrip.id == TankerTripExpense.trip_id)
+    if station_id is not None:
+        query = query.filter(TankerTrip.station_id == station_id)
+    elif organization_id is not None:
+        query = query.join(Station, Station.id == TankerTrip.station_id).filter(Station.organization_id == organization_id)
+    if from_date:
+        query = query.filter(TankerTripExpense.created_at >= from_date)
+    if to_date:
+        query = query.filter(TankerTripExpense.created_at < to_date)
+
+    expenses = query.order_by(TankerTripExpense.created_at.desc(), TankerTripExpense.id.desc()).all()
+    items = [
+        {
+            "expense_id": expense.id,
+            "trip_id": expense.trip_id,
+            "station_id": expense.trip.station_id,
+            "tanker_id": expense.trip.tanker_id,
+            "expense_type": expense.expense_type,
+            "amount": round(expense.amount or 0.0, 2),
+            "notes": expense.notes,
+            "created_at": expense.created_at,
+        }
+        for expense in expenses
+    ]
+    return {
+        "station_id": station_id,
+        "organization_id": organization_id,
+        "count": len(items),
+        "total_expenses": round(sum(item["amount"] for item in items), 2),
+        "items": items,
+    }

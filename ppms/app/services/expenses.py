@@ -8,6 +8,7 @@ from app.models.station import Station
 from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.services.audit import log_audit_event
+from app.services.notifications import notify_approval_requested, notify_decision
 
 
 def _get_station(db: Session, station_id: int) -> Station:
@@ -75,6 +76,18 @@ def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expe
             "organization_id": station.organization_id,
         },
     )
+    if not is_auto_approved:
+        notify_approval_requested(
+            db,
+            actor_user=current_user,
+            station_id=expense.station_id,
+            organization_id=station.organization_id,
+            entity_type="expense",
+            entity_id=expense.id,
+            title="Expense approval requested",
+            message=f"{current_user.full_name} submitted expense '{expense.title}' for approval.",
+            event_type="expense.pending_approval",
+        )
     db.commit()
     db.refresh(expense)
     return expense
@@ -124,6 +137,18 @@ def approve_expense(expense: Expense, db: Session, current_user: User, reason: s
         station_id=expense.station_id,
         details={"reason": reason},
     )
+    notify_decision(
+        db,
+        recipient_user_id=expense.submitted_by_user_id,
+        actor_user=current_user,
+        station_id=expense.station_id,
+        organization_id=_get_station(db, expense.station_id).organization_id,
+        entity_type="expense",
+        entity_id=expense.id,
+        title="Expense approved",
+        message=f"Expense '{expense.title}' was approved.",
+        event_type="expense.approved",
+    )
     db.commit()
     db.refresh(expense)
     return expense
@@ -147,6 +172,18 @@ def reject_expense(expense: Expense, db: Session, current_user: User, reason: st
         entity_id=expense.id,
         station_id=expense.station_id,
         details={"reason": reason},
+    )
+    notify_decision(
+        db,
+        recipient_user_id=expense.submitted_by_user_id,
+        actor_user=current_user,
+        station_id=expense.station_id,
+        organization_id=_get_station(db, expense.station_id).organization_id,
+        entity_type="expense",
+        entity_id=expense.id,
+        title="Expense rejected",
+        message=f"Expense '{expense.title}' was rejected.",
+        event_type="expense.rejected",
     )
     db.commit()
     db.refresh(expense)

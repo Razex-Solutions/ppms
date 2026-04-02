@@ -8,9 +8,12 @@ from app.models.nozzle import Nozzle
 from app.models.dispenser import Dispenser
 from app.models.tank import Tank
 from app.models.fuel_type import FuelType
+from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle_reading import NozzleReading
 from app.schemas.nozzle import NozzleCreate, NozzleUpdate, NozzleResponse
+from app.schemas.meter_adjustment_event import MeterAdjustmentEventResponse, MeterAdjustmentRequest
 from app.schemas.nozzle_reading import NozzleReadingResponse
+from app.services.nozzle_meter import adjust_nozzle_meter
 
 router = APIRouter(prefix="/nozzles", tags=["Nozzles"])
 
@@ -50,6 +53,7 @@ def create_nozzle(
         name=nozzle_data.name,
         code=nozzle_data.code,
         meter_reading=nozzle_data.meter_reading,
+        current_segment_start_reading=nozzle_data.meter_reading,
         dispenser_id=nozzle_data.dispenser_id,
         tank_id=nozzle_data.tank_id,
         fuel_type_id=nozzle_data.fuel_type_id
@@ -118,7 +122,10 @@ def update_nozzle(
     if current_user.role.name != "Admin" and current_user.station_id != nozzle.dispenser.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this nozzle")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    if "meter_reading" in changes:
+        raise HTTPException(status_code=400, detail="Use the dedicated meter adjustment endpoint to change nozzle meter readings")
+    for field, value in changes.items():
         setattr(nozzle, field, value)
     db.commit()
     db.refresh(nozzle)
@@ -156,6 +163,8 @@ def get_nozzle_readings(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
+    require_permission(current_user, "nozzles", "read_meter_history", detail="You do not have permission to view nozzle meter history")
+
     # Multi-tenancy check
     if current_user.role.name != "Admin" and current_user.station_id != nozzle.dispenser.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this nozzle")
@@ -163,3 +172,48 @@ def get_nozzle_readings(
     return db.query(NozzleReading).filter(
         NozzleReading.nozzle_id == nozzle_id
     ).order_by(NozzleReading.created_at.desc()).offset(skip).limit(limit).all()
+
+
+@router.post("/{nozzle_id}/adjust-meter", response_model=MeterAdjustmentEventResponse)
+def adjust_meter_reading(
+    nozzle_id: int,
+    data: MeterAdjustmentRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_permission(current_user, "nozzles", "adjust_meter", detail="You do not have permission to adjust nozzle meter readings")
+    nozzle = db.query(Nozzle).filter(Nozzle.id == nozzle_id).first()
+    if not nozzle:
+        raise HTTPException(status_code=404, detail="Nozzle not found")
+
+    if current_user.role.name != "Admin" and current_user.station_id != nozzle.dispenser.station_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this nozzle")
+
+    return adjust_nozzle_meter(
+        db,
+        nozzle=nozzle,
+        new_reading=data.new_reading,
+        reason=data.reason,
+        current_user=current_user,
+    )
+
+
+@router.get("/{nozzle_id}/adjustments", response_model=list[MeterAdjustmentEventResponse])
+def get_meter_adjustments(
+    nozzle_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_permission(current_user, "nozzles", "read_meter_history", detail="You do not have permission to view nozzle meter history")
+    nozzle = db.query(Nozzle).filter(Nozzle.id == nozzle_id).first()
+    if not nozzle:
+        raise HTTPException(status_code=404, detail="Nozzle not found")
+
+    if current_user.role.name != "Admin" and current_user.station_id != nozzle.dispenser.station_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this nozzle")
+
+    return db.query(MeterAdjustmentEvent).filter(
+        MeterAdjustmentEvent.nozzle_id == nozzle_id
+    ).order_by(MeterAdjustmentEvent.adjusted_at.desc()).offset(skip).limit(limit).all()

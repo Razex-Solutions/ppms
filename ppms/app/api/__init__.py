@@ -11,6 +11,7 @@ from app.api.fuel_type import router as fuel_type_router
 from app.api.hardware import router as hardware_router
 from app.api.ledger import router as ledger_router
 from app.api.nozzle import router as nozzle_router
+from app.api.notification import router as notification_router
 from app.api.organization import router as organization_router
 from app.api.purchase import router as purchase_router
 from app.api.pos_product import router as pos_product_router
@@ -41,6 +42,7 @@ ROUTER_REGISTRY = [
     {"name": "tanks", "router": tank_router, "protected": True},
     {"name": "dispensers", "router": dispenser_router, "protected": True},
     {"name": "nozzles", "router": nozzle_router, "protected": True},
+    {"name": "notifications", "router": notification_router, "protected": True},
     {"name": "fuel_sales", "router": fuel_sale_router, "protected": True},
     {"name": "hardware", "router": hardware_router, "protected": True},
     {"name": "customers", "router": customer_router, "protected": True},

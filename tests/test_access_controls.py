@@ -250,3 +250,17 @@ def test_operator_cannot_create_customer_or_tanker_master_data(client):
         },
     )
     assert tanker_response.status_code == 403
+
+
+def test_non_admin_cannot_adjust_nozzle_meter(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+
+    response = test_client.post(
+        f"/nozzles/{data['nozzle_id']}/adjust-meter",
+        headers=manager_headers,
+        json={"new_reading": 500, "reason": "Not allowed"},
+    )
+
+    assert response.status_code == 403

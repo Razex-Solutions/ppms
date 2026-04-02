@@ -249,6 +249,25 @@ venv\Scripts\python.exe -m pytest tests
   - `POST /tankers/trips/{id}/expenses`
   - `POST /tankers/trips/{id}/complete`
 
+## Nozzle Meter Adjustments
+
+- `meter_adjustments` is a station-level optional module.
+- Fuel sales still use meter progression and reduce tank stock from the liters sold.
+- Admin users can now reset or adjust a nozzle meter without breaking later sales math.
+- Each adjustment creates an immutable meter-adjustment event with:
+  - nozzle
+  - old reading
+  - new reading
+  - adjusted user
+  - timestamp
+  - reason
+- A meter adjustment starts a new nozzle sales segment by resetting the nozzle's current segment start.
+- Sales after the adjustment continue from the new reading, so total sales remain the sum of all valid segments instead of the difference between the first and last reading of the day.
+- Endpoints:
+  - `POST /nozzles/{id}/adjust-meter`
+  - `GET /nozzles/{id}/adjustments`
+  - `GET /nozzles/{id}/readings`
+
 ## Auth Password Management
 
 - `POST /auth/change-password`: authenticated user changes their own password by supplying the current password.

@@ -16,6 +16,9 @@ from app.services.reports import (
     build_shift_variance_report,
     build_stock_movement_report,
     build_supplier_balance_report,
+    build_tanker_delivery_report,
+    build_tanker_expense_report,
+    build_tanker_profit_report,
 )
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -170,6 +173,93 @@ def supplier_balance_report(
         entity_type="report",
         station_id=station_id,
         details={"organization_id": organization_id},
+    )
+    db.commit()
+    return report
+
+
+@router.get("/tanker-profit")
+def tanker_profit_report(
+    station_id: int | None = Query(None),
+    organization_id: int | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
+    station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
+    report = build_tanker_profit_report(db, station_id, from_date, to_date, organization_id)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="reports",
+        action="reports.tanker_profit",
+        entity_type="report",
+        station_id=station_id,
+        details={
+            "from_date": str(from_date) if from_date else None,
+            "to_date": str(to_date) if to_date else None,
+            "organization_id": organization_id,
+        },
+    )
+    db.commit()
+    return report
+
+
+@router.get("/tanker-deliveries")
+def tanker_delivery_report(
+    station_id: int | None = Query(None),
+    organization_id: int | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
+    station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
+    report = build_tanker_delivery_report(db, station_id, from_date, to_date, organization_id)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="reports",
+        action="reports.tanker_deliveries",
+        entity_type="report",
+        station_id=station_id,
+        details={
+            "from_date": str(from_date) if from_date else None,
+            "to_date": str(to_date) if to_date else None,
+            "organization_id": organization_id,
+        },
+    )
+    db.commit()
+    return report
+
+
+@router.get("/tanker-expenses")
+def tanker_expense_report(
+    station_id: int | None = Query(None),
+    organization_id: int | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
+    station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
+    report = build_tanker_expense_report(db, station_id, from_date, to_date, organization_id)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="reports",
+        action="reports.tanker_expenses",
+        entity_type="report",
+        station_id=station_id,
+        details={
+            "from_date": str(from_date) if from_date else None,
+            "to_date": str(to_date) if to_date else None,
+            "organization_id": organization_id,
+        },
     )
     db.commit()
     return report

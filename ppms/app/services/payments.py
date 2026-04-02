@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.customer_payment import CustomerPaymentCreate
 from app.schemas.supplier_payment import SupplierPaymentCreate
 from app.services.audit import log_audit_event
+from app.services.notifications import notify_approval_requested, notify_decision
 
 
 def ensure_customer_payment_access(payment: CustomerPayment, current_user: User) -> None:
@@ -136,6 +137,17 @@ def request_customer_payment_reversal(db: Session, payment: CustomerPayment, cur
         station_id=payment.station_id,
         details={"reason": reason},
     )
+    notify_approval_requested(
+        db,
+        actor_user=current_user,
+        station_id=payment.station_id,
+        organization_id=payment.station.organization_id if payment.station else None,
+        entity_type="customer_payment",
+        entity_id=payment.id,
+        title="Customer payment reversal requested",
+        message=f"{current_user.full_name} requested reversal for customer payment #{payment.id}.",
+        event_type="customer_payment.reversal_requested",
+    )
     db.commit()
     db.refresh(payment)
     return payment
@@ -161,6 +173,18 @@ def approve_customer_payment_reversal(db: Session, payment: CustomerPayment, cur
         station_id=payment.station_id,
         details={"reason": reason},
     )
+    notify_decision(
+        db,
+        recipient_user_id=payment.reversal_requested_by,
+        actor_user=current_user,
+        station_id=payment.station_id,
+        organization_id=payment.station.organization_id if payment.station else None,
+        entity_type="customer_payment",
+        entity_id=payment.id,
+        title="Customer payment reversal approved",
+        message=f"Reversal for customer payment #{payment.id} was approved.",
+        event_type="customer_payment.reversal_approved",
+    )
     db.flush()
     return reverse_customer_payment(db, payment, current_user)
 
@@ -184,6 +208,18 @@ def reject_customer_payment_reversal(db: Session, payment: CustomerPayment, curr
         entity_id=payment.id,
         station_id=payment.station_id,
         details={"reason": reason},
+    )
+    notify_decision(
+        db,
+        recipient_user_id=payment.reversal_requested_by,
+        actor_user=current_user,
+        station_id=payment.station_id,
+        organization_id=payment.station.organization_id if payment.station else None,
+        entity_type="customer_payment",
+        entity_id=payment.id,
+        title="Customer payment reversal rejected",
+        message=f"Reversal for customer payment #{payment.id} was rejected.",
+        event_type="customer_payment.reversal_rejected",
     )
     db.commit()
     db.refresh(payment)
@@ -284,6 +320,17 @@ def request_supplier_payment_reversal(db: Session, payment: SupplierPayment, cur
         station_id=payment.station_id,
         details={"reason": reason},
     )
+    notify_approval_requested(
+        db,
+        actor_user=current_user,
+        station_id=payment.station_id,
+        organization_id=payment.station.organization_id if payment.station else None,
+        entity_type="supplier_payment",
+        entity_id=payment.id,
+        title="Supplier payment reversal requested",
+        message=f"{current_user.full_name} requested reversal for supplier payment #{payment.id}.",
+        event_type="supplier_payment.reversal_requested",
+    )
     db.commit()
     db.refresh(payment)
     return payment
@@ -309,6 +356,18 @@ def approve_supplier_payment_reversal(db: Session, payment: SupplierPayment, cur
         station_id=payment.station_id,
         details={"reason": reason},
     )
+    notify_decision(
+        db,
+        recipient_user_id=payment.reversal_requested_by,
+        actor_user=current_user,
+        station_id=payment.station_id,
+        organization_id=payment.station.organization_id if payment.station else None,
+        entity_type="supplier_payment",
+        entity_id=payment.id,
+        title="Supplier payment reversal approved",
+        message=f"Reversal for supplier payment #{payment.id} was approved.",
+        event_type="supplier_payment.reversal_approved",
+    )
     db.flush()
     return reverse_supplier_payment(db, payment, current_user)
 
@@ -332,6 +391,18 @@ def reject_supplier_payment_reversal(db: Session, payment: SupplierPayment, curr
         entity_id=payment.id,
         station_id=payment.station_id,
         details={"reason": reason},
+    )
+    notify_decision(
+        db,
+        recipient_user_id=payment.reversal_requested_by,
+        actor_user=current_user,
+        station_id=payment.station_id,
+        organization_id=payment.station.organization_id if payment.station else None,
+        entity_type="supplier_payment",
+        entity_id=payment.id,
+        title="Supplier payment reversal rejected",
+        message=f"Reversal for supplier payment #{payment.id} was rejected.",
+        event_type="supplier_payment.reversal_rejected",
     )
     db.commit()
     db.refresh(payment)

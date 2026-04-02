@@ -82,6 +82,14 @@ if not tanker_module:
     db.add(StationModuleSetting(station_id=station.id, module_name="tanker_operations", is_enabled=True))
     db.commit()
 
+meter_adjustment_module = db.query(StationModuleSetting).filter(
+    StationModuleSetting.station_id == station.id,
+    StationModuleSetting.module_name == "meter_adjustments",
+).first()
+if not meter_adjustment_module:
+    db.add(StationModuleSetting(station_id=station.id, module_name="meter_adjustments", is_enabled=True))
+    db.commit()
+
 # Create admin user
 if not db.query(User).filter(User.username == "admin").first():
     admin = User(

@@ -10,12 +10,16 @@ from app.models.report_export_job import ReportExportJob
 from app.models.station import Station
 from app.models.user import User
 from app.services.audit import log_audit_event
+from app.services.notifications import notify_actor
 from app.services.reports import (
     build_customer_balance_report,
     build_daily_closing_report,
     build_shift_variance_report,
     build_stock_movement_report,
     build_supplier_balance_report,
+    build_tanker_delivery_report,
+    build_tanker_expense_report,
+    build_tanker_profit_report,
 )
 
 
@@ -25,6 +29,9 @@ SUPPORTED_REPORTS = {
     "stock_movement",
     "customer_balances",
     "supplier_balances",
+    "tanker_profit",
+    "tanker_deliveries",
+    "tanker_expenses",
 }
 
 
@@ -77,6 +84,12 @@ def _build_report_data(
         return build_customer_balance_report(db, station_id, organization_id)
     if report_type == "supplier_balances":
         return build_supplier_balance_report(db, station_id, organization_id)
+    if report_type == "tanker_profit":
+        return build_tanker_profit_report(db, station_id, from_date, to_date, organization_id)
+    if report_type == "tanker_deliveries":
+        return build_tanker_delivery_report(db, station_id, from_date, to_date, organization_id)
+    if report_type == "tanker_expenses":
+        return build_tanker_expense_report(db, station_id, from_date, to_date, organization_id)
     raise HTTPException(status_code=400, detail="Unsupported report type")
 
 
@@ -155,6 +168,16 @@ def create_report_export_job(
         entity_id=job.id,
         station_id=station_id,
         details={"report_type": report_type, "organization_id": organization_id, "file_name": file_name},
+    )
+    notify_actor(
+        db,
+        actor_user=current_user,
+        station_id=station_id,
+        entity_type="report_export_job",
+        entity_id=job.id,
+        title="Report export ready",
+        message=f"Your {report_type} export is ready to download.",
+        event_type="report_export.completed",
     )
     db.commit()
     db.refresh(job)

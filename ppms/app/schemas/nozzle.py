@@ -22,6 +22,7 @@ class NozzleResponse(BaseModel):
     name: str
     code: str
     meter_reading: float
+    current_segment_start_reading: float
     dispenser_id: int
     tank_id: int
     fuel_type_id: int

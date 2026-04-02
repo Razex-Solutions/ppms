@@ -555,6 +555,118 @@ def test_head_office_cannot_access_foreign_organization_report_exports(client):
     assert forbidden_download.status_code == 403
 
 
+def test_tanker_reports_dashboard_and_exports(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    tanker_response = test_client.post(
+        "/tankers/",
+        headers=manager_headers,
+        json={
+            "registration_no": "TK-RPT-001",
+            "name": "Report Tanker",
+            "capacity": 6000,
+            "ownership_type": "owned",
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+        },
+    )
+    assert tanker_response.status_code == 200, tanker_response.text
+    tanker_id = tanker_response.json()["id"]
+
+    trip_response = test_client.post(
+        "/tankers/trips",
+        headers=manager_headers,
+        json={
+            "tanker_id": tanker_id,
+            "supplier_id": 1,
+            "fuel_type_id": data["fuel_type_id"],
+            "trip_type": "supplier_to_customer",
+            "destination_name": "Wholesale Pump",
+        },
+    )
+    assert trip_response.status_code == 200, trip_response.text
+    trip_id = trip_response.json()["id"]
+
+    delivery_response = test_client.post(
+        f"/tankers/trips/{trip_id}/deliveries",
+        headers=manager_headers,
+        json={
+            "customer_id": data["customer_id"],
+            "destination_name": "Wholesale Pump",
+            "quantity": 12,
+            "fuel_rate": 9,
+            "delivery_charge": 18,
+            "sale_type": "credit",
+            "paid_amount": 20,
+        },
+    )
+    assert delivery_response.status_code == 200, delivery_response.text
+
+    expense_response = test_client.post(
+        f"/tankers/trips/{trip_id}/expenses",
+        headers=manager_headers,
+        json={"expense_type": "driver", "amount": 11, "notes": "Driver allowance"},
+    )
+    assert expense_response.status_code == 200, expense_response.text
+
+    complete_response = test_client.post(
+        f"/tankers/trips/{trip_id}/complete",
+        headers=manager_headers,
+        json={"reason": "Completed for reporting"},
+    )
+    assert complete_response.status_code == 200, complete_response.text
+    assert complete_response.json()["net_profit"] == 115
+
+    profit_report = test_client.get("/reports/tanker-profit", headers=accountant_headers)
+    assert profit_report.status_code == 200, profit_report.text
+    profit_json = profit_report.json()
+    assert profit_json["count"] == 1
+    assert profit_json["total_fuel_revenue"] == 108
+    assert profit_json["total_delivery_revenue"] == 18
+    assert profit_json["total_expenses"] == 11
+    assert profit_json["total_net_profit"] == 115
+
+    delivery_report = test_client.get("/reports/tanker-deliveries", headers=head_office_headers)
+    assert delivery_report.status_code == 200, delivery_report.text
+    delivery_json = delivery_report.json()
+    assert delivery_json["fuel_revenue"] == 108
+    assert delivery_json["delivery_revenue"] == 18
+    assert delivery_json["cash_collected"] == 20
+    assert delivery_json["credit_outstanding"] == 106
+
+    expense_report = test_client.get("/reports/tanker-expenses", headers=head_office_headers)
+    assert expense_report.status_code == 200, expense_report.text
+    assert expense_report.json()["total_expenses"] == 11
+
+    dashboard_response = test_client.get("/dashboard/", headers=head_office_headers)
+    assert dashboard_response.status_code == 200, dashboard_response.text
+    tanker_summary = dashboard_response.json()["tanker"]
+    assert tanker_summary["completed_trips"] == 1
+    assert tanker_summary["fuel_revenue"] == 108
+    assert tanker_summary["delivery_revenue"] == 18
+    assert tanker_summary["total_expenses"] == 11
+    assert tanker_summary["net_profit"] == 115
+    assert tanker_summary["credit_outstanding"] == 106
+    assert tanker_summary["expense_breakdown"]["driver"] == 11
+
+    export_response = test_client.post(
+        "/report-exports/",
+        headers=head_office_headers,
+        json={"report_type": "tanker_profit", "format": "csv"},
+    )
+    assert export_response.status_code == 200, export_response.text
+    export_job_id = export_response.json()["id"]
+
+    download_response = test_client.get(f"/report-exports/{export_job_id}/download", headers=head_office_headers)
+    assert download_response.status_code == 200, download_response.text
+    assert "trip_id" in download_response.text
+    assert "115.0" in download_response.text
+
+
 def test_validation_errors_include_request_id(client):
     test_client, _ = client
 
@@ -563,6 +675,89 @@ def test_validation_errors_include_request_id(client):
     assert response.status_code == 422
     assert response.headers["X-Request-ID"]
     assert response.json()["request_id"] == response.headers["X-Request-ID"]
+
+
+def test_notifications_cover_approval_export_and_meter_events(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+    admin_headers = login(test_client, "admin", "admin123")
+
+    expense_response = test_client.post(
+        "/expenses/",
+        headers=manager_headers,
+        json={
+            "title": "Notify Expense",
+            "category": "Ops",
+            "amount": 22,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert expense_response.status_code == 200, expense_response.text
+    expense_id = expense_response.json()["id"]
+
+    head_office_notifications = test_client.get("/notifications/", headers=head_office_headers)
+    assert head_office_notifications.status_code == 200, head_office_notifications.text
+    assert any(
+        n["event_type"] == "expense.pending_approval" and n["entity_id"] == expense_id
+        for n in head_office_notifications.json()
+    )
+
+    approval_response = test_client.post(
+        f"/expenses/{expense_id}/approve",
+        headers=head_office_headers,
+        json={"reason": "Approved for notifications"},
+    )
+    assert approval_response.status_code == 200, approval_response.text
+
+    manager_notifications = test_client.get("/notifications/", headers=manager_headers)
+    assert manager_notifications.status_code == 200, manager_notifications.text
+    approved_notification = next(
+        n for n in manager_notifications.json()
+        if n["event_type"] == "expense.approved" and n["entity_id"] == expense_id
+    )
+    assert approved_notification["is_read"] is False
+
+    mark_read = test_client.post(f"/notifications/{approved_notification['id']}/read", headers=manager_headers)
+    assert mark_read.status_code == 200, mark_read.text
+    assert mark_read.json()["is_read"] is True
+
+    export_response = test_client.post(
+        "/report-exports/",
+        headers=head_office_headers,
+        json={"report_type": "customer_balances", "format": "csv"},
+    )
+    assert export_response.status_code == 200, export_response.text
+    export_id = export_response.json()["id"]
+
+    export_notifications = test_client.get(
+        "/notifications/",
+        params={"event_type": "report_export.completed"},
+        headers=head_office_headers,
+    )
+    assert export_notifications.status_code == 200
+    assert any(n["entity_id"] == export_id for n in export_notifications.json())
+
+    adjust_response = test_client.post(
+        f"/nozzles/{data['nozzle_id']}/adjust-meter",
+        headers=admin_headers,
+        json={"new_reading": 900, "reason": "Pump calibration"},
+    )
+    assert adjust_response.status_code == 200, adjust_response.text
+
+    accountant_notifications = test_client.get(
+        "/notifications/",
+        params={"event_type": "nozzle.meter_adjusted", "unread_only": True},
+        headers=accountant_headers,
+    )
+    assert accountant_notifications.status_code == 200, accountant_notifications.text
+    assert any(n["entity_type"] == "meter_adjustment_event" for n in accountant_notifications.json())
+
+    read_all = test_client.post("/notifications/read-all", headers=accountant_headers)
+    assert read_all.status_code == 200
+    assert read_all.json()["marked_read"] >= 1
 
 
 def test_unhandled_exceptions_are_sanitized_and_traced(tmp_path):

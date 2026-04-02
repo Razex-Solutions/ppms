@@ -11,6 +11,7 @@ from app.models.tanker import Tanker
 from app.models.user import User
 from app.schemas.purchase import PurchaseCreate
 from app.services.audit import log_audit_event
+from app.services.notifications import notify_approval_requested, notify_decision
 
 
 def ensure_purchase_access(purchase: Purchase, current_user: User) -> None:
@@ -99,6 +100,18 @@ def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Pu
         station_id=tank.station_id,
         details={"total_amount": total_amount, "quantity": data.quantity, "status": purchase.status},
     )
+    if not is_auto_approved:
+        notify_approval_requested(
+            db,
+            actor_user=current_user,
+            station_id=tank.station_id,
+            organization_id=tank.station.organization_id if tank.station else None,
+            entity_type="purchase",
+            entity_id=purchase.id,
+            title="Purchase approval requested",
+            message=f"{current_user.full_name} submitted purchase #{purchase.id} for approval.",
+            event_type="purchase.pending_approval",
+        )
     db.commit()
     db.refresh(purchase)
     return purchase
@@ -135,6 +148,18 @@ def approve_purchase(db: Session, purchase: Purchase, current_user: User, reason
         station_id=tank.station_id,
         details={"reason": reason, "total_amount": purchase.total_amount},
     )
+    notify_decision(
+        db,
+        recipient_user_id=purchase.submitted_by_user_id,
+        actor_user=current_user,
+        station_id=tank.station_id,
+        organization_id=tank.station.organization_id if tank.station else None,
+        entity_type="purchase",
+        entity_id=purchase.id,
+        title="Purchase approved",
+        message=f"Purchase #{purchase.id} was approved.",
+        event_type="purchase.approved",
+    )
     db.commit()
     db.refresh(purchase)
     return purchase
@@ -161,6 +186,18 @@ def reject_purchase(db: Session, purchase: Purchase, current_user: User, reason:
         entity_id=purchase.id,
         station_id=purchase.tank.station_id,
         details={"reason": reason},
+    )
+    notify_decision(
+        db,
+        recipient_user_id=purchase.submitted_by_user_id,
+        actor_user=current_user,
+        station_id=purchase.tank.station_id,
+        organization_id=purchase.tank.station.organization_id if purchase.tank and purchase.tank.station else None,
+        entity_type="purchase",
+        entity_id=purchase.id,
+        title="Purchase rejected",
+        message=f"Purchase #{purchase.id} was rejected.",
+        event_type="purchase.rejected",
     )
     db.commit()
     db.refresh(purchase)
@@ -230,6 +267,17 @@ def request_purchase_reversal(db: Session, purchase: Purchase, current_user: Use
         station_id=purchase.tank.station_id,
         details={"reason": reason},
     )
+    notify_approval_requested(
+        db,
+        actor_user=current_user,
+        station_id=purchase.tank.station_id,
+        organization_id=purchase.tank.station.organization_id if purchase.tank and purchase.tank.station else None,
+        entity_type="purchase",
+        entity_id=purchase.id,
+        title="Purchase reversal requested",
+        message=f"{current_user.full_name} requested reversal for purchase #{purchase.id}.",
+        event_type="purchase.reversal_requested",
+    )
     db.commit()
     db.refresh(purchase)
     return purchase
@@ -255,6 +303,18 @@ def approve_purchase_reversal(db: Session, purchase: Purchase, current_user: Use
         station_id=purchase.tank.station_id,
         details={"reason": reason},
     )
+    notify_decision(
+        db,
+        recipient_user_id=purchase.reversal_requested_by,
+        actor_user=current_user,
+        station_id=purchase.tank.station_id,
+        organization_id=purchase.tank.station.organization_id if purchase.tank and purchase.tank.station else None,
+        entity_type="purchase",
+        entity_id=purchase.id,
+        title="Purchase reversal approved",
+        message=f"Reversal for purchase #{purchase.id} was approved.",
+        event_type="purchase.reversal_approved",
+    )
     db.flush()
     return reverse_purchase(db, purchase, current_user)
 
@@ -278,6 +338,18 @@ def reject_purchase_reversal(db: Session, purchase: Purchase, current_user: User
         entity_id=purchase.id,
         station_id=purchase.tank.station_id,
         details={"reason": reason},
+    )
+    notify_decision(
+        db,
+        recipient_user_id=purchase.reversal_requested_by,
+        actor_user=current_user,
+        station_id=purchase.tank.station_id,
+        organization_id=purchase.tank.station.organization_id if purchase.tank and purchase.tank.station else None,
+        entity_type="purchase",
+        entity_id=purchase.id,
+        title="Purchase reversal rejected",
+        message=f"Reversal for purchase #{purchase.id} was rejected.",
+        event_type="purchase.reversal_rejected",
     )
     db.commit()
     db.refresh(purchase)

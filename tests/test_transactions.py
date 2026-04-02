@@ -1,4 +1,5 @@
 from app.models.customer import Customer
+from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle import Nozzle
 from app.models.supplier import Supplier
 from app.models.tank import Tank
@@ -412,5 +413,78 @@ def test_credit_override_approval_allows_credit_sale_over_limit(client):
         assert customer.outstanding_balance == 510
         assert customer.credit_override_amount == 10
         assert customer.credit_override_status == "approved"
+    finally:
+        db.close()
+
+
+def test_meter_adjustment_starts_new_sales_segment_without_breaking_tank_deduction(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    admin_headers = login(test_client, "admin", "admin123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+
+    db = session_local()
+    try:
+        tank = db.query(Tank).filter(Tank.id == data["tank_id"]).first()
+        tank.current_volume = 1000
+        db.commit()
+    finally:
+        db.close()
+
+    first_sale = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1080,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert first_sale.status_code == 200, first_sale.text
+    assert first_sale.json()["quantity"] == 80
+
+    adjustment = test_client.post(
+        f"/nozzles/{data['nozzle_id']}/adjust-meter",
+        headers=admin_headers,
+        json={"new_reading": 600, "reason": "Meter reset after maintenance"},
+    )
+    assert adjustment.status_code == 200, adjustment.text
+    assert adjustment.json()["old_reading"] == 1080
+    assert adjustment.json()["new_reading"] == 600
+
+    second_sale = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 670,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert second_sale.status_code == 200, second_sale.text
+    assert second_sale.json()["opening_meter"] == 600
+    assert second_sale.json()["quantity"] == 70
+
+    adjustments = test_client.get(f"/nozzles/{data['nozzle_id']}/adjustments", headers=accountant_headers)
+    assert adjustments.status_code == 200, adjustments.text
+    assert len(adjustments.json()) == 1
+    assert adjustments.json()[0]["reason"] == "Meter reset after maintenance"
+
+    db = session_local()
+    try:
+        nozzle = db.query(Nozzle).filter(Nozzle.id == data["nozzle_id"]).first()
+        tank = db.query(Tank).filter(Tank.id == data["tank_id"]).first()
+        adjustment_event = db.query(MeterAdjustmentEvent).filter(MeterAdjustmentEvent.nozzle_id == data["nozzle_id"]).first()
+        assert nozzle.meter_reading == 670
+        assert nozzle.current_segment_start_reading == 600
+        assert tank.current_volume == 1000 - 80 - 70
+        assert adjustment_event is not None
     finally:
         db.close()

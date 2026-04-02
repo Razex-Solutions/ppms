@@ -13,6 +13,7 @@ from app.models.station import Station
 from app.models.user import User
 from app.schemas.fuel_sale import FuelSaleCreate
 from app.services.audit import log_audit_event
+from app.services.notifications import notify_approval_requested, notify_decision
 
 
 def ensure_sale_access(sale: FuelSale, current_user: User) -> None:
@@ -221,6 +222,17 @@ def request_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, 
         station_id=sale.station_id,
         details={"reason": reason},
     )
+    notify_approval_requested(
+        db,
+        actor_user=current_user,
+        station_id=sale.station_id,
+        organization_id=sale.station.organization_id if sale.station else None,
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        title="Fuel sale reversal requested",
+        message=f"{current_user.full_name} requested reversal for fuel sale #{sale.id}.",
+        event_type="fuel_sale.reversal_requested",
+    )
     db.commit()
     db.refresh(sale)
     return sale
@@ -247,6 +259,18 @@ def approve_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, 
         station_id=sale.station_id,
         details={"reason": reason},
     )
+    notify_decision(
+        db,
+        recipient_user_id=sale.reversal_requested_by,
+        actor_user=current_user,
+        station_id=sale.station_id,
+        organization_id=sale.station.organization_id if sale.station else None,
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        title="Fuel sale reversal approved",
+        message=f"Reversal for fuel sale #{sale.id} was approved.",
+        event_type="fuel_sale.reversal_approved",
+    )
     db.flush()
     return reverse_fuel_sale(db, sale, current_user)
 
@@ -271,6 +295,18 @@ def reject_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, r
         entity_id=sale.id,
         station_id=sale.station_id,
         details={"reason": reason},
+    )
+    notify_decision(
+        db,
+        recipient_user_id=sale.reversal_requested_by,
+        actor_user=current_user,
+        station_id=sale.station_id,
+        organization_id=sale.station.organization_id if sale.station else None,
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        title="Fuel sale reversal rejected",
+        message=f"Reversal for fuel sale #{sale.id} was rejected.",
+        event_type="fuel_sale.reversal_rejected",
     )
     db.commit()
     db.refresh(sale)

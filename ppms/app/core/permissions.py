@@ -50,6 +50,8 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "create": {"Admin", "Manager"},
         "update": {"Admin", "Manager"},
         "delete": {"Admin", "Manager"},
+        "adjust_meter": {"Admin"},
+        "read_meter_history": {"Admin", "HeadOffice", "Manager", "Accountant"},
     },
     "tankers": {
         "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
@@ -118,6 +120,9 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
     },
     "audit_logs": {
         "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
+    },
+    "notifications": {
+        "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
     },
     "reports": {
         "read": {"Admin", "HeadOffice", "Manager", "Accountant"},

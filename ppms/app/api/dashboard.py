@@ -14,6 +14,9 @@ from app.models.purchase import Purchase
 from app.models.station import Station
 from app.models.supplier_payment import SupplierPayment
 from app.models.tank import Tank
+from app.models.tanker_delivery import TankerDelivery
+from app.models.tanker_trip import TankerTrip
+from app.models.tanker_trip_expense import TankerTripExpense
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -193,6 +196,61 @@ def get_dashboard(
         for c in credit_limit_customers
     ]
 
+    tanker_trips_q = db.query(func.count(TankerTrip.id)).filter(TankerTrip.status == "completed")
+    if station_id:
+        tanker_trips_q = tanker_trips_q.filter(TankerTrip.station_id == station_id)
+    elif organization_id:
+        tanker_trips_q = tanker_trips_q.join(Station, Station.id == TankerTrip.station_id).filter(Station.organization_id == organization_id)
+    if from_date:
+        tanker_trips_q = tanker_trips_q.filter(TankerTrip.completed_at >= from_date)
+    if to_date:
+        tanker_trips_q = tanker_trips_q.filter(TankerTrip.completed_at < to_date)
+    tanker_trip_count = tanker_trips_q.scalar() or 0
+
+    tanker_profit_q = db.query(
+        func.sum(TankerTrip.fuel_revenue),
+        func.sum(TankerTrip.delivery_revenue),
+        func.sum(TankerTrip.expense_total),
+        func.sum(TankerTrip.net_profit),
+    ).filter(TankerTrip.status == "completed")
+    if station_id:
+        tanker_profit_q = tanker_profit_q.filter(TankerTrip.station_id == station_id)
+    elif organization_id:
+        tanker_profit_q = tanker_profit_q.join(Station, Station.id == TankerTrip.station_id).filter(Station.organization_id == organization_id)
+    if from_date:
+        tanker_profit_q = tanker_profit_q.filter(TankerTrip.completed_at >= from_date)
+    if to_date:
+        tanker_profit_q = tanker_profit_q.filter(TankerTrip.completed_at < to_date)
+    tanker_fuel_revenue, tanker_delivery_revenue, tanker_expense_total, tanker_net_profit = tanker_profit_q.one()
+
+    tanker_credit_q = db.query(func.sum(TankerDelivery.outstanding_amount)).join(TankerTrip, TankerTrip.id == TankerDelivery.trip_id)
+    if station_id:
+        tanker_credit_q = tanker_credit_q.filter(TankerTrip.station_id == station_id)
+    elif organization_id:
+        tanker_credit_q = tanker_credit_q.join(Station, Station.id == TankerTrip.station_id).filter(Station.organization_id == organization_id)
+    if from_date:
+        tanker_credit_q = tanker_credit_q.filter(TankerDelivery.created_at >= from_date)
+    if to_date:
+        tanker_credit_q = tanker_credit_q.filter(TankerDelivery.created_at < to_date)
+    tanker_credit_outstanding = tanker_credit_q.scalar() or 0
+
+    tanker_expense_breakdown_q = db.query(
+        TankerTripExpense.expense_type,
+        func.sum(TankerTripExpense.amount),
+    ).join(TankerTrip, TankerTrip.id == TankerTripExpense.trip_id)
+    if station_id:
+        tanker_expense_breakdown_q = tanker_expense_breakdown_q.filter(TankerTrip.station_id == station_id)
+    elif organization_id:
+        tanker_expense_breakdown_q = tanker_expense_breakdown_q.join(Station, Station.id == TankerTrip.station_id).filter(Station.organization_id == organization_id)
+    if from_date:
+        tanker_expense_breakdown_q = tanker_expense_breakdown_q.filter(TankerTripExpense.created_at >= from_date)
+    if to_date:
+        tanker_expense_breakdown_q = tanker_expense_breakdown_q.filter(TankerTripExpense.created_at < to_date)
+    tanker_expense_breakdown_rows = tanker_expense_breakdown_q.group_by(TankerTripExpense.expense_type).all()
+    tanker_expense_breakdown = {
+        expense_type: round(amount or 0, 2) for expense_type, amount in tanker_expense_breakdown_rows
+    }
+
     return {
         "filters": {
             "station_id": station_id,
@@ -211,6 +269,15 @@ def get_dashboard(
         "fuel_stock_liters": round(total_fuel_stock, 2),
         "receivables": round(total_receivables, 2),
         "payables": round(total_payables, 2),
+        "tanker": {
+            "completed_trips": tanker_trip_count,
+            "fuel_revenue": round(tanker_fuel_revenue or 0, 2),
+            "delivery_revenue": round(tanker_delivery_revenue or 0, 2),
+            "total_expenses": round(tanker_expense_total or 0, 2),
+            "net_profit": round(tanker_net_profit or 0, 2),
+            "credit_outstanding": round(tanker_credit_outstanding or 0, 2),
+            "expense_breakdown": tanker_expense_breakdown,
+        },
         "low_stock_alerts": alerts,
         "credit_limit_alerts": credit_alerts,
     }
