@@ -54,6 +54,99 @@ def test_audit_logs_capture_transaction_and_report_activity(client):
     assert "reports.daily_closing" in report_actions
 
 
+def test_head_office_audit_logs_are_organization_scoped(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    foreign_manager_headers = login(test_client, "foreignmanager", "foreign123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    local_sale = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1006,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert local_sale.status_code == 200, local_sale.text
+
+    db = session_local()
+    try:
+        from app.models.dispenser import Dispenser
+        from app.models.fuel_type import FuelType
+        from app.models.nozzle import Nozzle
+        from app.models.station import Station
+        from app.models.tank import Tank
+
+        station_c = db.query(Station).filter(Station.id == data["station_c_id"]).first()
+        fuel_type = db.query(FuelType).filter(FuelType.id == data["fuel_type_id"]).first()
+        foreign_tank = Tank(
+            name="Tank CX",
+            code="TANK-CX",
+            capacity=1000,
+            current_volume=200,
+            low_stock_threshold=30,
+            location="Rear",
+            station_id=station_c.id,
+            fuel_type_id=fuel_type.id,
+        )
+        db.add(foreign_tank)
+        db.flush()
+        foreign_dispenser = Dispenser(
+            name="Dispenser CX",
+            code="DISP-CX",
+            location="Rear",
+            station_id=station_c.id,
+        )
+        db.add(foreign_dispenser)
+        db.flush()
+        foreign_nozzle = Nozzle(
+            name="Nozzle CX",
+            code="NOZ-CX",
+            meter_reading=500,
+            dispenser_id=foreign_dispenser.id,
+            tank_id=foreign_tank.id,
+            fuel_type_id=fuel_type.id,
+        )
+        db.add(foreign_nozzle)
+        db.commit()
+        foreign_nozzle_id = foreign_nozzle.id
+    finally:
+        db.close()
+
+    foreign_sale = test_client.post(
+        "/fuel-sales/",
+        headers=foreign_manager_headers,
+        json={
+            "nozzle_id": foreign_nozzle_id,
+            "station_id": data["station_c_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 505,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert foreign_sale.status_code == 200, foreign_sale.text
+
+    head_office_audits = test_client.get("/audit-logs/", params={"module": "fuel_sales"}, headers=head_office_headers)
+    assert head_office_audits.status_code == 200, head_office_audits.text
+    returned_station_ids = {entry["station_id"] for entry in head_office_audits.json()}
+    assert data["station_a_id"] in returned_station_ids
+    assert data["station_c_id"] not in returned_station_ids
+
+    forbidden_foreign_station = test_client.get(
+        "/audit-logs/",
+        params={"station_id": data["station_c_id"]},
+        headers=head_office_headers,
+    )
+    assert forbidden_foreign_station.status_code == 403
+
+
 def test_report_permissions_and_financial_reports(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
@@ -126,6 +219,142 @@ def test_report_permissions_and_financial_reports(client):
     assert first_tank["purchased_liters"] == 20
     assert first_tank["sold_liters"] == 5
     assert first_tank["current_volume_liters"] == 115
+
+
+def test_head_office_reports_and_dashboard_are_organization_scoped(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    manager_headers = login(test_client, "manager", "manager123")
+    foreign_manager_headers = login(test_client, "foreignmanager", "foreign123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    local_sale = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1004,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert local_sale.status_code == 200, local_sale.text
+    report_date = local_sale.json()["created_at"][:10]
+
+    local_expense = test_client.post(
+        "/expenses/",
+        headers=manager_headers,
+        json={
+            "title": "Station A Expense",
+            "category": "Admin",
+            "amount": 12,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert local_expense.status_code == 200, local_expense.text
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+        from app.models.dispenser import Dispenser
+        from app.models.fuel_type import FuelType
+        from app.models.nozzle import Nozzle
+        from app.models.station import Station
+        from app.models.tank import Tank
+
+        station_c = db.query(Station).filter(Station.id == data["station_c_id"]).first()
+        fuel_type = db.query(FuelType).filter(FuelType.id == data["fuel_type_id"]).first()
+        foreign_tank = Tank(
+            name="Tank C",
+            code="TANK-C",
+            capacity=1000,
+            current_volume=200,
+            low_stock_threshold=30,
+            location="Rear",
+            station_id=station_c.id,
+            fuel_type_id=fuel_type.id,
+        )
+        db.add(foreign_tank)
+        db.flush()
+        foreign_dispenser = Dispenser(
+            name="Dispenser C",
+            code="DISP-C",
+            location="Rear",
+            station_id=station_c.id,
+        )
+        db.add(foreign_dispenser)
+        db.flush()
+        foreign_nozzle = Nozzle(
+            name="Nozzle C",
+            code="NOZ-C",
+            meter_reading=500,
+            dispenser_id=foreign_dispenser.id,
+            tank_id=foreign_tank.id,
+            fuel_type_id=fuel_type.id,
+        )
+        foreign_customer = Customer(
+            name="Customer C",
+            code="CUST-C",
+            customer_type="company",
+            phone="999",
+            address="Addr C",
+            credit_limit=1000,
+            outstanding_balance=0,
+            station_id=station_c.id,
+        )
+        db.add_all([foreign_nozzle, foreign_customer])
+        db.commit()
+        foreign_nozzle_id = foreign_nozzle.id
+    finally:
+        db.close()
+
+    foreign_sale = test_client.post(
+        "/fuel-sales/",
+        headers=foreign_manager_headers,
+        json={
+            "nozzle_id": foreign_nozzle_id,
+            "station_id": data["station_c_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 505,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert foreign_sale.status_code == 200, foreign_sale.text
+
+    head_office_report = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": report_date},
+        headers=head_office_headers,
+    )
+    assert head_office_report.status_code == 200, head_office_report.text
+    assert head_office_report.json()["organization_id"] == data["organization_id"]
+    assert head_office_report.json()["fuel_cash_sales"] == 40
+    assert head_office_report.json()["expenses"] == 12
+
+    foreign_org_report = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": report_date, "organization_id": data["foreign_organization_id"]},
+        headers=head_office_headers,
+    )
+    assert foreign_org_report.status_code == 200
+    assert foreign_org_report.json()["organization_id"] == data["organization_id"]
+    assert foreign_org_report.json()["fuel_cash_sales"] == 40
+
+    forbidden_station_report = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": report_date, "station_id": data["station_c_id"]},
+        headers=head_office_headers,
+    )
+    assert forbidden_station_report.status_code == 403
+
+    dashboard_response = test_client.get("/dashboard/", headers=head_office_headers)
+    assert dashboard_response.status_code == 200, dashboard_response.text
+    assert dashboard_response.json()["filters"]["organization_id"] == data["organization_id"]
+    assert dashboard_response.json()["sales"]["total"] == 40
 
 
 def test_validation_errors_include_request_id(client):

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, require_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.customer import Customer
 from app.models.dispenser import Dispenser
 from app.models.expense import Expense
@@ -61,12 +62,21 @@ def list_stations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.name != "Admin":
-        return db.query(Station).filter(Station.id == current_user.station_id).offset(skip).limit(limit).all()
-    query = db.query(Station)
-    if organization_id is not None:
-        query = query.filter(Station.organization_id == organization_id)
-    return query.offset(skip).limit(limit).all()
+    if current_user.role.name == "Admin":
+        query = db.query(Station)
+        if organization_id is not None:
+            query = query.filter(Station.organization_id == organization_id)
+        return query.offset(skip).limit(limit).all()
+    if is_head_office_user(current_user):
+        require_permission(current_user, "stations", "read", detail="You do not have permission to view stations")
+        user_organization_id = get_user_organization_id(current_user)
+        query = db.query(Station).filter(Station.organization_id == user_organization_id)
+        if organization_id is not None:
+            if organization_id != user_organization_id:
+                raise HTTPException(status_code=403, detail="Not authorized for this organization")
+            query = query.filter(Station.organization_id == organization_id)
+        return query.offset(skip).limit(limit).all()
+    return db.query(Station).filter(Station.id == current_user.station_id).offset(skip).limit(limit).all()
 
 
 @router.get("/{station_id}", response_model=StationResponse)
@@ -78,7 +88,14 @@ def get_station(
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name != "Admin" and current_user.station_id != station_id:
+    if current_user.role.name == "Admin":
+        return station
+    if is_head_office_user(current_user):
+        require_permission(current_user, "stations", "read", detail="You do not have permission to view stations")
+        if station.organization_id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
+        return station
+    if current_user.station_id != station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     return station
 

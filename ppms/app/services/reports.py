@@ -11,6 +11,7 @@ from app.models.nozzle import Nozzle
 from app.models.pos_sale import POSSale
 from app.models.purchase import Purchase
 from app.models.shift import Shift
+from app.models.station import Station
 from app.models.supplier import Supplier
 from app.models.supplier_payment import SupplierPayment
 from app.models.tank import Tank
@@ -22,7 +23,12 @@ def _day_bounds(report_date: date) -> tuple[datetime, datetime]:
     return start, end
 
 
-def build_daily_closing_report(db: Session, station_id: int | None, report_date: date) -> dict:
+def build_daily_closing_report(
+    db: Session,
+    station_id: int | None,
+    report_date: date,
+    organization_id: int | None = None,
+) -> dict:
     start, end = _day_bounds(report_date)
 
     fuel_cash_sales_query = db.query(func.sum(FuelSale.total_amount)).filter(
@@ -65,6 +71,13 @@ def build_daily_closing_report(db: Session, station_id: int | None, report_date:
         customer_payments_query = customer_payments_query.filter(CustomerPayment.station_id == station_id)
         supplier_payments_query = supplier_payments_query.filter(SupplierPayment.station_id == station_id)
         expenses_query = expenses_query.filter(Expense.station_id == station_id)
+    elif organization_id is not None:
+        fuel_cash_sales_query = fuel_cash_sales_query.join(Station, Station.id == FuelSale.station_id).filter(Station.organization_id == organization_id)
+        fuel_credit_sales_query = fuel_credit_sales_query.join(Station, Station.id == FuelSale.station_id).filter(Station.organization_id == organization_id)
+        pos_cash_sales_query = pos_cash_sales_query.join(Station, Station.id == POSSale.station_id).filter(Station.organization_id == organization_id)
+        customer_payments_query = customer_payments_query.join(Station, Station.id == CustomerPayment.station_id).filter(Station.organization_id == organization_id)
+        supplier_payments_query = supplier_payments_query.join(Station, Station.id == SupplierPayment.station_id).filter(Station.organization_id == organization_id)
+        expenses_query = expenses_query.join(Station, Station.id == Expense.station_id).filter(Station.organization_id == organization_id)
 
     fuel_cash_sales = fuel_cash_sales_query.scalar() or 0.0
     fuel_credit_sales = fuel_credit_sales_query.scalar() or 0.0
@@ -79,6 +92,7 @@ def build_daily_closing_report(db: Session, station_id: int | None, report_date:
     return {
         "report_date": str(report_date),
         "station_id": station_id,
+        "organization_id": organization_id,
         "fuel_cash_sales": round(fuel_cash_sales, 2),
         "fuel_credit_sales": round(fuel_credit_sales, 2),
         "pos_cash_sales": round(pos_cash_sales, 2),
@@ -96,10 +110,13 @@ def build_shift_variance_report(
     station_id: int | None,
     from_date: date | None,
     to_date: date | None,
+    organization_id: int | None = None,
 ) -> dict:
     query = db.query(Shift).filter(Shift.status == "closed")
     if station_id is not None:
         query = query.filter(Shift.station_id == station_id)
+    elif organization_id is not None:
+        query = query.join(Station, Station.id == Shift.station_id).filter(Station.organization_id == organization_id)
     if from_date:
         query = query.filter(Shift.end_time >= from_date)
     if to_date:
@@ -122,6 +139,7 @@ def build_shift_variance_report(
     ]
     return {
         "station_id": station_id,
+        "organization_id": organization_id,
         "count": len(items),
         "total_variance": round(sum(item["difference"] for item in items), 2),
         "items": items,
@@ -133,10 +151,13 @@ def build_stock_movement_report(
     station_id: int | None,
     from_date: date | None,
     to_date: date | None,
+    organization_id: int | None = None,
 ) -> dict:
     tanks_query = db.query(Tank)
     if station_id is not None:
         tanks_query = tanks_query.filter(Tank.station_id == station_id)
+    elif organization_id is not None:
+        tanks_query = tanks_query.join(Station, Station.id == Tank.station_id).filter(Station.organization_id == organization_id)
 
     items = []
     for tank in tanks_query.order_by(Tank.id.asc()).all():
@@ -170,13 +191,15 @@ def build_stock_movement_report(
             }
         )
 
-    return {"station_id": station_id, "count": len(items), "items": items}
+    return {"station_id": station_id, "organization_id": organization_id, "count": len(items), "items": items}
 
 
-def build_customer_balance_report(db: Session, station_id: int | None) -> dict:
+def build_customer_balance_report(db: Session, station_id: int | None, organization_id: int | None = None) -> dict:
     query = db.query(Customer)
     if station_id is not None:
         query = query.filter(Customer.station_id == station_id)
+    elif organization_id is not None:
+        query = query.join(Station, Station.id == Customer.station_id).filter(Station.organization_id == organization_id)
     items = [
         {
             "customer_id": customer.id,
@@ -188,18 +211,49 @@ def build_customer_balance_report(db: Session, station_id: int | None) -> dict:
         for customer in query.order_by(Customer.name.asc()).all()
         if (customer.outstanding_balance or 0.0) > 0
     ]
-    return {"station_id": station_id, "count": len(items), "items": items}
+    return {"station_id": station_id, "organization_id": organization_id, "count": len(items), "items": items}
 
 
-def build_supplier_balance_report(db: Session, station_id: int | None) -> dict:
+def build_supplier_balance_report(db: Session, station_id: int | None, organization_id: int | None = None) -> dict:
+    purchase_balances = db.query(
+        Purchase.supplier_id.label("supplier_id"),
+        func.sum(Purchase.total_amount).label("purchased_total"),
+    ).filter(Purchase.is_reversed.is_(False))
+    if station_id is not None:
+        purchase_balances = purchase_balances.join(Tank, Tank.id == Purchase.tank_id).filter(Tank.station_id == station_id)
+    elif organization_id is not None:
+        purchase_balances = purchase_balances.join(Tank, Tank.id == Purchase.tank_id).join(Station, Station.id == Tank.station_id).filter(
+            Station.organization_id == organization_id
+        )
+    purchase_rows = {
+        row.supplier_id: row.purchased_total or 0.0
+        for row in purchase_balances.group_by(Purchase.supplier_id).all()
+    }
+
+    payment_balances = db.query(
+        SupplierPayment.supplier_id.label("supplier_id"),
+        func.sum(SupplierPayment.amount).label("paid_total"),
+    ).filter(SupplierPayment.is_reversed.is_(False))
+    if station_id is not None:
+        payment_balances = payment_balances.filter(SupplierPayment.station_id == station_id)
+    elif organization_id is not None:
+        payment_balances = payment_balances.join(Station, Station.id == SupplierPayment.station_id).filter(Station.organization_id == organization_id)
+    payment_rows = {
+        row.supplier_id: row.paid_total or 0.0
+        for row in payment_balances.group_by(SupplierPayment.supplier_id).all()
+    }
+
+    supplier_ids = sorted(set(purchase_rows) | set(payment_rows))
+    suppliers = {supplier.id: supplier for supplier in db.query(Supplier).filter(Supplier.id.in_(supplier_ids)).all()}
     items = [
         {
-            "supplier_id": supplier.id,
-            "supplier_name": supplier.name,
+            "supplier_id": supplier_id,
+            "supplier_name": suppliers[supplier_id].name,
             "station_id": station_id,
-            "payable_balance": round(supplier.payable_balance or 0.0, 2),
+            "payable_balance": round((purchase_rows.get(supplier_id, 0.0) - payment_rows.get(supplier_id, 0.0)), 2),
         }
-        for supplier in db.query(Supplier).order_by(Supplier.name.asc()).all()
-        if (supplier.payable_balance or 0.0) > 0
+        for supplier_id in supplier_ids
+        if suppliers.get(supplier_id) and (purchase_rows.get(supplier_id, 0.0) - payment_rows.get(supplier_id, 0.0)) > 0
     ]
-    return {"station_id": station_id, "count": len(items), "items": items}
+    items.sort(key=lambda item: item["supplier_name"])
+    return {"station_id": station_id, "organization_id": organization_id, "count": len(items), "items": items}

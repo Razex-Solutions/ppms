@@ -117,7 +117,7 @@ def test_admin_can_manage_organizations_and_station_ownership(client):
     org_response = test_client.post(
         "/organizations/",
         headers=admin_headers,
-        json={"name": "Org B", "code": "ORG-B", "description": "Secondary org"},
+        json={"name": "Org C", "code": "ORG-C", "description": "Secondary org"},
     )
     assert org_response.status_code == 200, org_response.text
     organization_id = org_response.json()["id"]
@@ -126,8 +126,8 @@ def test_admin_can_manage_organizations_and_station_ownership(client):
         "/stations/",
         headers=admin_headers,
         json={
-            "name": "Station C",
-            "code": "STC",
+            "name": "Station D",
+            "code": "STD",
             "address": "Addr C",
             "city": "City C",
             "organization_id": organization_id,
@@ -154,4 +154,53 @@ def test_admin_can_manage_organizations_and_station_ownership(client):
 
     org_stations = test_client.get(f"/stations/?organization_id={organization_id}", headers=admin_headers)
     assert org_stations.status_code == 200
-    assert any(station["code"] == "STC" for station in org_stations.json())
+    assert any(station["code"] == "STD" for station in org_stations.json())
+
+
+def test_head_office_can_read_only_own_organization_users_and_stations(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    stations_response = test_client.get("/stations/", headers=head_office_headers)
+    assert stations_response.status_code == 200, stations_response.text
+    station_codes = {station["code"] for station in stations_response.json()}
+    assert station_codes == {"STA", "STB"}
+
+    forbidden_station = test_client.get(f"/stations/{data['station_c_id']}", headers=head_office_headers)
+    assert forbidden_station.status_code == 403
+
+    users_response = test_client.get("/users/", headers=head_office_headers)
+    assert users_response.status_code == 200, users_response.text
+    usernames = {user["username"] for user in users_response.json()}
+    assert "headoffice" in usernames
+    assert "manager" in usernames
+    assert "foreignmanager" not in usernames
+
+    admin_create_attempt = test_client.post(
+        "/users/",
+        headers=head_office_headers,
+        json={
+            "full_name": "Blocked User",
+            "username": "blockeduser",
+            "email": "blocked@example.com",
+            "password": "blocked123",
+            "role_id": 1,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert admin_create_attempt.status_code == 403
+
+    organizations_response = test_client.get("/organizations/", headers=head_office_headers)
+    assert organizations_response.status_code == 200, organizations_response.text
+    assert [organization["code"] for organization in organizations_response.json()] == ["ORG-A"]
+
+    allowed_organization = test_client.get(f"/organizations/{data['organization_id']}", headers=head_office_headers)
+    assert allowed_organization.status_code == 200
+    assert allowed_organization.json()["code"] == "ORG-A"
+
+    forbidden_organization = test_client.get(
+        f"/organizations/{data['foreign_organization_id']}",
+        headers=head_office_headers,
+    )
+    assert forbidden_organization.status_code == 403

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, require_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.organization import Organization
 from app.models.station import Station
 from app.models.user import User
@@ -38,11 +39,18 @@ def list_organizations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_admin(current_user)
     query = db.query(Organization)
-    if is_active is not None:
-        query = query.filter(Organization.is_active == is_active)
-    return query.offset(skip).limit(limit).all()
+    if current_user.role.name == "Admin":
+        if is_active is not None:
+            query = query.filter(Organization.is_active == is_active)
+        return query.offset(skip).limit(limit).all()
+    if is_head_office_user(current_user):
+        require_permission(current_user, "organizations", "read", detail="You do not have permission to view organizations")
+        query = query.filter(Organization.id == get_user_organization_id(current_user))
+        if is_active is not None:
+            query = query.filter(Organization.is_active == is_active)
+        return query.offset(skip).limit(limit).all()
+    raise HTTPException(status_code=403, detail="Admin access required")
 
 
 @router.get("/{organization_id}", response_model=OrganizationResponse)
@@ -51,11 +59,17 @@ def get_organization(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_admin(current_user)
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
-    return organization
+    if current_user.role.name == "Admin":
+        return organization
+    if is_head_office_user(current_user):
+        require_permission(current_user, "organizations", "read", detail="You do not have permission to view organizations")
+        if organization.id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this organization")
+        return organization
+    raise HTTPException(status_code=403, detail="Admin access required")
 
 
 @router.put("/{organization_id}", response_model=OrganizationResponse)

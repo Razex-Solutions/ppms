@@ -8,6 +8,13 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "create": {"Admin"},
         "update": {"Admin"},
         "delete": {"Admin"},
+        "read": {"Admin", "HeadOffice"},
+    },
+    "organizations": {
+        "create": {"Admin"},
+        "update": {"Admin"},
+        "delete": {"Admin"},
+        "read": {"Admin", "HeadOffice"},
     },
     "roles": {
         "create": {"Admin"},
@@ -18,6 +25,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "create": {"Admin"},
         "update": {"Admin"},
         "delete": {"Admin"},
+        "read": {"Admin", "HeadOffice"},
     },
     "fuel_types": {
         "create": {"Admin"},
@@ -87,10 +95,10 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "reverse": {"Admin", "Manager", "Operator"},
     },
     "audit_logs": {
-        "read": {"Admin", "Manager", "Accountant"},
+        "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
     },
     "reports": {
-        "read": {"Admin", "Manager", "Accountant"},
+        "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
     },
     "expenses": {
         "create": {"Admin", "Manager", "Accountant"},

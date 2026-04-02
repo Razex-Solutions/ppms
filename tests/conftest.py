@@ -57,10 +57,11 @@ def seed_base_data(session_local):
     db = session_local()
     try:
         admin_role = Role(name="Admin", description="Full access")
+        head_office_role = Role(name="HeadOffice", description="Organization-wide read access")
         manager_role = Role(name="Manager", description="Station management")
         accountant_role = Role(name="Accountant", description="Financial operations")
         operator_role = Role(name="Operator", description="Daily operations")
-        db.add_all([admin_role, manager_role, accountant_role, operator_role])
+        db.add_all([admin_role, head_office_role, manager_role, accountant_role, operator_role])
         db.flush()
 
         organization = Organization(
@@ -70,6 +71,14 @@ def seed_base_data(session_local):
             is_active=True,
         )
         db.add(organization)
+        db.flush()
+        foreign_organization = Organization(
+            name="Org B",
+            code="ORG-B",
+            description="Secondary organization",
+            is_active=True,
+        )
+        db.add(foreign_organization)
         db.flush()
 
         station_a = Station(
@@ -89,6 +98,16 @@ def seed_base_data(session_local):
             is_head_office=False,
         )
         db.add_all([station_a, station_b])
+        db.flush()
+        station_c = Station(
+            name="Station C",
+            code="STC",
+            address="Addr C",
+            city="City C",
+            organization_id=foreign_organization.id,
+            is_head_office=True,
+        )
+        db.add(station_c)
         db.flush()
 
         admin = User(
@@ -127,7 +146,25 @@ def seed_base_data(session_local):
             role_id=accountant_role.id,
             station_id=station_a.id,
         )
-        db.add_all([admin, operator, manager, accountant])
+        head_office = User(
+            full_name="Head Office User",
+            username="headoffice",
+            email="headoffice@example.com",
+            hashed_password=hash_password("headoffice123"),
+            is_active=True,
+            role_id=head_office_role.id,
+            station_id=station_a.id,
+        )
+        foreign_manager = User(
+            full_name="Foreign Manager",
+            username="foreignmanager",
+            email="foreignmanager@example.com",
+            hashed_password=hash_password("foreign123"),
+            is_active=True,
+            role_id=manager_role.id,
+            station_id=station_c.id,
+        )
+        db.add_all([admin, operator, manager, accountant, head_office, foreign_manager])
         db.flush()
 
         fuel_type = FuelType(name="Petrol", description="Fuel")
@@ -195,6 +232,8 @@ def seed_base_data(session_local):
             "organization_id": organization.id,
             "station_a_id": station_a.id,
             "station_b_id": station_b.id,
+            "station_c_id": station_c.id,
+            "foreign_organization_id": foreign_organization.id,
             "fuel_type_id": fuel_type.id,
             "tank_id": tank.id,
             "nozzle_id": nozzle.id,

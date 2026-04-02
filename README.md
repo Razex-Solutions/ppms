@@ -1,24 +1,25 @@
 # Petrol Pump Management System (PPMS)
 
-A comprehensive backend API for managing petrol pump operations, including sales, inventory, accounting, and employee shifts. Built with FastAPI and SQLAlchemy.
+A comprehensive backend API for managing petrol pump operations, including sales, inventory, accounting, employee shifts, and organization-aware oversight. Built with FastAPI and SQLAlchemy.
 
 ## Overview
 
 The Petrol Pump Management System (PPMS) provides a robust RESTful API to streamline the daily operations of a fuel station. Key features include:
-- **Authentication & Authorization**: Role-based access control (Admin, Manager, Operator, Accountant) with station-level data isolation.
+- **Authentication & Authorization**: Role-based access control (`Admin`, `HeadOffice`, `Manager`, `Operator`, `Accountant`) with organization-aware and station-level data isolation.
 - **Asset Management**: Tracking stations, tanks, dispensers, and nozzles.
 - **Sales Tracking**: Monitoring fuel sales (cash/credit), shift-wise nozzle readings, and daily summaries.
 - **Inventory Management**: Handling fuel types, purchases, tanker deliveries, and tank dip readings.
 - **POS & Hardware Foundations**: Supporting POS stock/sales workflows plus simulator-friendly hardware device registration and reading ingestion.
 - **Financials**: Managing customer/supplier payments, expenses, and ledger entries with profit analysis.
 - **Monitoring**: Real-time dashboard for sales, expenses, net profit, low-stock alerts, and credit-limit notifications.
-- **Multi-tenancy**: Admins can manage all stations, while Managers/Operators/Accountants are restricted to their assigned station data.
-- **Organization Foundation**: Stations can now belong to an organization, with head-office station designation for future centralized governance.
+- **Multi-station Governance**: Admins can manage all organizations, `HeadOffice` users can read across their own organization, and station roles remain restricted to their assigned station.
+- **Organization Foundation**: Stations belong to organizations, support head-office station designation, and power organization-level dashboards and reports.
 
 ## API Endpoints & Features
 
 ### Dashboard
 - **GET /dashboard/**: Real-time summaries including total sales (cash/credit), expenses, net profit, and total fuel stock.
+  - Supports station-level and organization-level views depending on role and filters.
 - **Alerts**: Automated alerts for low fuel stock and customers approaching their credit limit.
 
 ### Core Modules
@@ -39,6 +40,7 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
   - **Payments**: Processing customer payments (receivables) and supplier payments (payables).
   - **Expenses**: Tracking station-wise operational expenses.
   - **Profit Analysis**: Real-time calculation of net profit based on sales and expenses.
+  - **Reports**: Daily closing, shift variance, stock movement, customer balances, and supplier balances with organization-aware filters.
 
 ## Requirements
 
@@ -92,13 +94,13 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
     ```
 
 5.  **Initialize seed data**:
-    Run the seeding script to create the initial roles, station, and admin user.
+    Run the seeding script to create the initial roles, default organization, head-office station, and admin user.
     ```bash
     cd ppms
     python seed.py
     ```
-    - Default Admin Username: `admin`
-    - Default Admin Password: `admin123`
+- Default Admin Username: `admin`
+- Default Admin Password: `admin123`
 
 ## Running the Application
 
@@ -152,6 +154,13 @@ Use automated tests instead of hardcoded localhost verification scripts. The pro
 ```bash
 venv\Scripts\python.exe -m pytest tests
 ```
+
+## Organization-Aware Access
+
+- `Admin` can read and manage all organizations, stations, users, and reports.
+- `HeadOffice` is a read-focused organization role. It can view stations, users, dashboards, and reports within its own organization.
+- `Manager`, `Operator`, and `Accountant` remain station-scoped for operational safety.
+- Report endpoints support `station_id` and `organization_id` filters, but non-admin users are automatically constrained to their allowed scope.
 
 ## Auth Password Management
 

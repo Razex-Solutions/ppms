@@ -29,6 +29,7 @@ db = SessionLocal()
 # Create default roles
 roles_data = [
     {"name": "Admin", "description": "Full system access"},
+    {"name": "HeadOffice", "description": "Organization-wide read access"},
     {"name": "Manager", "description": "Station management access"},
     {"name": "Operator", "description": "Daily operations access"},
     {"name": "Accountant", "description": "Financial access only"},
