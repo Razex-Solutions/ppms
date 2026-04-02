@@ -31,6 +31,10 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "read": {"Admin", "HeadOffice"},
         "update": {"Admin", "HeadOffice"},
     },
+    "invoice_profiles": {
+        "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
+        "update": {"Admin", "HeadOffice", "Manager"},
+    },
     "fuel_types": {
         "create": {"Admin"},
         "update": {"Admin"},
@@ -123,6 +127,9 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
     },
     "notifications": {
         "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
+    },
+    "delivery_jobs": {
+        "process": {"Admin", "HeadOffice"},
     },
     "reports": {
         "read": {"Admin", "HeadOffice", "Manager", "Accountant"},

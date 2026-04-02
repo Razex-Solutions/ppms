@@ -11,6 +11,8 @@ class User(Base):
     full_name = Column(String, nullable=False)
     username = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, unique=True, nullable=True, index=True)
+    phone = Column(String, nullable=True)
+    whatsapp_number = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 

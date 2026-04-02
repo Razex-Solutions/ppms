@@ -1,4 +1,6 @@
+import asyncio
 import time
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException, Request
@@ -6,11 +8,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api import ROUTER_REGISTRY
-from app.core.config import APP_ENV, ENABLED_MODULES
+from app.core.config import APP_ENV, ENABLED_MODULES, DELIVERY_WORKER_ENABLED, DELIVERY_WORKER_INTERVAL_SECONDS
 from app.core.database import engine
 from app.core.dependencies import get_current_user
 from app.core.logging import get_logger, setup_logging
-from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent, AuditLog, Organization, ReportExportJob, StationModuleSetting, TankerTrip, TankerDelivery, TankerTripExpense, MeterAdjustmentEvent, Notification
+from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent, AuditLog, Organization, ReportExportJob, StationModuleSetting, TankerTrip, TankerDelivery, TankerTripExpense, MeterAdjustmentEvent, Notification, NotificationPreference, NotificationDelivery, InvoiceProfile, FinancialDocumentDispatch
+from app.services.delivery_worker import run_delivery_worker
 
 
 setup_logging()
@@ -30,9 +33,33 @@ def _resolve_enabled_modules(enabled_modules: str | None) -> set[str]:
 
 
 def create_app(enabled_modules: str | None = None) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        delivery_worker_task = None
+        if DELIVERY_WORKER_ENABLED and ("notifications" in active_modules or "financial_documents" in active_modules):
+            delivery_worker_task = asyncio.create_task(run_delivery_worker(DELIVERY_WORKER_INTERVAL_SECONDS))
+            app.state.delivery_worker_task = delivery_worker_task
+            logger.info(
+                "Delivery worker started",
+                extra={
+                    "delivery_worker": True,
+                    "interval_seconds": DELIVERY_WORKER_INTERVAL_SECONDS,
+                },
+            )
+        try:
+            yield
+        finally:
+            if delivery_worker_task is not None:
+                delivery_worker_task.cancel()
+                try:
+                    await delivery_worker_task
+                except asyncio.CancelledError:
+                    pass
+
     app = FastAPI(
         title="Petrol Pump Management System API",
-        version="0.1.0"
+        version="0.1.0",
+        lifespan=lifespan,
     )
 
     protected = {"dependencies": [Depends(get_current_user)]}
@@ -150,7 +177,12 @@ def create_app(enabled_modules: str | None = None) -> FastAPI:
 
     @app.get("/health")
     def health_check():
-        return {"status": "ok", "environment": APP_ENV, "enabled_modules": sorted(active_modules)}
+        return {
+            "status": "ok",
+            "environment": APP_ENV,
+            "enabled_modules": sorted(active_modules),
+            "delivery_worker_enabled": DELIVERY_WORKER_ENABLED,
+        }
 
     return app
 

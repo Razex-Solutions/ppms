@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.time import utc_now
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle import Nozzle
+from app.models.station import Station
 from app.models.user import User
 from app.services.audit import log_audit_event
 from app.services.notifications import get_station_watchers, notify_users
@@ -30,6 +31,8 @@ def adjust_nozzle_meter(
     old_reading = nozzle.meter_reading or 0.0
     if new_reading == old_reading:
         raise HTTPException(status_code=400, detail="New meter reading must be different from the current reading")
+    station = db.query(Station).filter(Station.id == station_id).first()
+    organization_id = station.organization_id if station else None
 
     adjustment = MeterAdjustmentEvent(
         nozzle_id=nozzle.id,
@@ -61,10 +64,10 @@ def adjust_nozzle_meter(
     )
     notify_users(
         db,
-        recipients=get_station_watchers(db, station_id, nozzle.dispenser.station.organization_id if nozzle.dispenser and nozzle.dispenser.station else None),
+        recipients=get_station_watchers(db, station_id, organization_id),
         actor_user=current_user,
         station_id=station_id,
-        organization_id=nozzle.dispenser.station.organization_id if nozzle.dispenser and nozzle.dispenser.station else None,
+        organization_id=organization_id,
         event_type="nozzle.meter_adjusted",
         title="Nozzle meter adjusted",
         message=f"{current_user.full_name} adjusted nozzle {nozzle.code} from {old_reading} to {new_reading}.",

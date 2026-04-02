@@ -268,6 +268,73 @@ venv\Scripts\python.exe -m pytest tests
   - `GET /nozzles/{id}/adjustments`
   - `GET /nozzles/{id}/readings`
 
+## Notifications
+
+- The backend now includes persisted in-app notifications with unread tracking.
+- Notification channels support real provider adapters with a safe default mock mode for local development and tests.
+- Notifications are generated for high-value operational events such as:
+  - expense approval requests and decisions
+  - purchase approval requests and decisions
+  - transaction reversal requests and decisions
+  - report export completion
+  - nozzle meter adjustments
+- Endpoints:
+  - `GET /notifications/`
+  - `GET /notifications/summary`
+  - `GET /notifications/preferences`
+  - `PUT /notifications/preferences/{event_type}`
+  - `GET /notifications/deliveries`
+  - `POST /notifications/{id}/read`
+  - `POST /notifications/read-all`
+
+## Invoice Profiles
+
+- Each station can now maintain branding and invoice metadata used for generated financial documents.
+- Supported fields include:
+  - business name
+  - logo URL
+  - NTN / GST or other custom tax labels
+  - contact email and phone
+  - invoice prefix
+  - footer text
+- Endpoints:
+  - `GET /invoice-profiles/{station_id}`
+  - `PUT /invoice-profiles/{station_id}`
+
+## Financial Documents
+
+- The backend now generates branded financial documents for:
+  - customer payment receipts
+  - supplier payment vouchers
+  - customer ledger statements
+  - supplier ledger statements
+- Documents are rendered as HTML payloads, can be downloaded as PDFs, and can be dispatched through:
+  - `email`
+  - `sms`
+  - `whatsapp`
+  - `print`
+- Dispatches are logged for traceability.
+- External delivery currently supports:
+  - SMTP for email
+  - Twilio-compatible SMS
+  - Twilio-compatible WhatsApp
+- Email dispatch can attach rendered PDFs when `format=pdf`.
+- In development/test, delivery defaults to mock mode unless configured otherwise.
+- Endpoints:
+  - `GET /financial-documents/customer-payments/{id}`
+  - `GET /financial-documents/customer-payments/{id}/pdf`
+  - `POST /financial-documents/customer-payments/{id}/send`
+  - `GET /financial-documents/supplier-payments/{id}`
+  - `GET /financial-documents/supplier-payments/{id}/pdf`
+  - `POST /financial-documents/supplier-payments/{id}/send`
+  - `GET /financial-documents/customer-ledgers/{id}`
+  - `GET /financial-documents/customer-ledgers/{id}/pdf`
+  - `POST /financial-documents/customer-ledgers/{id}/send`
+  - `GET /financial-documents/supplier-ledgers/{id}?station_id=...`
+  - `GET /financial-documents/supplier-ledgers/{id}/pdf?station_id=...`
+  - `POST /financial-documents/supplier-ledgers/{id}/send?station_id=...`
+  - `GET /financial-documents/dispatches`
+
 ## Auth Password Management
 
 - `POST /auth/change-password`: authenticated user changes their own password by supplying the current password.
@@ -287,6 +354,29 @@ venv\Scripts\python.exe -m alembic current
 - Requests now emit structured JSON logs with method, path, status, duration, and `request_id`.
 - Responses include `X-Request-ID` to help trace failures.
 - Validation errors, HTTP exceptions, and unexpected server errors are handled centrally.
+
+## Delivery Provider Configuration
+
+Set these environment variables to enable real external delivery:
+
+```env
+DELIVERY_MODE=mock
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM_EMAIL=
+SMTP_USE_TLS=true
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_SMS_FROM=
+TWILIO_WHATSAPP_FROM=
+```
+
+Notes:
+
+- `DELIVERY_MODE=mock` keeps email/SMS/WhatsApp delivery safe in local environments and tests.
+- When `DELIVERY_MODE` is not `mock` and provider credentials are configured, the backend will attempt real outbound delivery.
 
 ## License
 

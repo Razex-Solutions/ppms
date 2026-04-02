@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -758,6 +758,377 @@ def test_notifications_cover_approval_export_and_meter_events(client):
     read_all = test_client.post("/notifications/read-all", headers=accountant_headers)
     assert read_all.status_code == 200
     assert read_all.json()["marked_read"] >= 1
+
+
+def test_notification_preferences_and_financial_documents(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+    admin_headers = login(test_client, "admin", "admin123")
+
+    pref_response = test_client.put(
+        "/notifications/preferences/report_export.completed",
+        headers=accountant_headers,
+        json={
+            "event_type": "report_export.completed",
+            "in_app_enabled": True,
+            "email_enabled": True,
+            "sms_enabled": False,
+            "whatsapp_enabled": False,
+        },
+    )
+    assert pref_response.status_code == 200, pref_response.text
+    assert pref_response.json()["email_enabled"] is True
+
+    profile_response = test_client.put(
+        f"/invoice-profiles/{data['station_a_id']}",
+        headers=manager_headers,
+        json={
+            "business_name": "My Pump Pvt Ltd",
+            "logo_url": "https://example.com/logo.png",
+            "tax_label_1": "NTN",
+            "tax_value_1": "1234567-8",
+            "tax_label_2": "GST",
+            "tax_value_2": "GST-9988",
+            "contact_email": "billing@mypump.test",
+            "contact_phone": "03001234567",
+            "footer_text": "Thank you for your business",
+            "invoice_prefix": "MPP",
+        },
+    )
+    assert profile_response.status_code == 200, profile_response.text
+    assert profile_response.json()["invoice_prefix"] == "MPP"
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+        from app.models.supplier import Supplier
+
+        customer = db.query(Customer).filter(Customer.id == data["customer_id"]).first()
+        supplier = db.query(Supplier).filter(Supplier.code == "SUP-A").first()
+        customer.outstanding_balance = 200
+        supplier.payable_balance = 150
+        db.commit()
+        supplier_id = supplier.id
+    finally:
+        db.close()
+
+    customer_payment = test_client.post(
+        "/customer-payments/",
+        headers=accountant_headers,
+        json={
+            "customer_id": data["customer_id"],
+            "station_id": data["station_a_id"],
+            "amount": 50,
+            "payment_method": "bank",
+            "reference_no": "RCPT-1",
+        },
+    )
+    assert customer_payment.status_code == 200, customer_payment.text
+    customer_payment_id = customer_payment.json()["id"]
+
+    supplier_payment = test_client.post(
+        "/supplier-payments/",
+        headers=accountant_headers,
+        json={
+            "supplier_id": supplier_id,
+            "station_id": data["station_a_id"],
+            "amount": 40,
+            "payment_method": "bank",
+            "reference_no": "VCHR-1",
+        },
+    )
+    assert supplier_payment.status_code == 200, supplier_payment.text
+    supplier_payment_id = supplier_payment.json()["id"]
+
+    customer_receipt = test_client.get(
+        f"/financial-documents/customer-payments/{customer_payment_id}",
+        headers=accountant_headers,
+    )
+    assert customer_receipt.status_code == 200, customer_receipt.text
+    assert "My Pump Pvt Ltd" in customer_receipt.json()["rendered_html"]
+    assert "NTN" in customer_receipt.json()["rendered_html"]
+    assert customer_receipt.json()["document_number"].startswith("MPP-CP-")
+
+    supplier_voucher = test_client.get(
+        f"/financial-documents/supplier-payments/{supplier_payment_id}",
+        headers=accountant_headers,
+    )
+    assert supplier_voucher.status_code == 200, supplier_voucher.text
+    assert supplier_voucher.json()["document_number"].startswith("MPP-SP-")
+
+    customer_receipt_pdf = test_client.get(
+        f"/financial-documents/customer-payments/{customer_payment_id}/pdf",
+        headers=accountant_headers,
+    )
+    assert customer_receipt_pdf.status_code == 200, customer_receipt_pdf.text
+    assert customer_receipt_pdf.headers["content-type"].startswith("application/pdf")
+    assert customer_receipt_pdf.content.startswith(b"%PDF")
+
+    supplier_ledger_pdf = test_client.get(
+        f"/financial-documents/supplier-ledgers/{supplier_id}/pdf?station_id={data['station_a_id']}",
+        headers=accountant_headers,
+    )
+    assert supplier_ledger_pdf.status_code == 200, supplier_ledger_pdf.text
+    assert supplier_ledger_pdf.headers["content-type"].startswith("application/pdf")
+    assert supplier_ledger_pdf.content.startswith(b"%PDF")
+
+    customer_dispatch = test_client.post(
+        f"/financial-documents/customer-payments/{customer_payment_id}/send",
+        headers=accountant_headers,
+        json={"channel": "email", "format": "pdf"},
+    )
+    assert customer_dispatch.status_code == 200, customer_dispatch.text
+    assert customer_dispatch.json()["status"] == "sent"
+
+    supplier_dispatch = test_client.post(
+        f"/financial-documents/supplier-ledgers/{supplier_id}/send?station_id={data['station_a_id']}",
+        headers=accountant_headers,
+        json={"channel": "whatsapp", "recipient_contact": "03009998888"},
+    )
+    assert supplier_dispatch.status_code == 200, supplier_dispatch.text
+    assert supplier_dispatch.json()["status"] == "sent"
+
+    dispatch_list = test_client.get("/financial-documents/dispatches", headers=accountant_headers)
+    assert dispatch_list.status_code == 200, dispatch_list.text
+    assert len(dispatch_list.json()) >= 2
+
+    export_response = test_client.post(
+        "/report-exports/",
+        headers=accountant_headers,
+        json={"report_type": "customer_balances", "format": "csv"},
+    )
+    assert export_response.status_code == 200, export_response.text
+
+    summary_response = test_client.get("/notifications/summary", headers=accountant_headers)
+    assert summary_response.status_code == 200
+    assert summary_response.json()["total"] >= 1
+
+    deliveries_response = test_client.get("/notifications/deliveries", headers=accountant_headers)
+    assert deliveries_response.status_code == 200, deliveries_response.text
+    assert any(delivery["channel"] == "email" for delivery in deliveries_response.json())
+
+
+def test_notification_delivery_retry_flow(client, monkeypatch):
+    test_client, session_local = client
+    seed_base_data(session_local)
+    accountant_headers = login(test_client, "accountant", "accountant123")
+
+    pref_response = test_client.put(
+        "/notifications/preferences/report_export.completed",
+        headers=accountant_headers,
+        json={
+            "event_type": "report_export.completed",
+            "in_app_enabled": True,
+            "email_enabled": True,
+            "sms_enabled": False,
+            "whatsapp_enabled": False,
+        },
+    )
+    assert pref_response.status_code == 200, pref_response.text
+
+    monkeypatch.setattr("app.services.notifications.deliver_email", lambda **kwargs: ("failed", "smtp unavailable"))
+
+    export_response = test_client.post(
+        "/report-exports/",
+        headers=accountant_headers,
+        json={"report_type": "customer_balances", "format": "csv"},
+    )
+    assert export_response.status_code == 200, export_response.text
+
+    deliveries_response = test_client.get("/notifications/deliveries", headers=accountant_headers)
+    assert deliveries_response.status_code == 200, deliveries_response.text
+    email_delivery = next(delivery for delivery in deliveries_response.json() if delivery["channel"] == "email")
+    assert email_delivery["status"] == "retrying"
+    assert email_delivery["attempts_count"] == 1
+    assert email_delivery["next_retry_at"] is not None
+
+    monkeypatch.setattr("app.services.notifications.deliver_email", lambda **kwargs: ("sent", None))
+
+    retry_response = test_client.post(
+        f"/notifications/deliveries/{email_delivery['id']}/retry",
+        headers=accountant_headers,
+    )
+    assert retry_response.status_code == 200, retry_response.text
+    assert retry_response.json()["status"] == "delivered"
+    assert retry_response.json()["attempts_count"] == 2
+    assert retry_response.json()["processed_at"] is not None
+
+
+def test_financial_document_dispatch_retry_flow(client, monkeypatch):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    accountant_headers = login(test_client, "accountant", "accountant123")
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+
+        customer = db.query(Customer).filter(Customer.id == data["customer_id"]).first()
+        customer.outstanding_balance = 120
+        db.commit()
+    finally:
+        db.close()
+
+    customer_payment = test_client.post(
+        "/customer-payments/",
+        headers=accountant_headers,
+        json={
+            "customer_id": data["customer_id"],
+            "station_id": data["station_a_id"],
+            "amount": 30,
+            "payment_method": "cash",
+            "reference_no": "RETRY-1",
+        },
+    )
+    assert customer_payment.status_code == 200, customer_payment.text
+    customer_payment_id = customer_payment.json()["id"]
+
+    monkeypatch.setattr("app.services.financial_documents.deliver_email", lambda **kwargs: ("failed", "provider timeout"))
+
+    dispatch_response = test_client.post(
+        f"/financial-documents/customer-payments/{customer_payment_id}/send",
+        headers=accountant_headers,
+        json={"channel": "email", "format": "pdf"},
+    )
+    assert dispatch_response.status_code == 200, dispatch_response.text
+    assert dispatch_response.json()["status"] == "retrying"
+    assert dispatch_response.json()["output_format"] == "pdf"
+    assert dispatch_response.json()["attempts_count"] == 1
+    assert dispatch_response.json()["next_retry_at"] is not None
+
+    monkeypatch.setattr("app.services.financial_documents.deliver_email", lambda **kwargs: ("sent", None))
+
+    retry_response = test_client.post(
+        f"/financial-documents/dispatches/{dispatch_response.json()['id']}/retry",
+        headers=accountant_headers,
+    )
+    assert retry_response.status_code == 200, retry_response.text
+    assert retry_response.json()["status"] == "sent"
+    assert retry_response.json()["attempts_count"] == 2
+    assert retry_response.json()["processed_at"] is not None
+
+
+def test_process_due_notification_deliveries_endpoint(client, monkeypatch):
+    test_client, session_local = client
+    seed_base_data(session_local)
+    accountant_headers = login(test_client, "accountant", "accountant123")
+    admin_headers = login(test_client, "admin", "admin123")
+
+    pref_response = test_client.put(
+        "/notifications/preferences/report_export.completed",
+        headers=accountant_headers,
+        json={
+            "event_type": "report_export.completed",
+            "in_app_enabled": True,
+            "email_enabled": True,
+            "sms_enabled": False,
+            "whatsapp_enabled": False,
+        },
+    )
+    assert pref_response.status_code == 200, pref_response.text
+
+    monkeypatch.setattr("app.services.notifications.deliver_email", lambda **kwargs: ("failed", "temporary email failure"))
+
+    export_response = test_client.post(
+        "/report-exports/",
+        headers=accountant_headers,
+        json={"report_type": "customer_balances", "format": "csv"},
+    )
+    assert export_response.status_code == 200, export_response.text
+
+    deliveries_response = test_client.get("/notifications/deliveries", headers=accountant_headers)
+    assert deliveries_response.status_code == 200, deliveries_response.text
+    email_delivery = next(delivery for delivery in deliveries_response.json() if delivery["channel"] == "email")
+    assert email_delivery["status"] == "retrying"
+
+    db = session_local()
+    try:
+        from app.core.time import utc_now
+        from app.models.notification_delivery import NotificationDelivery
+
+        delivery = db.query(NotificationDelivery).filter(NotificationDelivery.id == email_delivery["id"]).first()
+        delivery.next_retry_at = utc_now() - timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
+
+    monkeypatch.setattr("app.services.notifications.deliver_email", lambda **kwargs: ("sent", None))
+
+    process_response = test_client.post("/notifications/deliveries/process-due", headers=admin_headers)
+    assert process_response.status_code == 200, process_response.text
+    assert process_response.json()["processed"] >= 1
+
+    refreshed_deliveries = test_client.get("/notifications/deliveries", headers=accountant_headers)
+    assert refreshed_deliveries.status_code == 200, refreshed_deliveries.text
+    refreshed_email_delivery = next(delivery for delivery in refreshed_deliveries.json() if delivery["id"] == email_delivery["id"])
+    assert refreshed_email_delivery["status"] == "delivered"
+    assert refreshed_email_delivery["attempts_count"] == 2
+
+
+def test_process_due_financial_document_dispatches_endpoint(client, monkeypatch):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    accountant_headers = login(test_client, "accountant", "accountant123")
+    admin_headers = login(test_client, "admin", "admin123")
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+
+        customer = db.query(Customer).filter(Customer.id == data["customer_id"]).first()
+        customer.outstanding_balance = 180
+        db.commit()
+    finally:
+        db.close()
+
+    customer_payment = test_client.post(
+        "/customer-payments/",
+        headers=accountant_headers,
+        json={
+            "customer_id": data["customer_id"],
+            "station_id": data["station_a_id"],
+            "amount": 25,
+            "payment_method": "bank",
+            "reference_no": "QUEUE-1",
+        },
+    )
+    assert customer_payment.status_code == 200, customer_payment.text
+    customer_payment_id = customer_payment.json()["id"]
+
+    monkeypatch.setattr("app.services.financial_documents.deliver_email", lambda **kwargs: ("failed", "mail gateway down"))
+
+    dispatch_response = test_client.post(
+        f"/financial-documents/customer-payments/{customer_payment_id}/send",
+        headers=accountant_headers,
+        json={"channel": "email", "format": "pdf"},
+    )
+    assert dispatch_response.status_code == 200, dispatch_response.text
+    assert dispatch_response.json()["status"] == "retrying"
+
+    db = session_local()
+    try:
+        from app.core.time import utc_now
+        from app.models.financial_document_dispatch import FinancialDocumentDispatch
+
+        dispatch = db.query(FinancialDocumentDispatch).filter(FinancialDocumentDispatch.id == dispatch_response.json()["id"]).first()
+        dispatch.next_retry_at = utc_now() - timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
+
+    monkeypatch.setattr("app.services.financial_documents.deliver_email", lambda **kwargs: ("sent", None))
+
+    process_response = test_client.post("/financial-documents/dispatches/process-due", headers=admin_headers)
+    assert process_response.status_code == 200, process_response.text
+    assert process_response.json()["processed"] >= 1
+
+    dispatches_response = test_client.get("/financial-documents/dispatches", headers=accountant_headers)
+    assert dispatches_response.status_code == 200, dispatches_response.text
+    refreshed_dispatch = next(dispatch for dispatch in dispatches_response.json() if dispatch["id"] == dispatch_response.json()["id"])
+    assert refreshed_dispatch["status"] == "sent"
+    assert refreshed_dispatch["attempts_count"] == 2
 
 
 def test_unhandled_exceptions_are_sanitized_and_traced(tmp_path):

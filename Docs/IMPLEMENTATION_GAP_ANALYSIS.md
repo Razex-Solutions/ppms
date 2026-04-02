@@ -53,6 +53,11 @@ That means the project is currently in a **late Phase 1 / early Phase 2 backend 
 - hardware backend module with simulator endpoints
 - seed script for initial data
 - automated API test coverage across modules
+- persisted in-app notifications, delivery logs, and user notification preferences
+- station invoice branding/profile settings
+- generated financial documents for receipts, vouchers, and ledger statements with dispatch logging
+- PDF rendering and download endpoints for generated financial documents
+- provider-backed outbound delivery adapters for email, SMS, and WhatsApp with safe mock mode for non-production use
 
 ### What does not exist today
 
@@ -60,9 +65,9 @@ That means the project is currently in a **late Phase 1 / early Phase 2 backend 
 - mobile client
 - sync engine
 - real device vendor adapters
-- notification services
+- real external notification gateways
 - payroll
-- compliance / invoicing
+- compliance-grade invoicing and tax workflows
 - SaaS tenancy and billing
 
 ## Module Status Matrix
@@ -79,20 +84,20 @@ Status definitions:
 | Role-based access control | Partial | Permission matrix and enforcement are much stronger now, including `HeadOffice`, but not yet fully data-driven or enterprise-grade |
 | Multi-station support | Partial | Organization model and head-office read scope now exist, but this is not yet a full tenant / centralized governance design |
 | User management | Partial | CRUD exists with admin-only mutations and head-office read scope; delegated provisioning and approval flows are still missing |
-| Fuel sales management | Partial | Core sale entry, validation, safe reversal, and reporting exist, but no real device integration, approval workflow, or invoice layer |
-| Nozzle monitoring / reading history | Partial | Manual reading progression exists through sales and history records |
+| Fuel sales management | Partial | Core sale entry, validation, safe reversal, and reporting exist, with meter-adjustment segmentation and document-ready receipt foundations; real device integration and richer billing still remain |
+| Nozzle monitoring / reading history | Partial | Manual reading progression exists through sales and history records, plus immutable meter-adjustment events and segment resets |
 | Tank inventory management | Partial | Tanks, dips, and stock movement reporting exist, plus hardware probe simulation; calibration charts and deeper reconciliation are still missing |
 | Purchase management | Partial | Purchases and safe reversal exist, but no purchase approvals, returns, shortage workflows, or vendor performance tracking |
-| Customer credit management | Partial | Basic credit sales and payments exist, but no vehicle/company hierarchy, monthly billing, statements workflow, or reminder engine |
-| Supplier management | Partial | Basic supplier CRUD and payments exist, but no richer supplier operations or performance tracking |
+| Customer credit management | Partial | Basic credit sales and payments exist, plus ledger statement generation and dispatch logging; vehicle/company hierarchy, monthly billing, and reminders are still missing |
+| Supplier management | Partial | Basic supplier CRUD and payments exist, plus voucher/ledger document generation; richer supplier operations and performance tracking are still missing |
 | Accounting module | Partial | Profit summary, ledgers, payments, and approved-expense handling exist; no chart of accounts, bank/cash, statements, or rules engine |
 | Shift management | Partial | Open/close shift and variance reporting exist, but no supervisor approval, attendance tie-in, or richer shift governance |
-| Reporting and analytics | Partial | Dashboard and organization-aware operational reports exist; no scheduled reports, export system, comparative analytics, or BI layer |
+| Reporting and analytics | Partial | Dashboard and organization-aware operational reports exist, including export jobs and tanker reports; scheduled automation, comparative analytics, and BI depth still remain |
 | Audit trail / fraud prevention | Partial | Audit log exists and critical actions are recorded, but fraud rules, anomaly detection, and deeper review workflows are still missing |
 | Attendance and payroll | Missing | Not modeled |
 | POS for shop/services | Partial | POS product and sale backend exists, but no richer retail workflows, UI, or advanced stock/accounting integration |
-| Notification system | Missing | No SMS, WhatsApp, email, push, or in-app alerts |
-| Government compliance / digital invoicing / tax | Missing | Not modeled |
+| Notification system | Partial | In-app notifications, preferences, delivery logs, and provider-backed email/SMS/WhatsApp adapters now exist; retries, queues, and richer template management are still missing |
+| Government compliance / digital invoicing / tax | Partial | Station invoice branding, flexible tax labels, and basic PDF financial documents now exist, but compliance-grade e-invoicing, tax rules, and regulatory workflows are still missing |
 | Desktop application | Missing | No Windows application in this repo |
 | Android mobile application | Missing | No mobile app in this repo |
 | Offline-first local operation | Missing | SQLite exists, but not as a designed offline-sync architecture |
@@ -143,10 +148,25 @@ The DOCX expects:
 - session control
 - detailed permissions
 
-The current implementation has only the early RBAC foundation.
-The current implementation is now beyond the early RBAC foundation, but it still lacks the full security depth expected by the DOCX.
+The current implementation is now well beyond the early RBAC foundation, but it still lacks the full security depth expected by the DOCX.
 
-### 5. Commercial SaaS features
+### 5. Notification and document delivery depth
+
+The codebase now has:
+
+- in-app notifications
+- per-user channel preferences
+- delivery logs
+- station-branded financial documents
+
+What is still missing is the deeper outbound delivery infrastructure around what now exists:
+
+- retries and backoff
+- queueing
+- template management
+- compliance-ready tax/e-invoice outputs beyond the current basic PDF renderer
+
+### 6. Commercial SaaS features
 
 The DOCX goes beyond operations and aims for a subscription SaaS business. None of the following exist yet:
 
@@ -208,7 +228,7 @@ Includes:
 Current assessment:
 
 - largely complete
-- still missing a few policy-heavy workflows and richer exports
+- now also includes notification/event foundations, PDF-capable financial documents, and meter-adjustment support
 
 ### Phase 2: Operational Hardening
 
@@ -229,7 +249,7 @@ Includes:
 Current assessment:
 
 - in active progress
-- audit logs, structured logging, permissions, migrations, and the first approval workflow are already in place
+- audit logs, structured logging, permissions, migrations, approval workflows, notifications, exports, and branded financial documents are now already in place
 
 ### Phase 3: Multi-Station and Head Office
 
@@ -384,7 +404,8 @@ Priority order should be:
 Note:
 
 - some of these reports now already exist at a basic backend level
-- the remaining gap is depth, exports, scheduling, and comparative analytics
+- the remaining gap is scheduling, comparative analytics, external delivery, and compliance-ready rendering
+- the remaining gap is scheduling, comparative analytics, delivery queueing/retries, and compliance-ready tax rendering
 
 ## Phase 3 Backlog: Multi-Station / Head Office
 
@@ -508,11 +529,11 @@ These are the best next engineering tasks for the current repo:
 3. Continue extracting mixed route/service logic into clearer domain services
 4. Expand automated API tests for deeper approval, reporting, and migration flows
 5. Define the next missing domain entities and workflows:
-   - transaction approval records beyond expenses
-   - report/export jobs
-   - notification/event delivery
+   - delivery queue / retry state
+   - compliance-grade invoice/e-invoice generation beyond the current PDF layer
    - offline/sync state
-6. Write a formal Phase 2 scope document so the project stops drifting against the much larger DOCX vision
+   - broader tenant/subscription entities
+6. Write a formal Phase 3 scope document so the project stops drifting against the much larger DOCX vision
 
 ## Final Assessment
 
@@ -522,7 +543,7 @@ The problem is that the codebase is currently much smaller than that vision and 
 
 The correct framing is:
 
-- **Current reality:** hardened backend pilot with early head-office and hardware/POS foundations
-- **Immediate target:** finish Phase 2 operational hardening and approval/governance workflows
-- **Next expansion:** stronger centralized operations, exports, desktop/offline architecture
+- **Current reality:** hardened backend pilot with head-office, hardware/POS, notifications, branded PDF-capable financial documents, and governance foundations
+- **Immediate target:** finish the remaining operational hardening plus delivery queue/compliance-grade document gaps
+- **Next expansion:** stronger centralized operations, desktop/offline architecture, and true external integrations
 - **Later product layers:** desktop, offline sync, hardware, mobile, SaaS
