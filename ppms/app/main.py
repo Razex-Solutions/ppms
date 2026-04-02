@@ -4,7 +4,7 @@ from app.api import ROUTER_REGISTRY
 from app.core.config import ENABLED_MODULES
 from app.core.database import Base, engine, ensure_sqlite_transaction_columns
 from app.core.dependencies import get_current_user
-from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent
+from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent, AuditLog
 
 
 Base.metadata.create_all(bind=engine)

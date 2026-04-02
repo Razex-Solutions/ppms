@@ -11,6 +11,7 @@ from app.models.shift import Shift
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.fuel_sale import FuelSaleCreate
+from app.services.audit import log_audit_event
 
 
 def ensure_sale_access(sale: FuelSale, current_user: User) -> None:
@@ -100,6 +101,16 @@ def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User)
     )
     db.add(sale)
     db.flush()
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="fuel_sales",
+        action="fuel_sales.create",
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        station_id=sale.station_id,
+        details={"sale_type": sale.sale_type, "total_amount": sale.total_amount, "quantity": sale.quantity},
+    )
 
     db.add(NozzleReading(nozzle_id=sale.nozzle_id, reading=sale.closing_meter, sale_id=sale.id))
     nozzle.meter_reading = closing_meter
@@ -148,6 +159,16 @@ def reverse_fuel_sale(db: Session, sale: FuelSale, current_user: User) -> FuelSa
     sale.is_reversed = True
     sale.reversed_at = utc_now()
     sale.reversed_by = current_user.id
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="fuel_sales",
+        action="fuel_sales.reverse",
+        entity_type="fuel_sale",
+        entity_id=sale.id,
+        station_id=sale.station_id,
+        details={"total_amount": sale.total_amount, "quantity": sale.quantity},
+    )
     db.commit()
     db.refresh(sale)
     return sale

@@ -7,6 +7,7 @@ from app.models.shift import Shift
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.shift import ShiftCreate, ShiftUpdate
+from app.services.audit import log_audit_event
 
 
 def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
@@ -35,6 +36,17 @@ def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
         start_time=utc_now(),
     )
     db.add(shift)
+    db.flush()
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="shifts",
+        action="shifts.open",
+        entity_type="shift",
+        entity_id=shift.id,
+        station_id=shift.station_id,
+        details={"initial_cash": shift.initial_cash},
+    )
     db.commit()
     db.refresh(shift)
     return shift
@@ -61,6 +73,20 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
     shift.status = "closed"
     shift.end_time = utc_now()
     shift.notes = data.notes if data.notes else shift.notes
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="shifts",
+        action="shifts.close",
+        entity_type="shift",
+        entity_id=shift.id,
+        station_id=shift.station_id,
+        details={
+            "expected_cash": shift.expected_cash,
+            "actual_cash_collected": shift.actual_cash_collected,
+            "difference": shift.difference,
+        },
+    )
     db.commit()
     db.refresh(shift)
     return shift

@@ -1,4 +1,5 @@
 from app.api.accounting import router as accounting_router
+from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.customer import router as customer_router
 from app.api.customer_payment import router as customer_payment_router
@@ -14,6 +15,7 @@ from app.api.purchase import router as purchase_router
 from app.api.pos_product import router as pos_product_router
 from app.api.pos_sale import router as pos_sale_router
 from app.api.role import router as role_router
+from app.api.reports import router as reports_router
 from app.api.shift import router as shift_router
 from app.api.station import router as station_router
 from app.api.supplier import router as supplier_router
@@ -26,6 +28,7 @@ from app.api.user import router as user_router
 
 ROUTER_REGISTRY = [
     {"name": "auth", "router": auth_router, "protected": False},
+    {"name": "audit_logs", "router": audit_router, "protected": True},
     {"name": "roles", "router": role_router, "protected": True},
     {"name": "stations", "router": station_router, "protected": True},
     {"name": "users", "router": user_router, "protected": True},
@@ -43,6 +46,7 @@ ROUTER_REGISTRY = [
     {"name": "tankers", "router": tanker_router, "protected": True},
     {"name": "expenses", "router": expense_router, "protected": True},
     {"name": "accounting", "router": accounting_router, "protected": True},
+    {"name": "reports", "router": reports_router, "protected": True},
     {"name": "customer_payments", "router": customer_payment_router, "protected": True},
     {"name": "supplier_payments", "router": supplier_payment_router, "protected": True},
     {"name": "ledger", "router": ledger_router, "protected": True},

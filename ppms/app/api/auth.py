@@ -6,6 +6,7 @@ from app.core.security import verify_password, create_access_token
 from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
+from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -22,6 +23,15 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
 
     token = create_access_token({"sub": str(user.id)})
+    log_audit_event(
+        db,
+        current_user=user,
+        module="auth",
+        action="auth.login",
+        entity_type="session",
+        station_id=user.station_id,
+    )
+    db.commit()
     return TokenResponse(
         access_token=token,
         user_id=user.id,

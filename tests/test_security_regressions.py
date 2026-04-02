@@ -1,4 +1,5 @@
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -58,8 +59,10 @@ def seed_base_data(session_local):
     db = session_local()
     try:
         admin_role = Role(name="Admin", description="Full access")
+        manager_role = Role(name="Manager", description="Station management")
+        accountant_role = Role(name="Accountant", description="Financial operations")
         operator_role = Role(name="Operator", description="Daily operations")
-        db.add_all([admin_role, operator_role])
+        db.add_all([admin_role, manager_role, accountant_role, operator_role])
         db.flush()
 
         station_a = Station(name="Station A", code="STA", address="Addr A", city="City A")
@@ -85,7 +88,25 @@ def seed_base_data(session_local):
             role_id=operator_role.id,
             station_id=station_a.id,
         )
-        db.add_all([admin, operator])
+        manager = User(
+            full_name="Manager User",
+            username="manager",
+            email="manager@example.com",
+            hashed_password=hash_password("manager123"),
+            is_active=True,
+            role_id=manager_role.id,
+            station_id=station_a.id,
+        )
+        accountant = User(
+            full_name="Accountant User",
+            username="accountant",
+            email="accountant@example.com",
+            hashed_password=hash_password("accountant123"),
+            is_active=True,
+            role_id=accountant_role.id,
+            station_id=station_a.id,
+        )
+        db.add_all([admin, operator, manager, accountant])
         db.flush()
 
         fuel_type = FuelType(name="Petrol", description="Fuel")
@@ -647,11 +668,11 @@ def test_pos_product_and_sale_flow_with_reverse_and_module_toggle(client, tmp_pa
 def test_hardware_device_and_simulator_flow(client, tmp_path):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    operator_headers = login(test_client, "operator", "operator123")
+    manager_headers = login(test_client, "manager", "manager123")
 
     dispenser_device_response = test_client.post(
         "/hardware/devices",
-        headers=operator_headers,
+        headers=manager_headers,
         json={
             "name": "Wayne Simulator",
             "code": "HW-DISP-001",
@@ -667,7 +688,7 @@ def test_hardware_device_and_simulator_flow(client, tmp_path):
 
     tank_probe_response = test_client.post(
         "/hardware/devices",
-        headers=operator_headers,
+        headers=manager_headers,
         json={
             "name": "Probe Simulator",
             "code": "HW-TANK-001",
@@ -683,7 +704,7 @@ def test_hardware_device_and_simulator_flow(client, tmp_path):
 
     dispenser_event_response = test_client.post(
         "/hardware/simulate/dispenser-reading",
-        headers=operator_headers,
+        headers=manager_headers,
         json={
             "device_id": dispenser_device_id,
             "nozzle_id": data["nozzle_id"],
@@ -696,7 +717,7 @@ def test_hardware_device_and_simulator_flow(client, tmp_path):
 
     tank_event_response = test_client.post(
         "/hardware/simulate/tank-probe-reading",
-        headers=operator_headers,
+        headers=manager_headers,
         json={
             "device_id": tank_probe_id,
             "volume": 95,
@@ -706,7 +727,7 @@ def test_hardware_device_and_simulator_flow(client, tmp_path):
     assert tank_event_response.status_code == 200, tank_event_response.text
     assert tank_event_response.json()["event_type"] == "tank_probe_reading"
 
-    events_response = test_client.get("/hardware/events", headers=operator_headers)
+    events_response = test_client.get("/hardware/events", headers=manager_headers)
     assert events_response.status_code == 200
     assert len(events_response.json()) == 2
 
@@ -718,7 +739,7 @@ def test_hardware_device_and_simulator_flow(client, tmp_path):
     finally:
         db.close()
 
-    delete_response = test_client.delete(f"/hardware/devices/{dispenser_device_id}", headers=operator_headers)
+    delete_response = test_client.delete(f"/hardware/devices/{dispenser_device_id}", headers=manager_headers)
     assert delete_response.status_code == 400
 
     toggle_db_path = tmp_path / "hardware_toggle.db"
@@ -784,3 +805,142 @@ def test_operator_cannot_access_foreign_hardware_device(client):
 
     response = test_client.get(f"/hardware/devices/{foreign_device_id}", headers=operator_headers)
     assert response.status_code == 403
+
+
+def test_audit_logs_capture_transaction_and_report_activity(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    admin_headers = login(test_client, "admin", "admin123")
+    manager_headers = login(test_client, "manager", "manager123")
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1001,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+    sale_id = sale_response.json()["id"]
+    report_date = sale_response.json()["created_at"][:10]
+
+    reverse_response = test_client.post(f"/fuel-sales/{sale_id}/reverse", headers=operator_headers)
+    assert reverse_response.status_code == 200, reverse_response.text
+
+    report_response = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": report_date},
+        headers=manager_headers,
+    )
+    assert report_response.status_code == 200, report_response.text
+
+    audit_response = test_client.get("/audit-logs/", params={"module": "fuel_sales"}, headers=admin_headers)
+    assert audit_response.status_code == 200, audit_response.text
+    actions = {entry["action"] for entry in audit_response.json()}
+    assert "fuel_sales.create" in actions
+    assert "fuel_sales.reverse" in actions
+
+    report_audit_response = test_client.get("/audit-logs/", params={"module": "reports"}, headers=admin_headers)
+    assert report_audit_response.status_code == 200
+    report_actions = {entry["action"] for entry in report_audit_response.json()}
+    assert "reports.daily_closing" in report_actions
+
+
+def test_report_permissions_and_financial_reports(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    manager_headers = login(test_client, "manager", "manager123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+    forbidden_report = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": date.today().isoformat()},
+        headers=operator_headers,
+    )
+    assert forbidden_report.status_code == 403
+
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "closing_meter": 1005,
+            "rate_per_liter": 10,
+            "sale_type": "cash",
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+    report_date = sale_response.json()["created_at"][:10]
+
+    expense_response = test_client.post(
+        "/expenses/",
+        headers=manager_headers,
+        json={
+            "title": "Office Supplies",
+            "category": "Admin",
+            "amount": 15,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert expense_response.status_code == 200, expense_response.text
+
+    purchase_response = test_client.post(
+        "/purchases/",
+        headers=operator_headers,
+        json={
+            "supplier_id": 1,
+            "tank_id": data["tank_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "quantity": 20,
+            "rate_per_liter": 5,
+        },
+    )
+    assert purchase_response.status_code == 200, purchase_response.text
+
+    daily_report = test_client.get(
+        "/reports/daily-closing",
+        params={"report_date": report_date},
+        headers=accountant_headers,
+    )
+    assert daily_report.status_code == 200, daily_report.text
+    report_json = daily_report.json()
+    assert report_json["fuel_cash_sales"] == 50
+    assert report_json["expenses"] == 15
+    assert report_json["cash_inflows"] == 50
+    assert report_json["cash_outflows"] == 15
+    assert report_json["net_cash_movement"] == 35
+
+    stock_report = test_client.get("/reports/stock-movement", headers=manager_headers)
+    assert stock_report.status_code == 200, stock_report.text
+    first_tank = stock_report.json()["items"][0]
+    assert first_tank["purchased_liters"] == 20
+    assert first_tank["sold_liters"] == 5
+    assert first_tank["current_volume_liters"] == 115
+
+
+def test_operator_cannot_view_audit_logs_or_create_expenses(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    audit_response = test_client.get("/audit-logs/", headers=operator_headers)
+    assert audit_response.status_code == 403
+
+    expense_response = test_client.post(
+        "/expenses/",
+        headers=operator_headers,
+        json={
+            "title": "Unauthorized Expense",
+            "category": "Ops",
+            "amount": 10,
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert expense_response.status_code == 403

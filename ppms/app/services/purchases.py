@@ -9,6 +9,7 @@ from app.models.tank import Tank
 from app.models.tanker import Tanker
 from app.models.user import User
 from app.schemas.purchase import PurchaseCreate
+from app.services.audit import log_audit_event
 
 
 def ensure_purchase_access(purchase: Purchase, current_user: User) -> None:
@@ -59,6 +60,17 @@ def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Pu
         notes=data.notes,
     )
     db.add(purchase)
+    db.flush()
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.create",
+        entity_type="purchase",
+        entity_id=purchase.id,
+        station_id=tank.station_id,
+        details={"total_amount": total_amount, "quantity": data.quantity},
+    )
     tank.current_volume += data.quantity
     if tanker:
         tanker.status = "active"
@@ -87,6 +99,16 @@ def reverse_purchase(db: Session, purchase: Purchase, current_user: User) -> Pur
     purchase.is_reversed = True
     purchase.reversed_at = utc_now()
     purchase.reversed_by = current_user.id
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.reverse",
+        entity_type="purchase",
+        entity_id=purchase.id,
+        station_id=tank.station_id,
+        details={"total_amount": purchase.total_amount, "quantity": purchase.quantity},
+    )
     db.commit()
     db.refresh(purchase)
     return purchase

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.purchase import Purchase
+from app.models.tank import Tank
 from app.schemas.purchase import PurchaseCreate, PurchaseResponse
 from app.services.purchases import create_purchase as create_purchase_service
 from app.services.purchases import ensure_purchase_access, reverse_purchase as reverse_purchase_service

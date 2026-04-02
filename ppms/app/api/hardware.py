@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.access import require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.hardware_device import HardwareDevice
 from app.models.hardware_event import HardwareEvent
 from app.models.user import User
@@ -32,6 +33,7 @@ def create_device(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_permission(current_user, "hardware", "create", detail="You do not have permission to create hardware devices")
     return create_hardware_device(db, data, current_user)
 
 
@@ -81,6 +83,7 @@ def update_device(
     device = db.query(HardwareDevice).filter(HardwareDevice.id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="Hardware device not found")
+    require_permission(current_user, "hardware", "update", detail="You do not have permission to update hardware devices")
     return update_hardware_device(db, device, data, current_user)
 
 
@@ -94,6 +97,7 @@ def delete_device(
     if not device:
         raise HTTPException(status_code=404, detail="Hardware device not found")
     ensure_hardware_access(device, current_user)
+    require_permission(current_user, "hardware", "delete", detail="You do not have permission to delete hardware devices")
     if db.query(HardwareEvent).filter(HardwareEvent.device_id == device.id).first():
         raise HTTPException(status_code=400, detail="Hardware device cannot be deleted while event history exists")
     db.delete(device)

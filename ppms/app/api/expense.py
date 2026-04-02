@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 from app.core.access import require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
 from app.models.expense import Expense
 from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseResponse
+from app.services.audit import log_audit_event
 from app.services.expenses import create_expense as create_expense_service
 from app.services.expenses import update_expense as update_expense_service
 
@@ -20,6 +22,7 @@ def create_expense(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    require_permission(current_user, "expenses", "create", detail="You do not have permission to create expenses")
     return create_expense_service(db, data, current_user)
 
 
@@ -73,7 +76,8 @@ def update_expense(
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     require_station_access(current_user, expense.station_id, detail="Not authorized for this expense")
-    return update_expense_service(expense, data, db)
+    require_permission(current_user, "expenses", "update", detail="You do not have permission to update expenses")
+    return update_expense_service(expense, data, db, current_user)
 
 
 @router.delete("/{expense_id}")
@@ -86,6 +90,17 @@ def delete_expense(
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     require_station_access(current_user, expense.station_id, detail="Not authorized for this expense")
+    require_permission(current_user, "expenses", "delete", detail="You do not have permission to delete expenses")
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="expenses",
+        action="expenses.delete",
+        entity_type="expense",
+        entity_id=expense.id,
+        station_id=expense.station_id,
+        details={"title": expense.title, "amount": expense.amount},
+    )
     db.delete(expense)
     db.commit()
     return {"message": "Expense deleted"}

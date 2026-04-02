@@ -5,6 +5,7 @@ from app.models.expense import Expense
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
+from app.services.audit import log_audit_event
 
 
 def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expense:
@@ -24,14 +25,35 @@ def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expe
         station_id=data.station_id,
     )
     db.add(expense)
+    db.flush()
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="expenses",
+        action="expenses.create",
+        entity_type="expense",
+        entity_id=expense.id,
+        station_id=expense.station_id,
+        details={"title": expense.title, "amount": expense.amount, "category": expense.category},
+    )
     db.commit()
     db.refresh(expense)
     return expense
 
 
-def update_expense(expense: Expense, data: ExpenseUpdate, db: Session) -> Expense:
+def update_expense(expense: Expense, data: ExpenseUpdate, db: Session, current_user: User | None = None) -> Expense:
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(expense, field, value)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="expenses",
+        action="expenses.update",
+        entity_type="expense",
+        entity_id=expense.id,
+        station_id=expense.station_id,
+        details=data.model_dump(exclude_unset=True),
+    )
     db.commit()
     db.refresh(expense)
     return expense

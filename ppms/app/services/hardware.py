@@ -18,6 +18,7 @@ from app.schemas.hardware import (
     SimulatedDispenserReadingCreate,
     SimulatedTankProbeReadingCreate,
 )
+from app.services.audit import log_audit_event
 
 
 VALID_DEVICE_TYPES = {"dispenser", "tank_probe", "printer", "other"}
@@ -105,6 +106,17 @@ def create_hardware_device(db: Session, data: HardwareDeviceCreate, current_user
 
     device = HardwareDevice(**data.model_dump())
     db.add(device)
+    db.flush()
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="hardware",
+        action="hardware.create",
+        entity_type="hardware_device",
+        entity_id=device.id,
+        station_id=device.station_id,
+        details={"device_type": device.device_type, "code": device.code},
+    )
     db.commit()
     db.refresh(device)
     return device
@@ -137,6 +149,16 @@ def update_hardware_device(
     for field, value in updates.items():
         setattr(device, field, value)
 
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="hardware",
+        action="hardware.update",
+        entity_type="hardware_device",
+        entity_id=device.id,
+        station_id=device.station_id,
+        details=updates,
+    )
     db.commit()
     db.refresh(device)
     return device
@@ -184,6 +206,17 @@ def _record_event(
         device.last_error = notes
 
     db.add(event)
+    db.flush()
+    log_audit_event(
+        db,
+        current_user=None,
+        module="hardware",
+        action=f"hardware.{event_type}",
+        entity_type="hardware_event",
+        entity_id=event.id,
+        station_id=device.station_id,
+        details=payload,
+    )
     db.commit()
     db.refresh(event)
     return event

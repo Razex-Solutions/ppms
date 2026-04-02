@@ -10,6 +10,7 @@ from app.models.supplier_payment import SupplierPayment
 from app.models.user import User
 from app.schemas.customer_payment import CustomerPaymentCreate
 from app.schemas.supplier_payment import SupplierPaymentCreate
+from app.services.audit import log_audit_event
 
 
 def ensure_customer_payment_access(payment: CustomerPayment, current_user: User) -> None:
@@ -51,6 +52,17 @@ def create_customer_payment(db: Session, data: CustomerPaymentCreate, current_us
     )
     db.add(payment)
     customer.outstanding_balance -= data.amount
+    db.flush()
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="customer_payments",
+        action="customer_payments.create",
+        entity_type="customer_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"customer_id": payment.customer_id, "amount": payment.amount},
+    )
     db.commit()
     db.refresh(payment)
     return payment
@@ -67,6 +79,16 @@ def reverse_customer_payment(db: Session, payment: CustomerPayment, current_user
     payment.is_reversed = True
     payment.reversed_at = utc_now()
     payment.reversed_by = current_user.id
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="customer_payments",
+        action="customer_payments.reverse",
+        entity_type="customer_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"customer_id": payment.customer_id, "amount": payment.amount},
+    )
     db.commit()
     db.refresh(payment)
     return payment
@@ -99,6 +121,17 @@ def create_supplier_payment(db: Session, data: SupplierPaymentCreate, current_us
     )
     db.add(payment)
     supplier.payable_balance -= data.amount
+    db.flush()
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="supplier_payments",
+        action="supplier_payments.create",
+        entity_type="supplier_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"supplier_id": payment.supplier_id, "amount": payment.amount},
+    )
     db.commit()
     db.refresh(payment)
     return payment
@@ -115,6 +148,16 @@ def reverse_supplier_payment(db: Session, payment: SupplierPayment, current_user
     payment.is_reversed = True
     payment.reversed_at = utc_now()
     payment.reversed_by = current_user.id
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="supplier_payments",
+        action="supplier_payments.reverse",
+        entity_type="supplier_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"supplier_id": payment.supplier_id, "amount": payment.amount},
+    )
     db.commit()
     db.refresh(payment)
     return payment
