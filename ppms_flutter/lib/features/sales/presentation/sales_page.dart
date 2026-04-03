@@ -301,7 +301,9 @@ class _SalesPageState extends State<SalesPage> {
                           ),
                           const SizedBox(height: 20),
                           DropdownButtonFormField<int>(
-                            key: ValueKey<int?>(_selectedStationId),
+                            key: ValueKey<String>(
+                              'station-${_selectedStationId ?? 'none'}',
+                            ),
                             initialValue: _selectedStationId,
                             decoration: const InputDecoration(
                               labelText: 'Station',
@@ -319,7 +321,9 @@ class _SalesPageState extends State<SalesPage> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int>(
-                            key: ValueKey<int?>(_selectedNozzleId),
+                            key: ValueKey<String>(
+                              'nozzle-${_selectedNozzleId ?? 'none'}',
+                            ),
                             initialValue: _selectedNozzleId,
                             decoration: const InputDecoration(
                               labelText: 'Nozzle',
@@ -351,7 +355,7 @@ class _SalesPageState extends State<SalesPage> {
                           ],
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            key: ValueKey<String>(_saleType),
+                            key: ValueKey<String>('sale-type-$_saleType'),
                             initialValue: _saleType,
                             decoration: const InputDecoration(
                               labelText: 'Sale Type',
@@ -377,7 +381,9 @@ class _SalesPageState extends State<SalesPage> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int?>(
-                            key: ValueKey<int?>(_selectedCustomerId),
+                            key: ValueKey<String>(
+                              'customer-${_selectedCustomerId ?? 'none'}',
+                            ),
                             initialValue: _selectedCustomerId,
                             decoration: const InputDecoration(
                               labelText: 'Customer',

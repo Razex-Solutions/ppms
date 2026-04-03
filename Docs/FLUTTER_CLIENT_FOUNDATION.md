@@ -37,6 +37,8 @@ The Flutter app currently includes:
   - notifications
 - sixth working operational screen for:
   - settings
+- seventh working operational screen for:
+  - documents
 
 ## Backend Module Mapping
 
@@ -49,14 +51,14 @@ The Flutter app currently includes:
 | Payroll | `/payroll/*` |
 | Reports | `/reports/*`, `/report-exports/*` |
 | Notifications | `/notifications/*` |
-| Documents | `/financial-documents/*`, `/invoice-profiles/*`, `/document-templates/*` |
+| Documents | `/financial-documents/*`, `/report-exports/*`, `/invoice-profiles/*`, `/document-templates/*` |
 | Governance | `/expenses/*`, `/purchases/*`, reversal approval endpoints |
 | Head Office | organization-aware dashboard/report/user/station endpoints |
 
 ## Recommended Next Flutter Steps
 
-1. Build the forecourt sales screen properly
-2. Add platform-specific polish for Windows and Android
+1. Add platform-specific polish for Windows and Android
+2. Add native/open/share flows for PDF and CSV downloads
 
 ## Local Run
 

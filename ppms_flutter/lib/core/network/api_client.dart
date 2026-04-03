@@ -231,6 +231,17 @@ class ApiClient {
     return _sendList('GET', '/report-exports/', accessToken: accessToken);
   }
 
+  Future<String> downloadReportExportText(
+    String accessToken, {
+    required int jobId,
+  }) async {
+    return _sendText(
+      'GET',
+      '/report-exports/$jobId/download',
+      accessToken: accessToken,
+    );
+  }
+
   Future<List<dynamic>> getAttendance(String accessToken) async {
     return _sendList('GET', '/attendance/', accessToken: accessToken);
   }
@@ -359,6 +370,44 @@ class ApiClient {
     );
   }
 
+  Future<List<dynamic>> getSuppliers(String accessToken) async {
+    return _sendList('GET', '/suppliers/', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getCustomerPayments(
+    String accessToken, {
+    int? stationId,
+    int limit = 25,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _sendList(
+      'GET',
+      '/customer-payments/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<List<dynamic>> getSupplierPayments(
+    String accessToken, {
+    int? stationId,
+    int limit = 25,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _sendList(
+      'GET',
+      '/supplier-payments/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
   Future<List<dynamic>> getFuelTypes(String accessToken) async {
     return _sendList('GET', '/fuel-types/', accessToken: accessToken);
   }
@@ -389,6 +438,159 @@ class ApiClient {
       '/fuel-sales/',
       accessToken: accessToken,
       body: payload,
+    );
+  }
+
+  Future<List<dynamic>> getShifts(
+    String accessToken, {
+    int? stationId,
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    return _sendList(
+      'GET',
+      '/shifts/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> openShift(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/shifts/', accessToken: accessToken, body: payload);
+  }
+
+  Future<Map<String, dynamic>> closeShift(
+    String accessToken, {
+    required int shiftId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/shifts/$shiftId/close',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<List<dynamic>> getPosProducts(
+    String accessToken, {
+    int? stationId,
+    String? module,
+    bool? isActive,
+    int limit = 100,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (module != null && module.isNotEmpty) {
+      params['module'] = module;
+    }
+    if (isActive != null) {
+      params['is_active'] = '$isActive';
+    }
+    return _sendList(
+      'GET',
+      '/pos-products/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<List<dynamic>> getPosSales(
+    String accessToken, {
+    int? stationId,
+    String? module,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (module != null && module.isNotEmpty) {
+      params['module'] = module;
+    }
+    return _sendList(
+      'GET',
+      '/pos-sales/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createPosSale(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/pos-sales/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> reversePosSale(
+    String accessToken, {
+    required int saleId,
+  }) async {
+    return _send(
+      'POST',
+      '/pos-sales/$saleId/reverse',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> getFuelSaleDocument(
+    String accessToken, {
+    required int saleId,
+  }) async {
+    return _send(
+      'GET',
+      '/financial-documents/fuel-sales/$saleId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> getCustomerPaymentDocument(
+    String accessToken, {
+    required int paymentId,
+  }) async {
+    return _send(
+      'GET',
+      '/financial-documents/customer-payments/$paymentId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> getSupplierPaymentDocument(
+    String accessToken, {
+    required int paymentId,
+  }) async {
+    return _send(
+      'GET',
+      '/financial-documents/supplier-payments/$paymentId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<List<dynamic>> getFinancialDocumentDispatches(
+    String accessToken,
+  ) async {
+    return _sendList(
+      'GET',
+      '/financial-documents/dispatches',
+      accessToken: accessToken,
     );
   }
 
@@ -491,6 +693,48 @@ class ApiClient {
       );
     }
     return List<dynamic>.from(decoded as List);
+  }
+
+  Future<String> _sendText(
+    String method,
+    String path, {
+    String? accessToken,
+    Map<String, String>? queryParams,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl$path',
+    ).replace(queryParameters: queryParams);
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (accessToken != null) {
+      headers['Authorization'] = 'Bearer $accessToken';
+    }
+
+    late http.Response response;
+    try {
+      switch (method) {
+        case 'GET':
+          response = await _httpClient.get(uri, headers: headers);
+          break;
+        default:
+          throw ApiException('Unsupported request method: $method');
+      }
+    } on http.ClientException catch (error) {
+      throw ApiException('Unable to reach PPMS backend: $error');
+    }
+
+    if (response.statusCode >= 400) {
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        decoded = <String, dynamic>{'detail': response.body};
+      }
+      throw ApiException(
+        _extractMessage(decoded),
+        statusCode: response.statusCode,
+      );
+    }
+    return response.body;
   }
 
   String _extractMessage(dynamic decoded) {

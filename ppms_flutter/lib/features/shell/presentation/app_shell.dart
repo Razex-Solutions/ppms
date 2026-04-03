@@ -3,11 +3,13 @@ import 'package:ppms_flutter/features/attendance/presentation/attendance_page.da
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/features/dashboard/presentation/dashboard_page.dart';
+import 'package:ppms_flutter/features/documents/presentation/documents_page.dart';
 import 'package:ppms_flutter/features/notifications/presentation/notifications_page.dart';
 import 'package:ppms_flutter/features/payroll/presentation/payroll_page.dart';
 import 'package:ppms_flutter/features/reports/presentation/reports_page.dart';
 import 'package:ppms_flutter/features/sales/presentation/sales_page.dart';
 import 'package:ppms_flutter/features/settings/presentation/settings_page.dart';
+import 'package:ppms_flutter/features/shifts/presentation/shift_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.sessionController});
@@ -156,6 +158,13 @@ class _AppShellState extends State<AppShell> {
         icon: Icons.local_gas_station_outlined,
         page: SalesPage(sessionController: widget.sessionController),
       ),
+      if (enabledModules.contains('shifts') ||
+          permissions.containsKey('shifts'))
+        _ShellDestination(
+          label: 'Shifts',
+          icon: Icons.manage_history_outlined,
+          page: ShiftPage(sessionController: widget.sessionController),
+        ),
       if (enabledModules.contains('attendance'))
         _ShellDestination(
           label: 'Attendance',
@@ -173,6 +182,12 @@ class _AppShellState extends State<AppShell> {
           label: 'Reports',
           icon: Icons.assessment_outlined,
           page: ReportsPage(sessionController: widget.sessionController),
+        ),
+      if (permissions.containsKey('reports'))
+        _ShellDestination(
+          label: 'Documents',
+          icon: Icons.description_outlined,
+          page: DocumentsPage(sessionController: widget.sessionController),
         ),
       if (enabledModules.contains('notifications'))
         _ShellDestination(

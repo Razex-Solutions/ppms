@@ -1,0 +1,448 @@
+import 'package:flutter/material.dart';
+import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_controller.dart';
+
+class DocumentsPage extends StatefulWidget {
+  const DocumentsPage({super.key, required this.sessionController});
+
+  final SessionController sessionController;
+
+  @override
+  State<DocumentsPage> createState() => _DocumentsPageState();
+}
+
+class _DocumentsPageState extends State<DocumentsPage> {
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+  String? _feedbackMessage;
+
+  List<Map<String, dynamic>> _fuelSales = const [];
+  List<Map<String, dynamic>> _customerPayments = const [];
+  List<Map<String, dynamic>> _supplierPayments = const [];
+  List<Map<String, dynamic>> _reportExports = const [];
+  List<Map<String, dynamic>> _dispatches = const [];
+
+  Map<String, dynamic>? _selectedDocument;
+  String? _selectedExportPreview;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDocumentCenter();
+  }
+
+  Future<void> _loadDocumentCenter() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final stationId =
+          widget.sessionController.currentUser?['station_id'] as int?;
+      final fuelSales = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchFuelSales(
+          stationId: stationId,
+          limit: 12,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      final customerPayments = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchCustomerPayments(
+          stationId: stationId,
+          limit: 12,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      final supplierPayments = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchSupplierPayments(
+          stationId: stationId,
+          limit: 12,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      final reportExports = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchReportExports()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+      final dispatches = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchFinancialDocumentDispatches()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _fuelSales = fuelSales;
+        _customerPayments = customerPayments;
+        _supplierPayments = supplierPayments;
+        _reportExports = reportExports;
+        _dispatches = dispatches;
+        _isLoading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _openFuelSaleDocument(int saleId) async {
+    await _loadDocument(
+      loader: () =>
+          widget.sessionController.fetchFuelSaleDocument(saleId: saleId),
+    );
+  }
+
+  Future<void> _openCustomerPaymentDocument(int paymentId) async {
+    await _loadDocument(
+      loader: () => widget.sessionController.fetchCustomerPaymentDocument(
+        paymentId: paymentId,
+      ),
+    );
+  }
+
+  Future<void> _openSupplierPaymentDocument(int paymentId) async {
+    await _loadDocument(
+      loader: () => widget.sessionController.fetchSupplierPaymentDocument(
+        paymentId: paymentId,
+      ),
+    );
+  }
+
+  Future<void> _previewExport(int jobId) async {
+    setState(() {
+      _isSubmitting = true;
+      _feedbackMessage = null;
+      _errorMessage = null;
+    });
+    try {
+      final text = await widget.sessionController.downloadReportExportText(
+        jobId: jobId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedExportPreview = text;
+        _selectedDocument = null;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadDocument({
+    required Future<Map<String, dynamic>> Function() loader,
+  }) async {
+    setState(() {
+      _isSubmitting = true;
+      _feedbackMessage = null;
+      _errorMessage = null;
+    });
+    try {
+      final document = await loader();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedDocument = document;
+        _selectedExportPreview = null;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading &&
+        _fuelSales.isEmpty &&
+        _customerPayments.isEmpty &&
+        _supplierPayments.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_errorMessage != null &&
+        _fuelSales.isEmpty &&
+        _customerPayments.isEmpty &&
+        _supplierPayments.isEmpty) {
+      return Center(child: Text(_errorMessage!));
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadDocumentCenter,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          if (_errorMessage != null)
+            Text(
+              _errorMessage!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          if (_feedbackMessage != null)
+            Text(
+              _feedbackMessage!,
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: [
+              _buildListCard(
+                context,
+                title: 'Fuel Sale Invoices',
+                items: _fuelSales,
+                itemBuilder: (sale) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Sale #${sale['id']} • ${_formatNumber(sale['total_amount'])}',
+                  ),
+                  subtitle: Text(
+                    '${_formatNumber(sale['quantity'])}L • ${_displayTimestamp(sale['created_at'])}',
+                  ),
+                  onTap: _isSubmitting
+                      ? null
+                      : () => _openFuelSaleDocument(sale['id'] as int),
+                ),
+              ),
+              _buildListCard(
+                context,
+                title: 'Customer Payment Receipts',
+                items: _customerPayments,
+                itemBuilder: (payment) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Payment #${payment['id']} • ${_formatNumber(payment['amount'])}',
+                  ),
+                  subtitle: Text(
+                    'Customer ${payment['customer_id']} • ${_displayTimestamp(payment['created_at'])}',
+                  ),
+                  onTap: _isSubmitting
+                      ? null
+                      : () =>
+                            _openCustomerPaymentDocument(payment['id'] as int),
+                ),
+              ),
+              _buildListCard(
+                context,
+                title: 'Supplier Payment Vouchers',
+                items: _supplierPayments,
+                itemBuilder: (payment) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Payment #${payment['id']} • ${_formatNumber(payment['amount'])}',
+                  ),
+                  subtitle: Text(
+                    'Supplier ${payment['supplier_id']} • ${_displayTimestamp(payment['created_at'])}',
+                  ),
+                  onTap: _isSubmitting
+                      ? null
+                      : () =>
+                            _openSupplierPaymentDocument(payment['id'] as int),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Preview',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 12),
+                        if (_selectedDocument != null) ...[
+                          Text('${_selectedDocument!['title']}'),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Document #: ${_selectedDocument!['document_number']}',
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Recipient: ${_selectedDocument!['recipient_name']}',
+                          ),
+                          const SizedBox(height: 8),
+                          if (_selectedDocument!['total_amount'] != null)
+                            Text(
+                              'Total: ${_formatNumber(_selectedDocument!['total_amount'])}',
+                            ),
+                          const SizedBox(height: 12),
+                          SelectableText(
+                            (_selectedDocument!['rendered_html'] as String? ??
+                                    '')
+                                .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                                .replaceAll('&nbsp;', ' ')
+                                .replaceAll(RegExp(r'\s+'), ' ')
+                                .trim(),
+                          ),
+                        ] else if (_selectedExportPreview != null) ...[
+                          Text(
+                            'Export Preview',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 12),
+                          SelectableText(_selectedExportPreview!),
+                        ] else
+                          const Text(
+                            'Select an invoice, receipt, voucher, or export job to preview it here.',
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  children: [
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Report Exports',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 12),
+                            if (_reportExports.isEmpty)
+                              const Text('No report exports available.')
+                            else
+                              for (final job in _reportExports.take(10))
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    job['file_name'] as String? ?? 'Export',
+                                  ),
+                                  subtitle: Text(
+                                    '${job['report_type']} • ${job['status']}',
+                                  ),
+                                  onTap: _isSubmitting
+                                      ? null
+                                      : () => _previewExport(job['id'] as int),
+                                ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Dispatch History',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 12),
+                            if (_dispatches.isEmpty)
+                              const Text(
+                                'No financial document dispatches found.',
+                              )
+                            else
+                              for (final dispatch in _dispatches.take(10))
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    '${dispatch['document_type']} • ${dispatch['channel']}',
+                                  ),
+                                  subtitle: Text(
+                                    '${dispatch['status']} • ${_displayTimestamp(dispatch['created_at'])}',
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListCard(
+    BuildContext context, {
+    required String title,
+    required List<Map<String, dynamic>> items,
+    required Widget Function(Map<String, dynamic>) itemBuilder,
+  }) {
+    return SizedBox(
+      width: 360,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 12),
+              if (items.isEmpty)
+                const Text('No items found.')
+              else
+                for (final item in items.take(8)) itemBuilder(item),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _displayTimestamp(dynamic value) {
+    if (value == null) {
+      return '-';
+    }
+    final text = value.toString().replaceFirst('T', ' ');
+    return text.length >= 19 ? text.substring(0, 19) : text;
+  }
+
+  String _formatNumber(dynamic value) {
+    if (value is num) {
+      return value.toStringAsFixed(2);
+    }
+    return '0.00';
+  }
+}

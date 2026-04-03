@@ -185,6 +185,13 @@ class SessionController extends ChangeNotifier {
     return _apiClient.getReportExports(await _validAccessToken());
   }
 
+  Future<String> downloadReportExportText({required int jobId}) async {
+    return _apiClient.downloadReportExportText(
+      await _validAccessToken(),
+      jobId: jobId,
+    );
+  }
+
   Future<List<dynamic>> fetchAttendance() async {
     return _apiClient.getAttendance(await _validAccessToken());
   }
@@ -273,6 +280,32 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<dynamic>> fetchSuppliers() async {
+    return _apiClient.getSuppliers(await _validAccessToken());
+  }
+
+  Future<List<dynamic>> fetchCustomerPayments({
+    int? stationId,
+    int limit = 25,
+  }) async {
+    return _apiClient.getCustomerPayments(
+      await _validAccessToken(),
+      stationId: stationId,
+      limit: limit,
+    );
+  }
+
+  Future<List<dynamic>> fetchSupplierPayments({
+    int? stationId,
+    int limit = 25,
+  }) async {
+    return _apiClient.getSupplierPayments(
+      await _validAccessToken(),
+      stationId: stationId,
+      limit: limit,
+    );
+  }
+
   Future<List<dynamic>> fetchFuelTypes() async {
     return _apiClient.getFuelTypes(await _validAccessToken());
   }
@@ -292,6 +325,109 @@ class SessionController extends ChangeNotifier {
       await _validAccessToken(),
       payload: payload,
     );
+  }
+
+  Future<List<dynamic>> fetchShifts({
+    int? stationId,
+    String? status,
+    int limit = 50,
+  }) async {
+    return _apiClient.getShifts(
+      await _validAccessToken(),
+      stationId: stationId,
+      status: status,
+      limit: limit,
+    );
+  }
+
+  Future<Map<String, dynamic>> openShift(Map<String, dynamic> payload) async {
+    return _apiClient.openShift(await _validAccessToken(), payload: payload);
+  }
+
+  Future<Map<String, dynamic>> closeShift({
+    required int shiftId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.closeShift(
+      await _validAccessToken(),
+      shiftId: shiftId,
+      payload: payload,
+    );
+  }
+
+  Future<List<dynamic>> fetchPosProducts({
+    int? stationId,
+    String? module,
+    bool? isActive,
+    int limit = 100,
+  }) async {
+    return _apiClient.getPosProducts(
+      await _validAccessToken(),
+      stationId: stationId,
+      module: module,
+      isActive: isActive,
+      limit: limit,
+    );
+  }
+
+  Future<List<dynamic>> fetchPosSales({
+    int? stationId,
+    String? module,
+    int limit = 50,
+  }) async {
+    return _apiClient.getPosSales(
+      await _validAccessToken(),
+      stationId: stationId,
+      module: module,
+      limit: limit,
+    );
+  }
+
+  Future<Map<String, dynamic>> createPosSale(
+    Map<String, dynamic> payload,
+  ) async {
+    return _apiClient.createPosSale(
+      await _validAccessToken(),
+      payload: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> reversePosSale({required int saleId}) async {
+    return _apiClient.reversePosSale(
+      await _validAccessToken(),
+      saleId: saleId,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchFuelSaleDocument({
+    required int saleId,
+  }) async {
+    return _apiClient.getFuelSaleDocument(
+      await _validAccessToken(),
+      saleId: saleId,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchCustomerPaymentDocument({
+    required int paymentId,
+  }) async {
+    return _apiClient.getCustomerPaymentDocument(
+      await _validAccessToken(),
+      paymentId: paymentId,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchSupplierPaymentDocument({
+    required int paymentId,
+  }) async {
+    return _apiClient.getSupplierPaymentDocument(
+      await _validAccessToken(),
+      paymentId: paymentId,
+    );
+  }
+
+  Future<List<dynamic>> fetchFinancialDocumentDispatches() async {
+    return _apiClient.getFinancialDocumentDispatches(await _validAccessToken());
   }
 
   Future<void> _refreshCurrentUser() async {

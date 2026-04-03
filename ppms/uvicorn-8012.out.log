@@ -1,0 +1,162 @@
+{"timestamp": "2026-04-03T10:00:57.084978+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "dd4311d0-0adf-4fcf-b542-267b9fdacacd", "method": "POST", "path": "/auth/login", "status_code": 200, "duration_ms": 908.21}
+INFO:     127.0.0.1:60528 - "POST /auth/login HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:00:58.219054+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "723ac926-bcae-4e03-9964-d2bda75d74c3", "method": "GET", "path": "/health", "status_code": 200, "duration_ms": 5.09}
+INFO:     127.0.0.1:60533 - "GET /health HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:17.222406+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "7624ef38-236f-46b5-a083-2da56e09c3ff", "method": "GET", "path": "/", "status_code": 200, "duration_ms": 2.79}
+INFO:     127.0.0.1:55816 - "GET / HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:17.822966+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "e15752bb-765a-41f7-9351-936607328667", "method": "POST", "path": "/auth/login", "status_code": 200, "duration_ms": 566.54}
+INFO:     127.0.0.1:55816 - "POST /auth/login HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:17.851998+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "d1c2c959-f74c-4e9a-951d-47e298bec940", "method": "GET", "path": "/auth/me", "status_code": 200, "duration_ms": 23.25}
+INFO:     127.0.0.1:55816 - "GET /auth/me HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:18.203418+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "067a49cd-c2b7-4c9a-a98b-66e264131d00", "method": "GET", "path": "/dashboard/", "status_code": 200, "duration_ms": 75.59}
+INFO:     127.0.0.1:55816 - "GET /dashboard/?station_id=1&organization_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:20.667526+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "8069fea4-d3e6-43be-b707-2f92e8795418", "method": "GET", "path": "/stations/", "status_code": 200, "duration_ms": 18.24}
+INFO:     127.0.0.1:55816 - "GET /stations/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:20.707522+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "a41e7c75-3076-48c1-b9f8-76313dc958c7", "method": "GET", "path": "/nozzles/", "status_code": 200, "duration_ms": 19.65}
+INFO:     127.0.0.1:55816 - "GET /nozzles/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:20.743582+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "9a660afb-b70d-4024-8f89-9b686e1a357b", "method": "GET", "path": "/customers/", "status_code": 200, "duration_ms": 15.69}
+INFO:     127.0.0.1:55816 - "GET /customers/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:20.795768+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "b6822e5f-6f66-40ca-b3a2-6069e5b88921", "method": "GET", "path": "/fuel-types/", "status_code": 200, "duration_ms": 21.9}
+INFO:     127.0.0.1:55816 - "GET /fuel-types/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:20.829195+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "507cc36f-86ae-4239-9d83-b7b4ce8194b7", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 23.36}
+INFO:     127.0.0.1:55816 - "GET /fuel-sales/?limit=25&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:25.110041+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "1bddc18e-43b3-4187-9f6e-d32f57feef63", "method": "GET", "path": "/attendance/", "status_code": 200, "duration_ms": 16.14}
+INFO:     127.0.0.1:55816 - "GET /attendance/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:25.159056+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "83443c66-d8f9-45ed-8c62-90698cdb1fd3", "method": "GET", "path": "/users/", "status_code": 200, "duration_ms": 34.01}
+INFO:     127.0.0.1:55816 - "GET /users/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:26.178471+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "969bde3d-4a58-41ef-812c-16c41e46f531", "method": "GET", "path": "/payroll/runs", "status_code": 200, "duration_ms": 17.42}
+INFO:     127.0.0.1:55816 - "GET /payroll/runs HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.003196+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "974ce725-4c09-4780-82ea-bed3b4e0900d", "method": "GET", "path": "/reports/daily-closing", "status_code": 200, "duration_ms": 45.01}
+INFO:     127.0.0.1:55816 - "GET /reports/daily-closing?report_date=2026-04-03&station_id=1&organization_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.052043+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "401ac2ec-358b-4014-8a95-eaf57f9771f7", "method": "GET", "path": "/reports/stock-movement", "status_code": 200, "duration_ms": 27.1}
+INFO:     127.0.0.1:55816 - "GET /reports/stock-movement?station_id=1&organization_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.118684+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "da5648bf-697f-4613-bce1-0b173f3a7c25", "method": "GET", "path": "/reports/customer-balances", "status_code": 200, "duration_ms": 26.98}
+INFO:     127.0.0.1:55816 - "GET /reports/customer-balances?station_id=1&organization_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.209409+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "bf61f0b7-478a-43f5-b135-e7c5432b0748", "method": "GET", "path": "/reports/supplier-balances", "status_code": 200, "duration_ms": 57.51}
+INFO:     127.0.0.1:55816 - "GET /reports/supplier-balances?station_id=1&organization_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.249421+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "65f50fea-8d06-4187-b5f7-a42f2c18e9a5", "method": "GET", "path": "/report-exports/", "status_code": 200, "duration_ms": 23.39}
+INFO:     127.0.0.1:55816 - "GET /report-exports/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.726076+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "5bb1ed6d-5d68-4425-9ebb-76d613467541", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 10.89}
+INFO:     127.0.0.1:55816 - "GET /fuel-sales/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.783604+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "cef86039-9aee-4cee-9eae-bf7d5e37f451", "method": "GET", "path": "/customer-payments/", "status_code": 200, "duration_ms": 23.75}
+INFO:     127.0.0.1:55816 - "GET /customer-payments/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.825615+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "5b45808f-7fbc-4427-804c-c0edc40a22c9", "method": "GET", "path": "/supplier-payments/", "status_code": 200, "duration_ms": 20.0}
+INFO:     127.0.0.1:55816 - "GET /supplier-payments/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.864472+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "01459b72-ea64-4e23-8f1c-4639512ca1c1", "method": "GET", "path": "/report-exports/", "status_code": 200, "duration_ms": 12.26}
+INFO:     127.0.0.1:55816 - "GET /report-exports/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:27.913475+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "fee22f47-0866-40d1-8f62-497a0b77485e", "method": "GET", "path": "/financial-documents/dispatches", "status_code": 200, "duration_ms": 27.64}
+INFO:     127.0.0.1:55816 - "GET /financial-documents/dispatches HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:29.632290+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "4d92d4e2-2878-4489-98a7-095b57e12710", "method": "GET", "path": "/notifications/summary", "status_code": 200, "duration_ms": 31.0}
+INFO:     127.0.0.1:55816 - "GET /notifications/summary HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:29.655967+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "7e408845-2fed-46d4-8fb2-d7b38a1d1d90", "method": "GET", "path": "/notifications/deliveries/diagnostics", "status_code": 200, "duration_ms": 15.85}
+INFO:     127.0.0.1:55816 - "GET /notifications/deliveries/diagnostics HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:29.688748+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "7a026c39-f99c-484b-9bae-6b2b9974e3c6", "method": "GET", "path": "/notifications/", "status_code": 200, "duration_ms": 15.67}
+INFO:     127.0.0.1:55816 - "GET /notifications/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:29.722930+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "29b148f0-29c8-47d0-8597-ade91aa9ac84", "method": "GET", "path": "/notifications/preferences", "status_code": 200, "duration_ms": 15.3}
+INFO:     127.0.0.1:55816 - "GET /notifications/preferences HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:29.753610+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "2431c402-379c-4b50-8fc1-0e6386aa2b02", "method": "GET", "path": "/notifications/deliveries", "status_code": 200, "duration_ms": 16.67}
+INFO:     127.0.0.1:55816 - "GET /notifications/deliveries HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:30.746496+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "f35b3d53-89a9-4bf6-a4f0-aaca6aa6e13d", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 12.71}
+INFO:     127.0.0.1:55816 - "GET /fuel-sales/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:30.778784+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "be43d47c-6ff2-46f3-87bc-277fc3a40107", "method": "GET", "path": "/customer-payments/", "status_code": 200, "duration_ms": 11.58}
+INFO:     127.0.0.1:55816 - "GET /customer-payments/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:30.804365+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "ad7d4c9d-bf28-4f6e-8184-fcb51362881a", "method": "GET", "path": "/supplier-payments/", "status_code": 200, "duration_ms": 10.8}
+INFO:     127.0.0.1:55816 - "GET /supplier-payments/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:30.833360+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "7e54a247-1485-4a80-a0d5-98a636f6a80e", "method": "GET", "path": "/report-exports/", "status_code": 200, "duration_ms": 10.51}
+INFO:     127.0.0.1:55816 - "GET /report-exports/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:30.867616+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "df9b032c-a1b2-411c-a36a-855e3defb7ba", "method": "GET", "path": "/financial-documents/dispatches", "status_code": 200, "duration_ms": 11.28}
+INFO:     127.0.0.1:55816 - "GET /financial-documents/dispatches HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:32.263097+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "a055c50d-e409-4cf2-bf9f-fc5650b5f382", "method": "GET", "path": "/financial-documents/fuel-sales/2", "status_code": 200, "duration_ms": 34.25}
+INFO:     127.0.0.1:55816 - "GET /financial-documents/fuel-sales/2 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:33.489290+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "12f6fbfc-4d0b-456d-bbda-4fb80369df5f", "method": "GET", "path": "/financial-documents/fuel-sales/1", "status_code": 200, "duration_ms": 17.25}
+INFO:     127.0.0.1:55816 - "GET /financial-documents/fuel-sales/1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:43.057013+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "e775491b-9b13-422f-b25f-2c5386509e46", "method": "GET", "path": "/notifications/summary", "status_code": 200, "duration_ms": 13.86}
+INFO:     127.0.0.1:55845 - "GET /notifications/summary HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:43.083559+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "3944ff7e-1bc1-4a06-a787-5c9bf91fda79", "method": "GET", "path": "/notifications/deliveries/diagnostics", "status_code": 200, "duration_ms": 11.66}
+INFO:     127.0.0.1:55845 - "GET /notifications/deliveries/diagnostics HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:43.120093+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "c7fd921a-73ea-4936-bec8-f4a7f75ab5c3", "method": "GET", "path": "/notifications/", "status_code": 200, "duration_ms": 16.25}
+INFO:     127.0.0.1:55845 - "GET /notifications/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:43.158895+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "5833764e-8fc7-4e13-9c02-2d043cb63114", "method": "GET", "path": "/notifications/preferences", "status_code": 200, "duration_ms": 13.95}
+INFO:     127.0.0.1:55845 - "GET /notifications/preferences HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:43.189828+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "ce1d6cbc-4b22-4540-86c1-d69c1324615e", "method": "GET", "path": "/notifications/deliveries", "status_code": 200, "duration_ms": 13.28}
+INFO:     127.0.0.1:55845 - "GET /notifications/deliveries HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:45.008553+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "cb946e19-5a37-4c38-880d-ec706fb9e43d", "method": "GET", "path": "/stations/", "status_code": 200, "duration_ms": 9.08}
+INFO:     127.0.0.1:55845 - "GET /stations/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:45.023562+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "b0a5690b-d8e4-4801-b188-c8f57ad1b4ef", "method": "GET", "path": "/nozzles/", "status_code": 200, "duration_ms": 9.82}
+INFO:     127.0.0.1:55845 - "GET /nozzles/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:45.046720+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "a64dc1f2-7802-4855-a119-ff485b49cc53", "method": "GET", "path": "/customers/", "status_code": 200, "duration_ms": 11.26}
+INFO:     127.0.0.1:55845 - "GET /customers/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:45.066737+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "33c3746a-de4a-492f-b4b1-bc983306db0d", "method": "GET", "path": "/fuel-types/", "status_code": 200, "duration_ms": 8.75}
+INFO:     127.0.0.1:55845 - "GET /fuel-types/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:45.106912+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "80caee02-4fd1-49ab-bfe5-84a1500689fb", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 16.47}
+INFO:     127.0.0.1:55845 - "GET /fuel-sales/?limit=25&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:48.704203+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "679c703e-5a3d-4f9f-a1a5-112423b26c5a", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 12.4}
+INFO:     127.0.0.1:55845 - "GET /fuel-sales/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:48.730190+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "1687cac1-6953-4c34-b02e-6e627bf37e81", "method": "GET", "path": "/customer-payments/", "status_code": 200, "duration_ms": 10.71}
+INFO:     127.0.0.1:55845 - "GET /customer-payments/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:48.761580+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "50797378-ccb6-49b5-a315-66ae740eb354", "method": "GET", "path": "/supplier-payments/", "status_code": 200, "duration_ms": 11.1}
+INFO:     127.0.0.1:55845 - "GET /supplier-payments/?limit=12&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:48.785615+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "df6d9fae-024c-4037-9026-93404157349c", "method": "GET", "path": "/report-exports/", "status_code": 200, "duration_ms": 11.56}
+INFO:     127.0.0.1:55845 - "GET /report-exports/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:48.804434+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "ee64a7a0-3f7c-442c-b68c-a58b8a97ddd6", "method": "GET", "path": "/financial-documents/dispatches", "status_code": 200, "duration_ms": 11.54}
+INFO:     127.0.0.1:55845 - "GET /financial-documents/dispatches HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:50.003989+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "e49fd026-b0d1-41f2-a6d3-fc6df033674f", "method": "GET", "path": "/financial-documents/fuel-sales/1", "status_code": 200, "duration_ms": 22.92}
+INFO:     127.0.0.1:55845 - "GET /financial-documents/fuel-sales/1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:50.921853+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "145db49a-332e-4191-9170-13096d20adbc", "method": "GET", "path": "/financial-documents/fuel-sales/2", "status_code": 200, "duration_ms": 16.95}
+INFO:     127.0.0.1:55845 - "GET /financial-documents/fuel-sales/2 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:01:57.941118+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "3e60e19e-d748-4871-818f-1a8c921e15de", "method": "GET", "path": "/notifications/summary", "status_code": 200, "duration_ms": 7.22}
+INFO:     127.0.0.1:64339 - "GET /notifications/summary HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:02:22.801831+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "95dc985f-e329-4257-b28d-34b088244d7f", "method": "GET", "path": "/attendance/", "status_code": 200, "duration_ms": 11.14}
+INFO:     127.0.0.1:55800 - "GET /attendance/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:02:22.834246+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "eb7c7463-2ee3-42c4-9670-e274e12fac80", "method": "GET", "path": "/users/", "status_code": 200, "duration_ms": 12.8}
+INFO:     127.0.0.1:55800 - "GET /users/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:02:23.268935+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "cf300e10-7e84-41ae-8b1b-e0669227a5af", "method": "GET", "path": "/stations/", "status_code": 200, "duration_ms": 9.45}
+INFO:     127.0.0.1:55800 - "GET /stations/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:02:23.305272+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "44160e1b-f8ed-4063-98e4-ed1fdbb5709e", "method": "GET", "path": "/nozzles/", "status_code": 200, "duration_ms": 12.21}
+INFO:     127.0.0.1:55800 - "GET /nozzles/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:02:23.330831+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "4a104cbf-de1e-40ab-9f6e-7ae613dd146c", "method": "GET", "path": "/customers/", "status_code": 200, "duration_ms": 9.8}
+INFO:     127.0.0.1:55800 - "GET /customers/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:02:23.345951+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "89b00fdb-56fb-4e04-903b-6972cb664586", "method": "GET", "path": "/fuel-types/", "status_code": 200, "duration_ms": 8.06}
+INFO:     127.0.0.1:55800 - "GET /fuel-types/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:02:23.366001+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "7db71e6b-43ad-4ed9-9d99-1c510ef58f5c", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 10.69}
+INFO:     127.0.0.1:55800 - "GET /fuel-sales/?limit=25&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:05:10.682602+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "785b17c2-6668-4e6c-a62d-44c76829ddcf", "method": "POST", "path": "/auth/logout", "status_code": 200, "duration_ms": 37.54}
+INFO:     127.0.0.1:59248 - "POST /auth/logout HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:05:26.065025+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "9860466b-d7ac-414e-a362-86b65d339d30", "method": "GET", "path": "/", "status_code": 200, "duration_ms": 2.11}
+INFO:     127.0.0.1:49958 - "GET / HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:05:26.643906+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "9d6efedf-f412-4850-9764-7fbe6ad3b0dc", "method": "POST", "path": "/auth/login", "status_code": 200, "duration_ms": 557.75}
+INFO:     127.0.0.1:49958 - "POST /auth/login HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:05:26.654248+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "06742529-5c86-4c71-ae50-4b5f9c5ef1cd", "method": "GET", "path": "/auth/me", "status_code": 200, "duration_ms": 6.99}
+INFO:     127.0.0.1:49958 - "GET /auth/me HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:05:26.742567+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "af00f3e9-6c02-44f7-abb1-7ba056ffc3ac", "method": "GET", "path": "/dashboard/", "status_code": 200, "duration_ms": 24.0}
+INFO:     127.0.0.1:49958 - "GET /dashboard/?station_id=1&organization_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:05:30.530159+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "4b9c698c-1f1e-4b99-a2c7-fd31d2d443c3", "method": "GET", "path": "/payroll/runs", "status_code": 200, "duration_ms": 11.29}
+INFO:     127.0.0.1:49958 - "GET /payroll/runs HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:33.161554+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "0a7d349c-fd88-41a3-a370-1fa5fb6d2e3c", "method": "GET", "path": "/auth/me", "status_code": 200, "duration_ms": 10.82}
+INFO:     127.0.0.1:50698 - "GET /auth/me HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:33.217732+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "8e0ce3d9-004b-48be-aa74-97468ad30fb1", "method": "GET", "path": "/", "status_code": 200, "duration_ms": 2.93}
+INFO:     127.0.0.1:50698 - "GET / HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:33.766109+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "c54993cc-b95a-4fc7-94a9-1bb7d14dbc77", "method": "GET", "path": "/dashboard/", "status_code": 200, "duration_ms": 29.16}
+INFO:     127.0.0.1:50698 - "GET /dashboard/?station_id=1&organization_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:36.255648+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "8a205be8-c691-4910-8d95-0e630e504aec", "method": "GET", "path": "/attendance/", "status_code": 200, "duration_ms": 9.44}
+INFO:     127.0.0.1:50698 - "GET /attendance/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:36.297059+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "272c3cc3-de86-49ac-baff-8394d2c82108", "method": "GET", "path": "/users/", "status_code": 200, "duration_ms": 11.22}
+INFO:     127.0.0.1:50698 - "GET /users/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:36.841682+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "330ad981-0e70-4433-bbde-aaeeb62cec78", "method": "GET", "path": "/stations/", "status_code": 200, "duration_ms": 8.63}
+INFO:     127.0.0.1:50698 - "GET /stations/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:36.877872+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "46bf3084-16ed-4845-9fcb-45f9e6986e0b", "method": "GET", "path": "/nozzles/", "status_code": 200, "duration_ms": 10.72}
+INFO:     127.0.0.1:50698 - "GET /nozzles/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:36.919019+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "50e0fea5-c446-4ae0-a8bb-69287dcdf01a", "method": "GET", "path": "/customers/", "status_code": 200, "duration_ms": 9.65}
+INFO:     127.0.0.1:50698 - "GET /customers/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:36.944361+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "5b929960-3856-44aa-be9d-ece63e33ba72", "method": "GET", "path": "/fuel-types/", "status_code": 200, "duration_ms": 8.27}
+INFO:     127.0.0.1:50698 - "GET /fuel-types/ HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:36.981078+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "a7f3ad63-ed85-4974-98f9-eae1879f5277", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 9.91}
+INFO:     127.0.0.1:50698 - "GET /fuel-sales/?limit=25&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:45.950802+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "4726e6a3-6783-4ee9-8389-bbf18da6184f", "method": "GET", "path": "/nozzles/", "status_code": 200, "duration_ms": 14.11}
+INFO:     127.0.0.1:50721 - "GET /nozzles/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:45.978533+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "baaf30ee-62b3-4ed0-9521-7f0f58dc3968", "method": "GET", "path": "/customers/", "status_code": 200, "duration_ms": 8.73}
+INFO:     127.0.0.1:50721 - "GET /customers/?station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:06:46.004157+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "7725b563-10ed-45aa-92be-75fbed3c495b", "method": "GET", "path": "/fuel-sales/", "status_code": 200, "duration_ms": 10.23}
+INFO:     127.0.0.1:50721 - "GET /fuel-sales/?limit=25&station_id=1 HTTP/1.1" 200 OK
+{"timestamp": "2026-04-03T10:07:10.301889+00:00", "level": "INFO", "logger": "app.main", "message": "Request completed", "environment": "development", "request_id": "7c689398-2a33-4e1a-8770-904bd6cb58ad", "method": "POST", "path": "/auth/logout", "status_code": 200, "duration_ms": 40.4}
+INFO:     127.0.0.1:52619 - "POST /auth/logout HTTP/1.1" 200 OK

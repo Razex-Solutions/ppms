@@ -160,6 +160,7 @@ venv\Scripts\python.exe -m desktop_app.main
   - live attendance screen
   - live payroll screen
   - live reports screen
+  - live document center
   - live notifications screen
   - live settings screen
 
