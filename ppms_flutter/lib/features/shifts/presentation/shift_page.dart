@@ -262,6 +262,31 @@ class _ShiftPageState extends State<ShiftPage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canOpenShifts => _hasAction('shifts', 'open');
+  bool get _canCloseShifts => _hasAction('shifts', 'close');
+  bool get _canReadShifts => _canOpenShifts || _canCloseShifts;
+
+  Widget _buildPermissionNotice(BuildContext context, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -274,6 +299,9 @@ class _ShiftPageState extends State<ShiftPage> {
 
     final openShift = _currentOpenShift;
     final selectedShift = _selectedShift;
+    final canOpenShifts = _canOpenShifts;
+    final canCloseShifts = _canCloseShifts;
+    final canReadShifts = _canReadShifts;
 
     return RefreshIndicator(
       onRefresh: _loadShiftWorkspace,
@@ -297,10 +325,19 @@ class _ShiftPageState extends State<ShiftPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Open, monitor, and close station shifts against the live PPMS backend.',
+                          canOpenShifts || canCloseShifts
+                              ? 'Open, monitor, and close station shifts against the live PPMS backend.'
+                              : 'Review station shifts and their cash expectations for the selected station.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 20),
+                        if (!canOpenShifts && !canCloseShifts) ...[
+                          _buildPermissionNotice(
+                            context,
+                            'This role can review shifts but cannot open or close them.',
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                         DropdownButtonFormField<int>(
                           key: ValueKey<String>(
                             'shift-station-${_selectedStationId ?? 'none'}',
@@ -318,7 +355,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                 ),
                               ),
                           ],
-                          onChanged: _changeStation,
+                          onChanged: canReadShifts ? _changeStation : null,
                         ),
                         const SizedBox(height: 20),
                         if (openShift != null) ...[
@@ -334,9 +371,17 @@ class _ShiftPageState extends State<ShiftPage> {
                                 'Open New Shift',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
+                              if (!canOpenShifts) ...[
+                                const SizedBox(height: 8),
+                                _buildPermissionNotice(
+                                  context,
+                                  'Opening shifts is disabled for this role.',
+                                ),
+                              ],
                               const SizedBox(height: 12),
                               TextFormField(
                                 controller: _initialCashController,
+                                enabled: canOpenShifts,
                                 decoration: const InputDecoration(
                                   labelText: 'Initial Cash',
                                 ),
@@ -357,6 +402,7 @@ class _ShiftPageState extends State<ShiftPage> {
                               const SizedBox(height: 12),
                               TextFormField(
                                 controller: _openNotesController,
+                                enabled: canOpenShifts,
                                 decoration: const InputDecoration(
                                   labelText: 'Open Notes (optional)',
                                 ),
@@ -364,7 +410,9 @@ class _ShiftPageState extends State<ShiftPage> {
                               ),
                               const SizedBox(height: 16),
                               FilledButton.icon(
-                                onPressed: _isOpening ? null : _openShift,
+                                onPressed: _isOpening || !canOpenShifts
+                                    ? null
+                                    : _openShift,
                                 icon: _isOpening
                                     ? const SizedBox.square(
                                         dimension: 18,
@@ -391,6 +439,13 @@ class _ShiftPageState extends State<ShiftPage> {
                                 'Close Shift',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
+                              if (!canCloseShifts) ...[
+                                const SizedBox(height: 8),
+                                _buildPermissionNotice(
+                                  context,
+                                  'Closing shifts is disabled for this role.',
+                                ),
+                              ],
                               const SizedBox(height: 12),
                               DropdownButtonFormField<int>(
                                 key: ValueKey<String>(
@@ -409,11 +464,13 @@ class _ShiftPageState extends State<ShiftPage> {
                                       ),
                                     ),
                                 ],
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedShiftId = value;
-                                  });
-                                },
+                                onChanged: canReadShifts
+                                    ? (value) {
+                                        setState(() {
+                                          _selectedShiftId = value;
+                                        });
+                                      }
+                                    : null,
                               ),
                               if (selectedShift != null) ...[
                                 const SizedBox(height: 8),
@@ -426,6 +483,7 @@ class _ShiftPageState extends State<ShiftPage> {
                               const SizedBox(height: 12),
                               TextFormField(
                                 controller: _actualCashController,
+                                enabled: canCloseShifts,
                                 decoration: const InputDecoration(
                                   labelText: 'Actual Cash Collected',
                                 ),
@@ -446,6 +504,7 @@ class _ShiftPageState extends State<ShiftPage> {
                               const SizedBox(height: 12),
                               TextFormField(
                                 controller: _closeNotesController,
+                                enabled: canCloseShifts,
                                 decoration: const InputDecoration(
                                   labelText: 'Close Notes (optional)',
                                 ),
@@ -455,6 +514,7 @@ class _ShiftPageState extends State<ShiftPage> {
                               FilledButton.tonalIcon(
                                 onPressed:
                                     _isClosing ||
+                                        !canCloseShifts ||
                                         selectedShift == null ||
                                         selectedShift['status'] != 'open'
                                     ? null
@@ -511,7 +571,9 @@ class _ShiftPageState extends State<ShiftPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Recent shifts for the selected station with quick operational totals.',
+                          canReadShifts
+                              ? 'Recent shifts for the selected station with quick operational totals.'
+                              : 'This role does not have access to shift history.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 16),
@@ -535,10 +597,12 @@ class _ShiftPageState extends State<ShiftPage> {
                               child: Text('Closed shifts'),
                             ),
                           ],
-                          onChanged: _changeStatusFilter,
+                          onChanged: canReadShifts ? _changeStatusFilter : null,
                         ),
                         const SizedBox(height: 16),
-                        if (_shifts.isEmpty)
+                        if (!canReadShifts)
+                          const Text('No shift access for this role.')
+                        else if (_shifts.isEmpty)
                           const Text('No shifts found for this filter yet.')
                         else
                           for (final shift in _shifts)

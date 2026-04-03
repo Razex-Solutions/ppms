@@ -570,6 +570,51 @@ class _InventoryPageState extends State<InventoryPage> {
     }).toList();
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canReadTanks =>
+      _hasAction('tanks', 'create') ||
+      _hasAction('tanks', 'update') ||
+      _hasAction('tanks', 'delete');
+  bool get _canManageTanks =>
+      _hasAction('tanks', 'create') || _hasAction('tanks', 'update');
+  bool get _canDeleteTanks => _hasAction('tanks', 'delete');
+  bool get _canReadDispensers =>
+      _hasAction('dispensers', 'create') ||
+      _hasAction('dispensers', 'update') ||
+      _hasAction('dispensers', 'delete');
+  bool get _canManageDispensers =>
+      _hasAction('dispensers', 'create') || _hasAction('dispensers', 'update');
+  bool get _canDeleteDispensers => _hasAction('dispensers', 'delete');
+  bool get _canReadNozzles =>
+      _hasAction('nozzles', 'create') ||
+      _hasAction('nozzles', 'update') ||
+      _hasAction('nozzles', 'delete') ||
+      _hasAction('nozzles', 'read_meter_history') ||
+      _hasAction('nozzles', 'adjust_meter');
+  bool get _canManageNozzles =>
+      _hasAction('nozzles', 'create') || _hasAction('nozzles', 'update');
+  bool get _canDeleteNozzles => _hasAction('nozzles', 'delete');
+
+  Widget _buildPermissionNotice(BuildContext context, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final stationItems = _stations
@@ -580,6 +625,15 @@ class _InventoryPageState extends State<InventoryPage> {
           ),
         )
         .toList();
+
+    final availableSections = <_InventorySection>[
+      if (_canReadTanks) _InventorySection.tanks,
+      if (_canReadDispensers) _InventorySection.dispensers,
+      if (_canReadNozzles) _InventorySection.nozzles,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
+    }
 
     Widget content;
     switch (_section) {
@@ -599,7 +653,9 @@ class _InventoryPageState extends State<InventoryPage> {
           Text('Inventory', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Manage tanks, dispensers, and nozzles for the selected station.',
+            availableSections.isEmpty
+                ? 'This role does not currently have access to inventory management.'
+                : 'Manage tanks, dispensers, and nozzles for the selected station.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 20),
@@ -616,37 +672,50 @@ class _InventoryPageState extends State<InventoryPage> {
                   ),
                   initialValue: _selectedStationId,
                   items: stationItems,
-                  onChanged: _isLoading ? null : _changeStation,
+                  onChanged: _isLoading || availableSections.isEmpty
+                      ? null
+                      : _changeStation,
                   decoration: const InputDecoration(labelText: 'Station'),
                 ),
               ),
-              SegmentedButton<_InventorySection>(
-                segments: const [
-                  ButtonSegment(
-                    value: _InventorySection.tanks,
-                    label: Text('Tanks'),
-                  ),
-                  ButtonSegment(
-                    value: _InventorySection.dispensers,
-                    label: Text('Dispensers'),
-                  ),
-                  ButtonSegment(
-                    value: _InventorySection.nozzles,
-                    label: Text('Nozzles'),
-                  ),
-                ],
-                selected: {_section},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _section = selection.first;
-                    _feedbackMessage = null;
-                    _errorMessage = null;
-                  });
-                },
-              ),
+              if (availableSections.isNotEmpty)
+                SegmentedButton<_InventorySection>(
+                  segments: [
+                    if (_canReadTanks)
+                      const ButtonSegment(
+                        value: _InventorySection.tanks,
+                        label: Text('Tanks'),
+                      ),
+                    if (_canReadDispensers)
+                      const ButtonSegment(
+                        value: _InventorySection.dispensers,
+                        label: Text('Dispensers'),
+                      ),
+                    if (_canReadNozzles)
+                      const ButtonSegment(
+                        value: _InventorySection.nozzles,
+                        label: Text('Nozzles'),
+                      ),
+                  ],
+                  selected: {_section},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _section = selection.first;
+                      _feedbackMessage = null;
+                      _errorMessage = null;
+                    });
+                  },
+                ),
             ],
           ),
           const SizedBox(height: 16),
+          if (availableSections.isEmpty) ...[
+            _buildPermissionNotice(
+              context,
+              'This role cannot view inventory master data. Ask an administrator for tank, dispenser, or nozzle access.',
+            ),
+            const SizedBox(height: 12),
+          ],
           if (_feedbackMessage != null) ...[
             Text(
               _feedbackMessage!,
@@ -674,6 +743,8 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Widget _buildTanks() {
+    final canManageTanks = _canManageTanks;
+    final canDeleteTanks = _canDeleteTanks;
     final fuelTypeItems = _fuelTypes
         .map(
           (fuelType) => DropdownMenuItem<int>(
@@ -698,14 +769,23 @@ class _InventoryPageState extends State<InventoryPage> {
                 _selectedTankId == null ? 'Create Tank' : 'Edit Tank',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
+              if (!canManageTanks) ...[
+                const SizedBox(height: 12),
+                _buildPermissionNotice(
+                  context,
+                  'This role can review tanks but cannot create or edit them.',
+                ),
+              ],
               const SizedBox(height: 16),
               TextFormField(
                 controller: _tankNameController,
+                enabled: canManageTanks,
                 decoration: const InputDecoration(labelText: 'Tank Name'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _tankCodeController,
+                enabled: canManageTanks,
                 decoration: const InputDecoration(labelText: 'Tank Code'),
               ),
               const SizedBox(height: 12),
@@ -715,14 +795,17 @@ class _InventoryPageState extends State<InventoryPage> {
                 ),
                 initialValue: _selectedTankFuelTypeId,
                 items: fuelTypeItems,
-                onChanged: (value) {
-                  setState(() => _selectedTankFuelTypeId = value);
-                },
+                onChanged: canManageTanks
+                    ? (value) {
+                        setState(() => _selectedTankFuelTypeId = value);
+                      }
+                    : null,
                 decoration: const InputDecoration(labelText: 'Fuel Type'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _tankCapacityController,
+                enabled: canManageTanks,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -731,6 +814,7 @@ class _InventoryPageState extends State<InventoryPage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _tankCurrentVolumeController,
+                enabled: canManageTanks,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -739,6 +823,7 @@ class _InventoryPageState extends State<InventoryPage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _tankLowStockController,
+                enabled: canManageTanks,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -749,6 +834,7 @@ class _InventoryPageState extends State<InventoryPage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _tankLocationController,
+                enabled: canManageTanks,
                 decoration: const InputDecoration(labelText: 'Location'),
               ),
               const SizedBox(height: 16),
@@ -757,7 +843,9 @@ class _InventoryPageState extends State<InventoryPage> {
                 runSpacing: 12,
                 children: [
                   FilledButton(
-                    onPressed: _isSubmitting ? null : _saveTank,
+                    onPressed: _isSubmitting || !canManageTanks
+                        ? null
+                        : _saveTank,
                     child: Text(
                       _isSubmitting
                           ? 'Saving...'
@@ -783,7 +871,9 @@ class _InventoryPageState extends State<InventoryPage> {
                           child: const Text('Cancel Edit'),
                         ),
                         OutlinedButton(
-                          onPressed: _isSubmitting ? null : _deleteTank,
+                          onPressed: _isSubmitting || !canDeleteTanks
+                              ? null
+                              : _deleteTank,
                           child: const Text('Delete Tank'),
                         ),
                       ],
@@ -885,6 +975,8 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Widget _buildDispensers() {
+    final canManageDispensers = _canManageDispensers;
+    final canDeleteDispensers = _canDeleteDispensers;
     final selectedDispenser = _dispensers
         .cast<Map<String, dynamic>?>()
         .firstWhere(
@@ -904,19 +996,29 @@ class _InventoryPageState extends State<InventoryPage> {
                     : 'Edit Dispenser',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
+              if (!canManageDispensers) ...[
+                const SizedBox(height: 12),
+                _buildPermissionNotice(
+                  context,
+                  'This role can review dispensers but cannot create or edit them.',
+                ),
+              ],
               const SizedBox(height: 16),
               TextFormField(
                 controller: _dispenserNameController,
+                enabled: canManageDispensers,
                 decoration: const InputDecoration(labelText: 'Dispenser Name'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _dispenserCodeController,
+                enabled: canManageDispensers,
                 decoration: const InputDecoration(labelText: 'Dispenser Code'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _dispenserLocationController,
+                enabled: canManageDispensers,
                 decoration: const InputDecoration(labelText: 'Location'),
               ),
               const SizedBox(height: 16),
@@ -925,7 +1027,9 @@ class _InventoryPageState extends State<InventoryPage> {
                 runSpacing: 12,
                 children: [
                   FilledButton(
-                    onPressed: _isSubmitting ? null : _saveDispenser,
+                    onPressed: _isSubmitting || !canManageDispensers
+                        ? null
+                        : _saveDispenser,
                     child: Text(
                       _isSubmitting
                           ? 'Saving...'
@@ -952,7 +1056,9 @@ class _InventoryPageState extends State<InventoryPage> {
                           child: const Text('Cancel Edit'),
                         ),
                         OutlinedButton(
-                          onPressed: _isSubmitting ? null : _deleteDispenser,
+                          onPressed: _isSubmitting || !canDeleteDispensers
+                              ? null
+                              : _deleteDispenser,
                           child: const Text('Delete Dispenser'),
                         ),
                       ],
@@ -1044,6 +1150,8 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Widget _buildNozzles() {
+    final canManageNozzles = _canManageNozzles;
+    final canDeleteNozzles = _canDeleteNozzles;
     final fuelTypeItems = _fuelTypes
         .map(
           (fuelType) => DropdownMenuItem<int>(
@@ -1084,14 +1192,23 @@ class _InventoryPageState extends State<InventoryPage> {
                 _selectedNozzleId == null ? 'Create Nozzle' : 'Edit Nozzle',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
+              if (!canManageNozzles) ...[
+                const SizedBox(height: 12),
+                _buildPermissionNotice(
+                  context,
+                  'This role can review nozzles but cannot create or edit them. Meter changes still belong in Hardware.',
+                ),
+              ],
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nozzleNameController,
+                enabled: canManageNozzles,
                 decoration: const InputDecoration(labelText: 'Nozzle Name'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _nozzleCodeController,
+                enabled: canManageNozzles,
                 decoration: const InputDecoration(labelText: 'Nozzle Code'),
               ),
               const SizedBox(height: 12),
@@ -1101,9 +1218,11 @@ class _InventoryPageState extends State<InventoryPage> {
                 ),
                 initialValue: _selectedNozzleFuelTypeId,
                 items: fuelTypeItems,
-                onChanged: (value) {
-                  setState(() => _selectedNozzleFuelTypeId = value);
-                },
+                onChanged: canManageNozzles
+                    ? (value) {
+                        setState(() => _selectedNozzleFuelTypeId = value);
+                      }
+                    : null,
                 decoration: const InputDecoration(labelText: 'Fuel Type'),
               ),
               const SizedBox(height: 12),
@@ -1113,9 +1232,11 @@ class _InventoryPageState extends State<InventoryPage> {
                 ),
                 initialValue: _selectedNozzleTankId,
                 items: tankItems,
-                onChanged: (value) {
-                  setState(() => _selectedNozzleTankId = value);
-                },
+                onChanged: canManageNozzles
+                    ? (value) {
+                        setState(() => _selectedNozzleTankId = value);
+                      }
+                    : null,
                 decoration: const InputDecoration(labelText: 'Tank'),
               ),
               const SizedBox(height: 12),
@@ -1125,15 +1246,17 @@ class _InventoryPageState extends State<InventoryPage> {
                 ),
                 initialValue: _selectedNozzleDispenserId,
                 items: dispenserItems,
-                onChanged: (value) {
-                  setState(() => _selectedNozzleDispenserId = value);
-                },
+                onChanged: canManageNozzles
+                    ? (value) {
+                        setState(() => _selectedNozzleDispenserId = value);
+                      }
+                    : null,
                 decoration: const InputDecoration(labelText: 'Dispenser'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _nozzleMeterController,
-                enabled: _selectedNozzleId == null,
+                enabled: canManageNozzles && _selectedNozzleId == null,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -1150,7 +1273,9 @@ class _InventoryPageState extends State<InventoryPage> {
                 runSpacing: 12,
                 children: [
                   FilledButton(
-                    onPressed: _isSubmitting ? null : _saveNozzle,
+                    onPressed: _isSubmitting || !canManageNozzles
+                        ? null
+                        : _saveNozzle,
                     child: Text(
                       _isSubmitting
                           ? 'Saving...'
@@ -1176,7 +1301,9 @@ class _InventoryPageState extends State<InventoryPage> {
                           child: const Text('Cancel Edit'),
                         ),
                         OutlinedButton(
-                          onPressed: _isSubmitting ? null : _deleteNozzle,
+                          onPressed: _isSubmitting || !canDeleteNozzles
+                              ? null
+                              : _deleteNozzle,
                           child: const Text('Delete Nozzle'),
                         ),
                       ],

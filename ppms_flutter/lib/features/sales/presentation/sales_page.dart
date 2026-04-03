@@ -448,6 +448,19 @@ class _SalesPageState extends State<SalesPage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canCreateSales => _hasAction('fuel_sales', 'create');
+  bool get _canReadSales =>
+      _canCreateSales || _hasAction('fuel_sales', 'reverse');
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -459,6 +472,8 @@ class _SalesPageState extends State<SalesPage> {
 
     final selectedNozzle = _selectedNozzle;
     final isCreditSale = _saleType == 'credit';
+    final canCreateSales = _canCreateSales;
+    final canReadSales = _canReadSales;
 
     return RefreshIndicator(
       onRefresh: _loadInitialData,
@@ -481,10 +496,19 @@ class _SalesPageState extends State<SalesPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Create fuel sales directly against the live PPMS backend. This screen is shared for desktop and mobile growth.',
+                        canCreateSales
+                            ? 'Create fuel sales directly against the live PPMS backend. This screen is shared for desktop and mobile growth.'
+                            : 'Review recent forecourt sales for the selected station. This role can inspect sales activity but cannot post new sales.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 20),
+                      if (!canCreateSales) ...[
+                        _buildHintBanner(
+                          context,
+                          'This role has read access to sales only. Use a Manager, Operator, or Admin login to create new fuel sales.',
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       if (_stations.isEmpty) ...[
                         _buildHintBanner(
                           context,
@@ -511,7 +535,9 @@ class _SalesPageState extends State<SalesPage> {
                                   ),
                                 ),
                             ],
-                            onChanged: (value) => _changeStation(value),
+                            onChanged: canReadSales
+                                ? (value) => _changeStation(value)
+                                : null,
                           );
                           return constraints.maxWidth < 500
                               ? field
@@ -534,11 +560,13 @@ class _SalesPageState extends State<SalesPage> {
                               ),
                             ),
                         ],
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedNozzleId = value;
-                          });
-                        },
+                        onChanged: canCreateSales
+                            ? (value) {
+                                setState(() {
+                                  _selectedNozzleId = value;
+                                });
+                              }
+                            : null,
                         validator: (value) =>
                             value == null ? 'Select a nozzle' : null,
                       ),
@@ -571,14 +599,16 @@ class _SalesPageState extends State<SalesPage> {
                             child: Text('Credit'),
                           ),
                         ],
-                        onChanged: (value) {
-                          setState(() {
-                            _saleType = value ?? 'cash';
-                            if (_saleType != 'credit') {
-                              _selectedCustomerId = null;
-                            }
-                          });
-                        },
+                        onChanged: canCreateSales
+                            ? (value) {
+                                setState(() {
+                                  _saleType = value ?? 'cash';
+                                  if (_saleType != 'credit') {
+                                    _selectedCustomerId = null;
+                                  }
+                                });
+                              }
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<int?>(
@@ -602,7 +632,7 @@ class _SalesPageState extends State<SalesPage> {
                               ),
                             ),
                         ],
-                        onChanged: isCreditSale
+                        onChanged: canCreateSales && isCreditSale
                             ? (value) {
                                 setState(() {
                                   _selectedCustomerId = value;
@@ -620,6 +650,7 @@ class _SalesPageState extends State<SalesPage> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _rateController,
+                        enabled: canCreateSales,
                         decoration: const InputDecoration(
                           labelText: 'Rate Per Liter',
                           helperText: 'Enter the selling rate for this sale.',
@@ -640,6 +671,7 @@ class _SalesPageState extends State<SalesPage> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _closingMeterController,
+                        enabled: canCreateSales,
                         decoration: const InputDecoration(
                           labelText: 'Closing Meter',
                           helperText:
@@ -661,6 +693,7 @@ class _SalesPageState extends State<SalesPage> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _shiftNameController,
+                        enabled: canCreateSales,
                         decoration: const InputDecoration(
                           labelText: 'Shift Name (optional)',
                         ),
@@ -682,7 +715,9 @@ class _SalesPageState extends State<SalesPage> {
                         ),
                       const SizedBox(height: 16),
                       FilledButton.icon(
-                        onPressed: _isSubmitting ? null : _submitSale,
+                        onPressed: _isSubmitting || !canCreateSales
+                            ? null
+                            : _submitSale,
                         icon: _isSubmitting
                             ? const SizedBox.square(
                                 dimension: 18,
@@ -713,11 +748,19 @@ class _SalesPageState extends State<SalesPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Latest sales for the selected station. Pull to refresh or save a new sale to update this list.',
+                      canReadSales
+                          ? 'Latest sales for the selected station. Pull to refresh or save a new sale to update this list.'
+                          : 'This role does not have access to sales history.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
-                    if (_recentSales.isEmpty)
+                    if (!canReadSales)
+                      _buildEmptyState(
+                        context,
+                        'No sales access for this role.',
+                        'Ask an administrator to grant fuel sales read access if this screen should show station sales.',
+                      )
+                    else if (_recentSales.isEmpty)
                       _buildEmptyState(
                         context,
                         'No fuel sales found for this station yet.',

@@ -377,10 +377,47 @@ class _HardwarePageState extends State<HardwarePage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canReadHardware => _hasAction('hardware', 'read');
+  bool get _canManageHardware =>
+      _hasAction('hardware', 'create') || _hasAction('hardware', 'update');
+  bool get _canAdjustMeters => _hasAction('nozzles', 'adjust_meter');
+  bool get _canReadMeterHistory =>
+      _hasAction('nozzles', 'read_meter_history') || _canAdjustMeters;
+
+  Widget _buildPermissionNotice(BuildContext context, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    final availableSections = <_HardwareSection>[
+      if (_canReadHardware) _HardwareSection.devices,
+      if (_canReadHardware) _HardwareSection.events,
+      if (_canReadMeterHistory || _canAdjustMeters) _HardwareSection.meterOps,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
     }
 
     return RefreshIndicator(
@@ -400,10 +437,19 @@ class _HardwarePageState extends State<HardwarePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Manage hardware devices, inspect recent events, and run nozzle meter operations.',
+                    availableSections.isEmpty
+                        ? 'This role does not currently have access to hardware or meter operations.'
+                        : 'Manage hardware devices, inspect recent events, and run nozzle meter operations.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
+                  if (availableSections.isEmpty) ...[
+                    _buildPermissionNotice(
+                      context,
+                      'Ask an administrator for hardware or nozzle meter permissions if this workspace should be available.',
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Row(
                     children: [
                       Expanded(
@@ -424,39 +470,45 @@ class _HardwarePageState extends State<HardwarePage> {
                                 ),
                               ),
                           ],
-                          onChanged: _changeStation,
+                          onChanged: availableSections.isEmpty
+                              ? null
+                              : _changeStation,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: SegmentedButton<_HardwareSection>(
-                          segments: const [
-                            ButtonSegment(
-                              value: _HardwareSection.devices,
-                              label: Text('Devices'),
-                              icon: Icon(Icons.memory_outlined),
-                            ),
-                            ButtonSegment(
-                              value: _HardwareSection.events,
-                              label: Text('Events'),
-                              icon: Icon(Icons.timeline_outlined),
-                            ),
-                            ButtonSegment(
-                              value: _HardwareSection.meterOps,
-                              label: Text('Meter Ops'),
-                              icon: Icon(Icons.speed_outlined),
-                            ),
-                          ],
-                          selected: {_section},
-                          onSelectionChanged: (selection) {
-                            setState(() {
-                              _section = selection.first;
-                              _errorMessage = null;
-                              _feedbackMessage = null;
-                            });
-                          },
+                      if (availableSections.isNotEmpty)
+                        Expanded(
+                          child: SegmentedButton<_HardwareSection>(
+                            segments: [
+                              if (_canReadHardware)
+                                const ButtonSegment(
+                                  value: _HardwareSection.devices,
+                                  label: Text('Devices'),
+                                  icon: Icon(Icons.memory_outlined),
+                                ),
+                              if (_canReadHardware)
+                                const ButtonSegment(
+                                  value: _HardwareSection.events,
+                                  label: Text('Events'),
+                                  icon: Icon(Icons.timeline_outlined),
+                                ),
+                              if (_canReadMeterHistory || _canAdjustMeters)
+                                const ButtonSegment(
+                                  value: _HardwareSection.meterOps,
+                                  label: Text('Meter Ops'),
+                                  icon: Icon(Icons.speed_outlined),
+                                ),
+                            ],
+                            selected: {_section},
+                            onSelectionChanged: (selection) {
+                              setState(() {
+                                _section = selection.first;
+                                _errorMessage = null;
+                                _feedbackMessage = null;
+                              });
+                            },
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -492,6 +544,7 @@ class _HardwarePageState extends State<HardwarePage> {
   }
 
   Widget _buildDevices(BuildContext context) {
+    final canManageHardware = _canManageHardware;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -504,14 +557,23 @@ class _HardwarePageState extends State<HardwarePage> {
                 'Register Device',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
+              if (!canManageHardware) ...[
+                const SizedBox(height: 12),
+                _buildPermissionNotice(
+                  context,
+                  'This role can review hardware devices but cannot register or poll them.',
+                ),
+              ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: _deviceNameController,
+                enabled: canManageHardware,
                 decoration: const InputDecoration(labelText: 'Device Name'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _deviceCodeController,
+                enabled: canManageHardware,
                 decoration: const InputDecoration(labelText: 'Device Code'),
               ),
               const SizedBox(height: 12),
@@ -529,11 +591,13 @@ class _HardwarePageState extends State<HardwarePage> {
                     child: Text('Tank Probe'),
                   ),
                 ],
-                onChanged: (value) {
-                  setState(() {
-                    _deviceType = value ?? 'dispenser_controller';
-                  });
-                },
+                onChanged: canManageHardware
+                    ? (value) {
+                        setState(() {
+                          _deviceType = value ?? 'dispenser_controller';
+                        });
+                      }
+                    : null,
               ),
               const SizedBox(height: 12),
               if (_deviceType == 'dispenser_controller')
@@ -552,11 +616,13 @@ class _HardwarePageState extends State<HardwarePage> {
                         ),
                       ),
                   ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedDispenserId = value;
-                    });
-                  },
+                  onChanged: canManageHardware
+                      ? (value) {
+                          setState(() {
+                            _selectedDispenserId = value;
+                          });
+                        }
+                      : null,
                 ),
               if (_deviceType == 'tank_probe')
                 DropdownButtonFormField<int>(
@@ -572,17 +638,20 @@ class _HardwarePageState extends State<HardwarePage> {
                         child: Text('${tank['code']} - ${tank['name']}'),
                       ),
                   ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedTankId = value;
-                    });
-                  },
+                  onChanged: canManageHardware
+                      ? (value) {
+                          setState(() {
+                            _selectedTankId = value;
+                          });
+                        }
+                      : null,
                 ),
               if (_deviceType == 'dispenser_controller' ||
                   _deviceType == 'tank_probe')
                 const SizedBox(height: 12),
               TextFormField(
                 controller: _deviceIdentifierController,
+                enabled: canManageHardware,
                 decoration: const InputDecoration(
                   labelText: 'Device Identifier (optional)',
                 ),
@@ -591,7 +660,9 @@ class _HardwarePageState extends State<HardwarePage> {
               Row(
                 children: [
                   FilledButton.icon(
-                    onPressed: _isSubmitting ? null : _createDevice,
+                    onPressed: _isSubmitting || !canManageHardware
+                        ? null
+                        : _createDevice,
                     icon: _isSubmitting
                         ? const SizedBox.square(
                             dimension: 18,
@@ -602,7 +673,9 @@ class _HardwarePageState extends State<HardwarePage> {
                   ),
                   const SizedBox(width: 12),
                   FilledButton.tonalIcon(
-                    onPressed: _isSubmitting ? null : _pollSelectedDevice,
+                    onPressed: _isSubmitting || !canManageHardware
+                        ? null
+                        : _pollSelectedDevice,
                     icon: const Icon(Icons.sync_outlined),
                     label: const Text('Poll Selected'),
                   ),
@@ -685,6 +758,9 @@ class _HardwarePageState extends State<HardwarePage> {
   }
 
   Widget _buildMeterOps(BuildContext context) {
+    final canAdjustMeters = _canAdjustMeters;
+    final canReadMeterHistory = _canReadMeterHistory;
+    final canManageHardware = _canManageHardware;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -697,6 +773,15 @@ class _HardwarePageState extends State<HardwarePage> {
                 'Nozzle Meter Operations',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
+              if (!canAdjustMeters) ...[
+                const SizedBox(height: 12),
+                _buildPermissionNotice(
+                  context,
+                  canReadMeterHistory
+                      ? 'This role can review meter history but cannot post adjustments or simulations.'
+                      : 'This role does not currently have meter-operation permissions.',
+                ),
+              ],
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 key: ValueKey<String>(
@@ -711,16 +796,19 @@ class _HardwarePageState extends State<HardwarePage> {
                       child: Text('${nozzle['code']} - ${nozzle['name']}'),
                     ),
                 ],
-                onChanged: (value) async {
-                  setState(() {
-                    _selectedNozzleId = value;
-                  });
-                  await _loadWorkspace();
-                },
+                onChanged: canReadMeterHistory || canAdjustMeters
+                    ? (value) async {
+                        setState(() {
+                          _selectedNozzleId = value;
+                        });
+                        await _loadWorkspace();
+                      }
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _meterReadingController,
+                enabled: canAdjustMeters,
                 decoration: const InputDecoration(
                   labelText: 'New Meter Reading',
                 ),
@@ -731,6 +819,7 @@ class _HardwarePageState extends State<HardwarePage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _meterReasonController,
+                enabled: canAdjustMeters,
                 decoration: const InputDecoration(
                   labelText: 'Adjustment Reason',
                 ),
@@ -738,7 +827,9 @@ class _HardwarePageState extends State<HardwarePage> {
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: _isSubmitting ? null : _adjustMeter,
+                onPressed: _isSubmitting || !canAdjustMeters
+                    ? null
+                    : _adjustMeter,
                 icon: _isSubmitting
                     ? const SizedBox.square(
                         dimension: 18,
@@ -752,6 +843,7 @@ class _HardwarePageState extends State<HardwarePage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _simulatedMeterController,
+                enabled: canManageHardware,
                 decoration: const InputDecoration(
                   labelText: 'Simulated Meter Reading',
                 ),
@@ -762,6 +854,7 @@ class _HardwarePageState extends State<HardwarePage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _simulatedVolumeController,
+                enabled: canManageHardware,
                 decoration: const InputDecoration(
                   labelText: 'Simulated Volume',
                 ),
@@ -772,6 +865,7 @@ class _HardwarePageState extends State<HardwarePage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _tankProbeVolumeController,
+                enabled: canManageHardware,
                 decoration: const InputDecoration(
                   labelText: 'Tank Probe Volume',
                 ),
@@ -783,13 +877,17 @@ class _HardwarePageState extends State<HardwarePage> {
               Row(
                 children: [
                   FilledButton.tonalIcon(
-                    onPressed: _isSubmitting ? null : _simulateDispenser,
+                    onPressed: _isSubmitting || !canManageHardware
+                        ? null
+                        : _simulateDispenser,
                     icon: const Icon(Icons.sensors_outlined),
                     label: const Text('Simulate Dispenser'),
                   ),
                   const SizedBox(width: 12),
                   FilledButton.tonalIcon(
-                    onPressed: _isSubmitting ? null : _simulateTankProbe,
+                    onPressed: _isSubmitting || !canManageHardware
+                        ? null
+                        : _simulateTankProbe,
                     icon: const Icon(Icons.waterfall_chart_outlined),
                     label: const Text('Simulate Tank Probe'),
                   ),
@@ -812,7 +910,9 @@ class _HardwarePageState extends State<HardwarePage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 12),
-                  if (_adjustments.isEmpty)
+                  if (!canReadMeterHistory)
+                    const Text('No meter-history access for this role.')
+                  else if (_adjustments.isEmpty)
                     const Text(
                       'No meter adjustments found for this nozzle yet.',
                     )
