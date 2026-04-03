@@ -146,6 +146,36 @@ Or:
 venv\Scripts\python.exe -m desktop_app.main
 ```
 
+## Flutter Client Foundation
+
+- The real shared frontend path now starts in [ppms_flutter](/C:/Fuel%20Management%20System/ppms_flutter).
+- This Flutter app is intended to become the common desktop and mobile client instead of growing the Python desktop prototype indefinitely.
+- Current Flutter foundation includes:
+  - backend URL login flow
+  - persisted session restore
+  - shared API client for PPMS backend endpoints
+  - role-aware home shell
+  - live dashboard loading
+  - live forecourt sales screen
+  - live attendance screen
+  - live payroll screen
+  - placeholders for reports, notifications, and settings
+
+Run it with:
+
+```bash
+cd ppms_flutter
+flutter pub get
+flutter run -d windows
+```
+
+For Android later:
+
+```bash
+cd ppms_flutter
+flutter run -d android
+```
+
 ## Scripts
 
 -   **`ppms/seed.py`**: Initializes the database with default roles, a head office station, and a system administrator account.

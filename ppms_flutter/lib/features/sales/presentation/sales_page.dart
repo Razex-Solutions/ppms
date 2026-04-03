@@ -1,0 +1,547 @@
+import 'package:flutter/material.dart';
+import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_controller.dart';
+
+class SalesPage extends StatefulWidget {
+  const SalesPage({super.key, required this.sessionController});
+
+  final SessionController sessionController;
+
+  @override
+  State<SalesPage> createState() => _SalesPageState();
+}
+
+class _SalesPageState extends State<SalesPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _rateController = TextEditingController();
+  final _closingMeterController = TextEditingController();
+  final _shiftNameController = TextEditingController();
+
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+  String? _feedbackMessage;
+
+  List<Map<String, dynamic>> _stations = const [];
+  List<Map<String, dynamic>> _nozzles = const [];
+  List<Map<String, dynamic>> _customers = const [];
+  List<Map<String, dynamic>> _fuelTypes = const [];
+  List<Map<String, dynamic>> _recentSales = const [];
+
+  int? _selectedStationId;
+  int? _selectedNozzleId;
+  int? _selectedCustomerId;
+  String _saleType = 'cash';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _rateController.dispose();
+    _closingMeterController.dispose();
+    _shiftNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final stations = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchStations()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+
+      final preferredStationId =
+          widget.sessionController.currentUser?['station_id'] as int?;
+      final stationId =
+          preferredStationId ??
+          (stations.isNotEmpty ? stations.first['id'] as int : null);
+
+      final nozzles = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchNozzles(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final customers = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchCustomers(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final fuelTypes = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchFuelTypes()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+      final recentSales = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelSales(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _stations = stations;
+        _selectedStationId = stationId;
+        _nozzles = nozzles;
+        _customers = customers;
+        _fuelTypes = fuelTypes;
+        _recentSales = recentSales;
+        _selectedNozzleId = nozzles.isNotEmpty
+            ? nozzles.first['id'] as int
+            : null;
+        _selectedCustomerId = null;
+        _isLoading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _changeStation(int? stationId) async {
+    if (stationId == null) {
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _selectedStationId = stationId;
+      _errorMessage = null;
+    });
+    try {
+      final nozzles = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchNozzles(
+          stationId: stationId,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      final customers = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchCustomers(
+          stationId: stationId,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      final recentSales = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchFuelSales(
+          stationId: stationId,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _nozzles = nozzles;
+        _customers = customers;
+        _recentSales = recentSales;
+        _selectedNozzleId = nozzles.isNotEmpty
+            ? nozzles.first['id'] as int
+            : null;
+        _selectedCustomerId = null;
+        _isLoading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _submitSale() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    final selectedNozzle = _selectedNozzle;
+    final stationId = _selectedStationId;
+    if (selectedNozzle == null || stationId == null) {
+      setState(() {
+        _feedbackMessage =
+            'Select a station and nozzle before submitting a sale.';
+      });
+      return;
+    }
+    if (_saleType == 'credit' && _selectedCustomerId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a customer for credit sales.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _feedbackMessage = null;
+      _errorMessage = null;
+    });
+
+    try {
+      final payload = <String, dynamic>{
+        'station_id': stationId,
+        'nozzle_id': selectedNozzle['id'],
+        'fuel_type_id': selectedNozzle['fuel_type_id'],
+        'closing_meter': double.parse(_closingMeterController.text.trim()),
+        'rate_per_liter': double.parse(_rateController.text.trim()),
+        'sale_type': _saleType,
+        'shift_name': _shiftNameController.text.trim().isEmpty
+            ? null
+            : _shiftNameController.text.trim(),
+      };
+      if (_selectedCustomerId != null) {
+        payload['customer_id'] = _selectedCustomerId;
+      }
+
+      final createdSale = await widget.sessionController.createFuelSale(
+        payload,
+      );
+      final recentSales = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchFuelSales(
+          stationId: stationId,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      _closingMeterController.clear();
+      _shiftNameController.clear();
+      setState(() {
+        _recentSales = recentSales;
+        _feedbackMessage =
+            'Sale #${createdSale['id']} saved: ${_formatNumber(createdSale['quantity'])}L for ${_formatNumber(createdSale['total_amount'])}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Map<String, dynamic>? get _selectedNozzle {
+    for (final nozzle in _nozzles) {
+      if (nozzle['id'] == _selectedNozzleId) {
+        return nozzle;
+      }
+    }
+    return null;
+  }
+
+  String _fuelTypeName(int fuelTypeId) {
+    final match = _fuelTypes.where((fuelType) => fuelType['id'] == fuelTypeId);
+    if (match.isEmpty) {
+      return 'Fuel $fuelTypeId';
+    }
+    return match.first['name'] as String? ?? 'Fuel $fuelTypeId';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_errorMessage != null && _stations.isEmpty) {
+      return Center(child: Text(_errorMessage!));
+    }
+
+    final selectedNozzle = _selectedNozzle;
+    final isCreditSale = _saleType == 'credit';
+
+    return RefreshIndicator(
+      onRefresh: _loadInitialData,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 5,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Forecourt Sales',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Create fuel sales directly against the live PPMS backend. This screen is shared for desktop and mobile growth.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 20),
+                          DropdownButtonFormField<int>(
+                            key: ValueKey<int?>(_selectedStationId),
+                            initialValue: _selectedStationId,
+                            decoration: const InputDecoration(
+                              labelText: 'Station',
+                            ),
+                            items: [
+                              for (final station in _stations)
+                                DropdownMenuItem<int>(
+                                  value: station['id'] as int,
+                                  child: Text(
+                                    '${station['name']} (${station['code']})',
+                                  ),
+                                ),
+                            ],
+                            onChanged: (value) => _changeStation(value),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<int>(
+                            key: ValueKey<int?>(_selectedNozzleId),
+                            initialValue: _selectedNozzleId,
+                            decoration: const InputDecoration(
+                              labelText: 'Nozzle',
+                            ),
+                            items: [
+                              for (final nozzle in _nozzles)
+                                DropdownMenuItem<int>(
+                                  value: nozzle['id'] as int,
+                                  child: Text(
+                                    '${nozzle['code']} - ${nozzle['name']}',
+                                  ),
+                                ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedNozzleId = value;
+                              });
+                            },
+                            validator: (value) =>
+                                value == null ? 'Select a nozzle' : null,
+                          ),
+                          if (selectedNozzle != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Fuel: ${_fuelTypeName(selectedNozzle['fuel_type_id'] as int)} • '
+                              'Current meter: ${_formatNumber(selectedNozzle['meter_reading'])} • '
+                              'Segment start: ${_formatNumber(selectedNozzle['current_segment_start_reading'])}',
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            key: ValueKey<String>(_saleType),
+                            initialValue: _saleType,
+                            decoration: const InputDecoration(
+                              labelText: 'Sale Type',
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'cash',
+                                child: Text('Cash'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'credit',
+                                child: Text('Credit'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _saleType = value ?? 'cash';
+                                if (_saleType != 'credit') {
+                                  _selectedCustomerId = null;
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<int?>(
+                            key: ValueKey<int?>(_selectedCustomerId),
+                            initialValue: _selectedCustomerId,
+                            decoration: const InputDecoration(
+                              labelText: 'Customer',
+                            ),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Walk-in / cash customer'),
+                              ),
+                              for (final customer in _customers)
+                                DropdownMenuItem<int?>(
+                                  value: customer['id'] as int,
+                                  child: Text(
+                                    '${customer['code']} - ${customer['name']}',
+                                  ),
+                                ),
+                            ],
+                            onChanged: isCreditSale
+                                ? (value) {
+                                    setState(() {
+                                      _selectedCustomerId = value;
+                                    });
+                                  }
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _rateController,
+                            decoration: const InputDecoration(
+                              labelText: 'Rate Per Liter',
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Enter the rate per liter';
+                              }
+                              if (double.tryParse(value.trim()) == null) {
+                                return 'Enter a valid rate';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _closingMeterController,
+                            decoration: const InputDecoration(
+                              labelText: 'Closing Meter',
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Enter the closing meter';
+                              }
+                              if (double.tryParse(value.trim()) == null) {
+                                return 'Enter a valid closing meter';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _shiftNameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Shift Name (optional)',
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          if (_errorMessage != null)
+                            Text(
+                              _errorMessage!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          if (_feedbackMessage != null)
+                            Text(
+                              _feedbackMessage!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _isSubmitting ? null : _submitSale,
+                            icon: _isSubmitting
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.save_outlined),
+                            label: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('Save Fuel Sale'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 4,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Recent Sales',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Latest sales for the selected station. Pull to refresh or save a new sale to update this list.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        if (_recentSales.isEmpty)
+                          const Text(
+                            'No fuel sales found for this station yet.',
+                          )
+                        else
+                          for (final sale in _recentSales)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.receipt_long_outlined),
+                              title: Text(
+                                '${_formatNumber(sale['quantity'])}L • ${_formatNumber(sale['total_amount'])}',
+                              ),
+                              subtitle: Text(
+                                'Nozzle ${sale['nozzle_id']} • ${sale['sale_type']} • '
+                                '${(sale['created_at'] as String?)?.replaceFirst('T', ' ').substring(0, 19) ?? ''}',
+                              ),
+                              trailing: sale['shift_name'] != null
+                                  ? Chip(
+                                      label: Text(sale['shift_name'] as String),
+                                    )
+                                  : null,
+                            ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatNumber(dynamic value) {
+    if (value is num) {
+      return value.toStringAsFixed(2);
+    }
+    return '0.00';
+  }
+}
