@@ -159,7 +159,9 @@ venv\Scripts\python.exe -m desktop_app.main
   - live forecourt sales screen
   - live attendance screen
   - live payroll screen
-  - placeholders for reports, notifications, and settings
+  - live reports screen
+  - live notifications screen
+  - placeholder for settings
 
 Run it with:
 

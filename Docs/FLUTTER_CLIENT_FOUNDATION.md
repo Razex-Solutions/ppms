@@ -31,9 +31,11 @@ The Flutter app currently includes:
   - attendance
 - third working operational screen for:
   - payroll
-- first module placeholders for:
+- fourth working operational screen for:
   - reports
+- fifth working operational screen for:
   - notifications
+- first module placeholders for:
   - settings
 
 ## Backend Module Mapping
@@ -54,9 +56,7 @@ The Flutter app currently includes:
 ## Recommended Next Flutter Steps
 
 1. Build the forecourt sales screen properly
-2. Add reports listing and export download handling
-3. Add approval inbox/notification center
-4. Add platform-specific polish for Windows and Android
+2. Add platform-specific polish for Windows and Android
 
 ## Local Run
 

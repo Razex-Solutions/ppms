@@ -88,6 +88,48 @@ class SessionController extends ChangeNotifier {
     return _apiClient.getNotifications(await _validAccessToken());
   }
 
+  Future<Map<String, dynamic>> fetchNotificationSummary() async {
+    return _apiClient.getNotificationSummary(await _validAccessToken());
+  }
+
+  Future<Map<String, dynamic>> markNotificationRead({
+    required int notificationId,
+  }) async {
+    return _apiClient.markNotificationRead(
+      await _validAccessToken(),
+      notificationId: notificationId,
+    );
+  }
+
+  Future<Map<String, dynamic>> markAllNotificationsRead() async {
+    return _apiClient.markAllNotificationsRead(await _validAccessToken());
+  }
+
+  Future<List<dynamic>> fetchNotificationPreferences() async {
+    return _apiClient.getNotificationPreferences(await _validAccessToken());
+  }
+
+  Future<Map<String, dynamic>> updateNotificationPreference({
+    required String eventType,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.updateNotificationPreference(
+      await _validAccessToken(),
+      eventType: eventType,
+      payload: payload,
+    );
+  }
+
+  Future<List<dynamic>> fetchNotificationDeliveries() async {
+    return _apiClient.getNotificationDeliveries(await _validAccessToken());
+  }
+
+  Future<Map<String, dynamic>> fetchNotificationDeliveryDiagnostics() async {
+    return _apiClient.getNotificationDeliveryDiagnostics(
+      await _validAccessToken(),
+    );
+  }
+
   Future<Map<String, dynamic>> fetchDailyClosingReport({
     required String reportDate,
   }) async {

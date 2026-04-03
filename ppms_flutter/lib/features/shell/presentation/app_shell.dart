@@ -4,7 +4,9 @@ import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/features/dashboard/presentation/dashboard_page.dart';
 import 'package:ppms_flutter/features/home/presentation/module_placeholder_page.dart';
+import 'package:ppms_flutter/features/notifications/presentation/notifications_page.dart';
 import 'package:ppms_flutter/features/payroll/presentation/payroll_page.dart';
+import 'package:ppms_flutter/features/reports/presentation/reports_page.dart';
 import 'package:ppms_flutter/features/sales/presentation/sales_page.dart';
 
 class AppShell extends StatefulWidget {
@@ -19,7 +21,6 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   Map<String, dynamic>? _dashboard;
-  List<dynamic> _notifications = const [];
   bool _isLoading = true;
   String? _loadError;
 
@@ -36,13 +37,11 @@ class _AppShellState extends State<AppShell> {
     });
     try {
       final dashboard = await widget.sessionController.fetchDashboard();
-      final notifications = await widget.sessionController.fetchNotifications();
       if (!mounted) {
         return;
       }
       setState(() {
         _dashboard = dashboard;
-        _notifications = notifications;
         _isLoading = false;
       });
     } on ApiException catch (error) {
@@ -170,27 +169,16 @@ class _AppShellState extends State<AppShell> {
           page: PayrollPage(sessionController: widget.sessionController),
         ),
       if (permissions.containsKey('reports'))
-        const _ShellDestination(
+        _ShellDestination(
           label: 'Reports',
           icon: Icons.assessment_outlined,
-          page: ModulePlaceholderPage(
-            title: 'Reports',
-            description:
-                'The backend already exposes dashboards, report exports, and organization-aware summaries. Flutter report screens come next.',
-          ),
+          page: ReportsPage(sessionController: widget.sessionController),
         ),
       if (enabledModules.contains('notifications'))
         _ShellDestination(
           label: 'Notifications',
           icon: Icons.notifications_outlined,
-          page: ModulePlaceholderPage(
-            title: 'Notifications',
-            description:
-                'This area will show approval queues, alerts, and outbound delivery history.',
-            trailing: Text(
-              'Current notification items loaded: ${_notifications.length}',
-            ),
-          ),
+          page: NotificationsPage(sessionController: widget.sessionController),
         ),
       const _ShellDestination(
         label: 'Settings',

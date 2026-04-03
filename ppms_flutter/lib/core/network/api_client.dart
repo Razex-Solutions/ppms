@@ -72,6 +72,68 @@ class ApiClient {
     return _sendList('GET', '/notifications/', accessToken: accessToken);
   }
 
+  Future<Map<String, dynamic>> getNotificationSummary(
+    String accessToken,
+  ) async {
+    return _send('GET', '/notifications/summary', accessToken: accessToken);
+  }
+
+  Future<Map<String, dynamic>> markNotificationRead(
+    String accessToken, {
+    required int notificationId,
+  }) async {
+    return _send(
+      'POST',
+      '/notifications/$notificationId/read',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> markAllNotificationsRead(
+    String accessToken,
+  ) async {
+    return _send('POST', '/notifications/read-all', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getNotificationPreferences(String accessToken) async {
+    return _sendList(
+      'GET',
+      '/notifications/preferences',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateNotificationPreference(
+    String accessToken, {
+    required String eventType,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/notifications/preferences/$eventType',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<List<dynamic>> getNotificationDeliveries(String accessToken) async {
+    return _sendList(
+      'GET',
+      '/notifications/deliveries',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> getNotificationDeliveryDiagnostics(
+    String accessToken,
+  ) async {
+    return _send(
+      'GET',
+      '/notifications/deliveries/diagnostics',
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> getDailyClosingReport(
     String accessToken, {
     required String reportDate,
@@ -350,6 +412,13 @@ class ApiClient {
       switch (method) {
         case 'POST':
           response = await _httpClient.post(
+            uri,
+            headers: headers,
+            body: jsonEncode(body ?? {}),
+          );
+          break;
+        case 'PUT':
+          response = await _httpClient.put(
             uri,
             headers: headers,
             body: jsonEncode(body ?? {}),
