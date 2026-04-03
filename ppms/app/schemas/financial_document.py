@@ -14,6 +14,8 @@ class FinancialDocumentResponse(BaseModel):
     balance: float | None = None
     generated_at: datetime
     rendered_html: str
+    compliance_context: dict | None = None
+    machine_payload: dict | None = None
 
 
 class FinancialDocumentDispatchCreate(BaseModel):

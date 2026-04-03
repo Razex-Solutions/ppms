@@ -225,6 +225,82 @@ def test_hardware_device_and_simulator_flow(client, tmp_path):
     hardware_only_app.dependency_overrides.clear()
 
 
+def test_vendor_api_hardware_adapter_poll_flow(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+
+    vendors_response = test_client.get("/hardware/vendors", headers=manager_headers)
+    assert vendors_response.status_code == 200, vendors_response.text
+    assert "gilbarco" in vendors_response.json()["recognized_vendors"]
+
+    invalid_vendor_response = test_client.post(
+        "/hardware/devices",
+        headers=manager_headers,
+        json={
+            "name": "Invalid Veeder Dispenser",
+            "code": "HW-VENDOR-BAD",
+            "device_type": "dispenser",
+            "vendor_name": "veederroot",
+            "integration_mode": "vendor_api",
+            "protocol": "https",
+            "endpoint_url": "https://vendor.example/api/device",
+            "device_identifier": "VR-001",
+            "status": "offline",
+            "station_id": data["station_a_id"],
+            "dispenser_id": 1,
+        },
+    )
+    assert invalid_vendor_response.status_code == 400
+
+    vendor_device_response = test_client.post(
+        "/hardware/devices",
+        headers=manager_headers,
+        json={
+            "name": "Gilbarco Controller",
+            "code": "HW-VENDOR-001",
+            "device_type": "dispenser",
+            "vendor_name": "gilbarco",
+            "integration_mode": "vendor_api",
+            "protocol": "https",
+            "endpoint_url": "https://vendor.example/api/device",
+            "device_identifier": "GIL-001",
+            "api_key": "secret-token",
+            "status": "offline",
+            "station_id": data["station_a_id"],
+            "dispenser_id": 1,
+        },
+    )
+    assert vendor_device_response.status_code == 200, vendor_device_response.text
+    vendor_device_id = vendor_device_response.json()["id"]
+    assert vendor_device_response.json()["protocol"] == "https"
+    assert vendor_device_response.json()["device_identifier"] == "GIL-001"
+
+    adapter_check_response = test_client.post(
+        f"/hardware/devices/{vendor_device_id}/adapter-check",
+        headers=manager_headers,
+    )
+    assert adapter_check_response.status_code == 200, adapter_check_response.text
+    assert adapter_check_response.json()["vendor_name"] == "gilbarco"
+    assert adapter_check_response.json()["status"] == "configured"
+
+    vendor_poll_response = test_client.post(
+        f"/hardware/devices/{vendor_device_id}/vendor-poll",
+        headers=manager_headers,
+    )
+    assert vendor_poll_response.status_code == 200, vendor_poll_response.text
+    assert vendor_poll_response.json()["event_type"] == "vendor_dispenser_poll"
+    assert vendor_poll_response.json()["meter_reading"] == 1015.5
+
+    db = session_local()
+    try:
+        device = db.query(HardwareDevice).filter(HardwareDevice.id == vendor_device_id).first()
+        assert device.status == "online"
+        assert device.last_seen_at is not None
+    finally:
+        db.close()
+
+
 def test_tanker_module_workflows_and_station_toggle(client):
     test_client, session_local = client
     data = seed_base_data(session_local)

@@ -18,7 +18,7 @@ from app.schemas.hardware import (
     SimulatedDispenserReadingCreate,
     SimulatedTankProbeReadingCreate,
 )
-from app.services.hardware_adapters import get_hardware_adapter
+from app.services.hardware_adapters import RECOGNIZED_VENDORS, get_hardware_adapter
 from app.services.audit import log_audit_event
 
 
@@ -26,6 +26,7 @@ VALID_DEVICE_TYPES = {"dispenser", "tank_probe", "printer", "other"}
 VALID_INTEGRATION_MODES = {"manual", "simulated", "vendor_api"}
 VALID_DEVICE_STATUSES = {"online", "offline", "error", "maintenance"}
 VALID_EVENT_STATUSES = {"received", "warning", "error"}
+VALID_PROTOCOLS = {"http", "https", "tcp", "udp"}
 
 
 def ensure_hardware_access(device: HardwareDevice, current_user: User) -> None:
@@ -89,6 +90,30 @@ def _validate_device_payload(
     _validate_linked_assets(db, station_id, device_type, dispenser_id, tank_id)
 
 
+def _validate_vendor_configuration(device: HardwareDevice | HardwareDeviceCreate | HardwareDeviceUpdate, device_type: str, integration_mode: str) -> None:
+    vendor_name = (getattr(device, "vendor_name", None) or "").strip().lower()
+    protocol = getattr(device, "protocol", None)
+    endpoint_url = getattr(device, "endpoint_url", None)
+    device_identifier = getattr(device, "device_identifier", None)
+
+    if integration_mode != "vendor_api":
+        return
+    if not vendor_name:
+        raise HTTPException(status_code=400, detail="Vendor name is required for vendor API hardware")
+    if protocol and protocol not in VALID_PROTOCOLS:
+        raise HTTPException(status_code=400, detail="Invalid hardware protocol")
+    if not device_identifier:
+        raise HTTPException(status_code=400, detail="Device identifier is required for vendor API hardware")
+    if device_type not in {"dispenser", "tank_probe"}:
+        raise HTTPException(status_code=400, detail="Vendor API integration currently supports dispenser and tank probe devices only")
+    if vendor_name in {"veederroot", "opw"} and device_type != "tank_probe":
+        raise HTTPException(status_code=400, detail=f"{vendor_name} adapter currently supports tank probes only")
+    if vendor_name in {"tokheim", "gilbarco"} and device_type != "dispenser":
+        raise HTTPException(status_code=400, detail=f"{vendor_name} adapter currently supports dispenser devices only")
+    if endpoint_url and not endpoint_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Hardware endpoint URL must start with http:// or https://")
+
+
 def create_hardware_device(db: Session, data: HardwareDeviceCreate, current_user: User) -> HardwareDevice:
     require_station_access(current_user, data.station_id)
     existing = db.query(HardwareDevice).filter(HardwareDevice.code == data.code).first()
@@ -104,6 +129,7 @@ def create_hardware_device(db: Session, data: HardwareDeviceCreate, current_user
         dispenser_id=data.dispenser_id,
         tank_id=data.tank_id,
     )
+    _validate_vendor_configuration(data, data.device_type, data.integration_mode)
 
     device = HardwareDevice(**data.model_dump())
     db.add(device)
@@ -146,6 +172,14 @@ def update_hardware_device(
         dispenser_id=dispenser_id,
         tank_id=tank_id,
     )
+    merged = HardwareDevice(
+        vendor_name=updates.get("vendor_name", device.vendor_name),
+        protocol=updates.get("protocol", device.protocol),
+        endpoint_url=updates.get("endpoint_url", device.endpoint_url),
+        device_identifier=updates.get("device_identifier", device.device_identifier),
+        api_key=updates.get("api_key", device.api_key),
+    )
+    _validate_vendor_configuration(merged, device.device_type, integration_mode)
 
     for field, value in updates.items():
         setattr(device, field, value)
@@ -328,3 +362,68 @@ def simulate_tank_probe_reading(
 def check_hardware_adapter(device: HardwareDevice, current_user: User) -> dict:
     ensure_hardware_access(device, current_user)
     return get_hardware_adapter(device).health_check(device)
+
+
+def get_supported_hardware_vendors() -> dict:
+    return {
+        "recognized_vendors": sorted(RECOGNIZED_VENDORS),
+        "device_support": {
+            "veederroot": ["tank_probe"],
+            "opw": ["tank_probe"],
+            "tokheim": ["dispenser"],
+            "gilbarco": ["dispenser"],
+            "generic": ["dispenser", "tank_probe"],
+        },
+        "protocols": sorted(VALID_PROTOCOLS),
+    }
+
+
+def poll_vendor_hardware_device(
+    db: Session,
+    *,
+    device: HardwareDevice,
+    current_user: User,
+) -> HardwareEvent:
+    ensure_hardware_access(device, current_user)
+    if not device.is_active:
+        raise HTTPException(status_code=400, detail="Inactive hardware device cannot be polled")
+    adapter = get_hardware_adapter(device)
+    snapshot = adapter.fetch_snapshot(device)
+    status = snapshot.get("status", "received")
+    _validate_event_status(status)
+
+    if device.device_type == "dispenser":
+        meter_reading = snapshot.get("meter_reading")
+        volume = snapshot.get("volume")
+        if meter_reading is None:
+            raise HTTPException(status_code=400, detail="Vendor dispenser snapshot is missing meter_reading")
+        return _record_event(
+            db,
+            device=device,
+            event_type="vendor_dispenser_poll",
+            status=status,
+            dispenser_id=device.dispenser_id,
+            nozzle_id=None,
+            meter_reading=float(meter_reading),
+            volume=float(volume) if volume is not None else None,
+            notes=snapshot.get("notes"),
+            payload=snapshot,
+        )
+
+    if device.device_type == "tank_probe":
+        volume = snapshot.get("tank_volume", snapshot.get("volume"))
+        if volume is None:
+            raise HTTPException(status_code=400, detail="Vendor tank probe snapshot is missing volume")
+        return _record_event(
+            db,
+            device=device,
+            event_type="vendor_tank_probe_poll",
+            status=status,
+            tank_id=device.tank_id,
+            volume=float(volume),
+            temperature=float(snapshot["temperature"]) if snapshot.get("temperature") is not None else None,
+            notes=snapshot.get("notes"),
+            payload=snapshot,
+        )
+
+    raise HTTPException(status_code=400, detail="Vendor polling is not supported for this hardware device type")

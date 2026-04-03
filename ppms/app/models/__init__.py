@@ -3,6 +3,7 @@ from app.models.organization import Organization
 from app.models.organization_module_setting import OrganizationModuleSetting
 from app.models.organization_subscription import OrganizationSubscription
 from app.models.online_api_hook import OnlineAPIHook
+from app.models.inbound_webhook_event import InboundWebhookEvent
 from app.models.notification import Notification
 from app.models.notification_delivery import NotificationDelivery
 from app.models.notification_preference import NotificationPreference
@@ -10,6 +11,10 @@ from app.models.invoice_profile import InvoiceProfile
 from app.models.subscription_plan import SubscriptionPlan
 from app.models.document_template import DocumentTemplate
 from app.models.financial_document_dispatch import FinancialDocumentDispatch
+from app.models.auth_session import AuthSession
+from app.models.attendance_record import AttendanceRecord
+from app.models.payroll_run import PayrollRun
+from app.models.payroll_line import PayrollLine
 from app.models.user import User
 from app.models.station import Station
 from app.models.fuel_type import FuelType

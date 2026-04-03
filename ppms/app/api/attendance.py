@@ -1,0 +1,120 @@
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.dependencies import get_current_user
+from app.core.permissions import require_permission
+from app.models.attendance_record import AttendanceRecord
+from app.models.user import User
+from app.schemas.attendance import (
+    AttendanceCheckInRequest,
+    AttendanceCheckOutRequest,
+    AttendanceRecordCreate,
+    AttendanceRecordResponse,
+    AttendanceRecordUpdate,
+)
+from app.services.attendance import (
+    check_in,
+    check_out,
+    create_attendance_record,
+    ensure_attendance_access,
+    update_attendance_record,
+)
+
+
+router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
+
+@router.post("/check-in", response_model=AttendanceRecordResponse)
+def post_check_in(
+    data: AttendanceCheckInRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "attendance", "check_in", detail="You do not have permission to check in")
+    return check_in(db, current_user=current_user, station_id=data.station_id, notes=data.notes)
+
+
+@router.post("/{attendance_id}/check-out", response_model=AttendanceRecordResponse)
+def post_check_out(
+    attendance_id: int,
+    data: AttendanceCheckOutRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = db.query(AttendanceRecord).filter(AttendanceRecord.id == attendance_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    require_permission(current_user, "attendance", "check_out", detail="You do not have permission to check out")
+    return check_out(db, record=record, current_user=current_user, notes=data.notes)
+
+
+@router.post("/", response_model=AttendanceRecordResponse)
+def post_attendance_record(
+    data: AttendanceRecordCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "attendance", "create", detail="You do not have permission to create attendance records")
+    return create_attendance_record(db, data=data, current_user=current_user)
+
+
+@router.get("/", response_model=list[AttendanceRecordResponse])
+def list_attendance(
+    station_id: int | None = Query(None),
+    user_id: int | None = Query(None),
+    attendance_date: date | None = Query(None),
+    status: str | None = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "attendance", "read", detail="You do not have permission to view attendance")
+    query = db.query(AttendanceRecord)
+    if current_user.role.name == "Admin":
+        pass
+    elif current_user.role.name == "HeadOffice":
+        organization_id = current_user.station.organization_id if current_user.station else None
+        query = query.join(User, User.id == AttendanceRecord.user_id).filter(User.station.has(organization_id=organization_id))
+    else:
+        station_id = current_user.station_id
+    if station_id is not None:
+        query = query.filter(AttendanceRecord.station_id == station_id)
+    if user_id is not None:
+        query = query.filter(AttendanceRecord.user_id == user_id)
+    if attendance_date is not None:
+        query = query.filter(AttendanceRecord.attendance_date == attendance_date)
+    if status is not None:
+        query = query.filter(AttendanceRecord.status == status)
+    return query.order_by(AttendanceRecord.attendance_date.desc(), AttendanceRecord.id.desc()).offset(skip).limit(limit).all()
+
+
+@router.get("/{attendance_id}", response_model=AttendanceRecordResponse)
+def get_attendance_record(
+    attendance_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "attendance", "read", detail="You do not have permission to view attendance")
+    record = db.query(AttendanceRecord).filter(AttendanceRecord.id == attendance_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    ensure_attendance_access(db, record.station_id, current_user)
+    return record
+
+
+@router.put("/{attendance_id}", response_model=AttendanceRecordResponse)
+def put_attendance_record(
+    attendance_id: int,
+    data: AttendanceRecordUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "attendance", "update", detail="You do not have permission to update attendance")
+    record = db.query(AttendanceRecord).filter(AttendanceRecord.id == attendance_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    return update_attendance_record(db, record=record, data=data, current_user=current_user)

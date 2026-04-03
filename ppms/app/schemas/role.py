@@ -17,3 +17,15 @@ class RoleResponse(BaseModel):
     description: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RolePermissionResponse(BaseModel):
+    role_name: str
+    summary: dict[str, str] | None = None
+    permissions: dict[str, list[str]]
+
+
+class PermissionCatalogResponse(BaseModel):
+    core_roles: list[str]
+    role_summaries: dict[str, dict[str, str]]
+    permission_matrix: dict[str, dict[str, list[str]]]

@@ -229,3 +229,45 @@ def test_head_office_can_manage_station_modules_per_station(client):
         json={"module_name": "tanker_operations", "is_enabled": False},
     )
     assert forbidden_other_org.status_code == 403
+
+
+def test_permission_catalog_and_core_role_governance(client):
+    test_client, session_local = client
+    seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    me_response = test_client.get("/auth/me", headers=admin_headers)
+    assert me_response.status_code == 200, me_response.text
+    assert me_response.json()["role_name"] == "Admin"
+    assert "users" in me_response.json()["permissions"]
+    assert me_response.json()["role_summary"]["scope"] == "System-wide"
+
+    catalog_response = test_client.get("/roles/permission-catalog", headers=head_office_headers)
+    assert catalog_response.status_code == 200, catalog_response.text
+    assert "Admin" in catalog_response.json()["core_roles"]
+    assert "roles" in catalog_response.json()["permission_matrix"]
+
+    manager_policy = test_client.get("/roles/permission-catalog/Manager", headers=head_office_headers)
+    assert manager_policy.status_code == 200, manager_policy.text
+    assert manager_policy.json()["role_name"] == "Manager"
+    assert "fuel_sales" in manager_policy.json()["permissions"]
+
+    db = session_local()
+    try:
+        from app.models.role import Role
+
+        admin_role = db.query(Role).filter(Role.name == "Admin").first()
+        admin_role_id = admin_role.id
+    finally:
+        db.close()
+
+    rename_response = test_client.put(
+        f"/roles/{admin_role_id}",
+        headers=admin_headers,
+        json={"name": "SuperAdmin"},
+    )
+    assert rename_response.status_code == 400
+
+    delete_response = test_client.delete(f"/roles/{admin_role_id}", headers=admin_headers)
+    assert delete_response.status_code == 400

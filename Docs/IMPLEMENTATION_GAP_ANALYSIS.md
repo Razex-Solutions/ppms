@@ -17,7 +17,7 @@ The DOCX describes a full commercial PPMS platform:
 
 The current repository is still not that full platform yet.
 
-It is now a substantially hardened backend pilot focused on:
+It is now a substantially hardened local-first backend foundation focused on:
 
 - authentication
 - organizations, stations, roles, and users
@@ -29,10 +29,11 @@ It is now a substantially hardened backend pilot focused on:
 - tank dips
 - dashboard, reports, audit logs, ledger/profit reporting
 - POS product and sale workflows
-- hardware device registry and simulator ingestion
-- approval workflows for expenses
+- hardware device registry, simulator ingestion, and vendor-aware adapter scaffolding
+- approval workflows for expenses, purchases, reversals, and credit overrides
+- session hardening, maintenance tooling, provider diagnostics, and inspectable permission governance
 
-That means the project is currently in a **late Phase 1 / early Phase 2 backend pilot** stage, not in the full product stage described in the DOCX.
+That means the project is currently in a **late Phase 2 / early Phase 3 backend foundation** stage, not in the full product stage described in the DOCX.
 
 ## Current System Snapshot
 
@@ -41,7 +42,7 @@ That means the project is currently in a **late Phase 1 / early Phase 2 backend 
 - FastAPI backend in `ppms/app`
 - SQLite persistence
 - Alembic migrations
-- JWT login plus password change/reset
+- JWT login plus password change/reset, refresh tokens, logout, session tracking, and lockout control
 - CRUD APIs for core operational entities
 - role and permission enforcement with organization/station scoping
 - audit logging
@@ -58,14 +59,19 @@ That means the project is currently in a **late Phase 1 / early Phase 2 backend 
 - generated financial documents for receipts, vouchers, and ledger statements with dispatch logging
 - PDF rendering and download endpoints for generated financial documents
 - provider-backed outbound delivery adapters for email, SMS, and WhatsApp with safe mock mode for non-production use
+- delivery retry state and local background processing hooks
+- station-level document templates with previews and seeded defaults
+- local maintenance tooling for snapshots and backups
+- optional SaaS foundation with plans, organization subscriptions, and organization module toggles
+- optional online API hooks for future hosted integrations plus inbound webhook capture
 
 ### What does not exist today
 
 - desktop client
 - mobile client
 - sync engine
-- real device vendor adapters
-- real external notification gateways
+- production-grade live hardware deployments
+- production-ready external notification operations
 - payroll
 - compliance-grade invoicing and tax workflows
 - SaaS tenancy and billing
@@ -80,8 +86,8 @@ Status definitions:
 
 | Module / Capability | Status | Notes |
 | --- | --- | --- |
-| Authentication | Partial | Login, password change, and admin reset exist; session control, lockout, MFA, and richer auth security still do not |
-| Role-based access control | Partial | Permission matrix and enforcement are much stronger now, including `HeadOffice`, but not yet fully data-driven or enterprise-grade |
+| Authentication | Partial | Login, password change/reset, refresh, logout, session visibility, and lockout now exist; MFA and more advanced auth controls still do not |
+| Role-based access control | Partial | Permission matrix, inspectable permission catalog, core-role protection, and enforcement are much stronger now, including `HeadOffice`, but not yet fully data-driven or enterprise-grade |
 | Multi-station support | Partial | Organization model and head-office read scope now exist, but this is not yet a full tenant / centralized governance design |
 | User management | Partial | CRUD exists with admin-only mutations and head-office read scope; delegated provisioning and approval flows are still missing |
 | Fuel sales management | Partial | Core sale entry, validation, safe reversal, and reporting exist, with meter-adjustment segmentation and document-ready receipt foundations; real device integration and richer billing still remain |
@@ -96,15 +102,15 @@ Status definitions:
 | Audit trail / fraud prevention | Partial | Audit log exists and critical actions are recorded, but fraud rules, anomaly detection, and deeper review workflows are still missing |
 | Attendance and payroll | Missing | Not modeled |
 | POS for shop/services | Partial | POS product and sale backend exists, but no richer retail workflows, UI, or advanced stock/accounting integration |
-| Notification system | Partial | In-app notifications, preferences, delivery logs, and provider-backed email/SMS/WhatsApp adapters now exist; retries, queues, and richer template management are still missing |
-| Government compliance / digital invoicing / tax | Partial | Station invoice branding, flexible tax labels, and basic PDF financial documents now exist, but compliance-grade e-invoicing, tax rules, and regulatory workflows are still missing |
+| Notification system | Partial | In-app notifications, preferences, delivery logs, retry state, and provider-backed email/SMS/WhatsApp adapters now exist; richer provider operations and broader delivery governance still remain |
+| Government compliance / digital invoicing / tax | Partial | Station invoice branding, policy controls, document templates, PDF financial documents, and tax-aware sale invoices now exist, but compliance-grade e-invoicing, tax rules, and regulatory workflows are still missing |
 | Desktop application | Missing | No Windows application in this repo |
 | Android mobile application | Missing | No mobile app in this repo |
 | Offline-first local operation | Missing | SQLite exists, but not as a designed offline-sync architecture |
 | Synchronization engine | Missing | No sync jobs, queue, conflict resolution, or local/cloud reconciliation |
-| Hardware integration | Partial | Hardware device registry, event logging, and simulated dispenser/tank-probe ingestion exist; no real vendor adapters yet |
-| SaaS subscription platform | Missing | No tenant onboarding, subscription billing, or customer management portal |
-| Monitoring / observability | Partial | Structured logging, request IDs, centralized error handling, and health checks exist; no alerts or ops dashboard |
+| Hardware integration | Partial | Hardware device registry, event logging, simulated ingestion, vendor-aware adapter scaffolding, and vendor polling paths now exist; production live integrations still need vendor-specific rollout work |
+| SaaS subscription platform | Partial | SaaS foundation, plans, subscriptions, and organization-level module toggles now exist, but onboarding, hosted billing, and customer-facing portal flows are still missing |
+| Monitoring / observability | Partial | Structured logging, request IDs, centralized error handling, health checks, and local maintenance tooling exist; no alerts or ops dashboard |
 
 ## What The Codebase Is Ignoring Today
 
@@ -136,7 +142,7 @@ Missing pieces include:
 
 ### 3. Hardware integration
 
-The DOCX repeatedly treats dispenser, tank probe, printer, and device integration as major project phases. The codebase now has a hardware foundation, but still not true live integration.
+The DOCX repeatedly treats dispenser, tank probe, printer, and device integration as major project phases. The codebase now has a real backend integration layer, but it still stops short of production live hardware rollout.
 
 ### 4. Security depth
 
@@ -148,7 +154,7 @@ The DOCX expects:
 - session control
 - detailed permissions
 
-The current implementation is now well beyond the early RBAC foundation, but it still lacks the full security depth expected by the DOCX.
+The current implementation is now well beyond the early RBAC foundation, and now includes session control too, but it still lacks the full security depth expected by the DOCX.
 
 ### 5. Notification and document delivery depth
 
@@ -159,22 +165,26 @@ The codebase now has:
 - delivery logs
 - station-branded financial documents
 
-What is still missing is the deeper outbound delivery infrastructure around what now exists:
+What is still missing is the deeper outbound delivery and compliance infrastructure around what now exists:
 
-- retries and backoff
-- queueing
-- template management
-- compliance-ready tax/e-invoice outputs beyond the current basic PDF renderer
+- stronger background delivery orchestration beyond the local worker
+- richer provider monitoring, replay, and operational controls
+- compliance-ready tax/e-invoice outputs beyond the current PDF/document layer
 
 ### 6. Commercial SaaS features
 
-The DOCX goes beyond operations and aims for a subscription SaaS business. None of the following exist yet:
+The DOCX goes beyond operations and aims for a subscription SaaS business. Some groundwork now exists:
 
-- tenant model
-- subscription plans
-- billing
-- onboarding
-- tenant provisioning
+- organization-level subscription plans
+- organization subscriptions
+- organization module toggles
+- online API hook records for future hosted integration
+
+What is still missing:
+
+- customer onboarding flows
+- real billing collection
+- tenant provisioning automation
 - deployment isolation strategy
 
 ## What Is Wrong or Misaligned
@@ -183,9 +193,9 @@ The DOCX goes beyond operations and aims for a subscription SaaS business. None 
 
 The document reads like a full product roadmap, but the repository currently holds only one backend service. That is fine for an MVP, but it needs explicit phase boundaries.
 
-### 2. The service layer is only partially established
+### 2. The service layer is now meaningful, but still evolving
 
-The project now has meaningful services for major workflows, but the architecture is still mixed between route-layer decisions and service-layer business rules. If the project is going to grow toward desktop/mobile/offline/hardware/SaaS, more of the domain logic should keep moving into service/domain modules.
+The project now has clear services for major workflows, but there are still some route-level orchestration decisions mixed into the API layer. If the project is going to grow toward desktop/mobile/offline/hardware/SaaS, more of the domain logic should keep moving into service/domain modules.
 
 ### 3. The data model is still pilot-grade, but less so than before
 
@@ -227,8 +237,8 @@ Includes:
 
 Current assessment:
 
-- largely complete
-- now also includes notification/event foundations, PDF-capable financial documents, and meter-adjustment support
+- complete in practical backend terms
+- now also includes notification/event foundations, PDF-capable financial documents, meter-adjustment support, and tanker/POS foundations
 
 ### Phase 2: Operational Hardening
 
@@ -248,8 +258,8 @@ Includes:
 
 Current assessment:
 
-- in active progress
-- audit logs, structured logging, permissions, migrations, approval workflows, notifications, exports, and branded financial documents are now already in place
+- largely complete for a strong local-first backend foundation
+- audit logs, structured logging, permissions, migrations, approval workflows, notifications, exports, branded financial documents, retry processing, and maintenance tooling are now already in place
 
 ### Phase 3: Multi-Station and Head Office
 
@@ -266,8 +276,8 @@ Includes:
 
 Current assessment:
 
-- early implementation started
-- organization model, head-office role behavior, and organization-aware dashboards/reports are now present
+- in progress
+- organization model, head-office role behavior, organization-aware dashboards/reports, SaaS foundation records, and online API hook scaffolding are now present
 
 ### Phase 4: Desktop Operations App + Offline Sync
 
@@ -323,9 +333,9 @@ Includes:
 
 If we classify the project today against that roadmap:
 
-- Phase 1: **mostly complete**
-- Phase 2: **in progress**
-- Phase 3: **early implementation**
+- Phase 1: **complete in practical backend terms**
+- Phase 2: **complete in practical backend terms**
+- Phase 3: **in progress**
 - Phase 4: **not started**
 - Phase 5: **foundational backend work only**
 - Phase 6: **not started**
@@ -524,16 +534,15 @@ If the goal is to build this professionally, the next milestones should be:
 
 These are the best next engineering tasks for the current repo:
 
-1. Add environment-based config and remove hardcoded secrets
-2. Complete the remaining authorization consistency audit
-3. Continue extracting mixed route/service logic into clearer domain services
-4. Expand automated API tests for deeper approval, reporting, and migration flows
+1. Finalize production-readiness guidance, deployment boundaries, and operational docs
+2. Expand compliance policy into more jurisdiction-ready tax and e-invoice workflows
+3. Continue hardening production-like operations around delivery workers, provider monitoring, and backups
+4. Expand automated tests for migration smoke, reconciliation edge cases, and provider-facing workflows
 5. Define the next missing domain entities and workflows:
-   - delivery queue / retry state
-   - compliance-grade invoice/e-invoice generation beyond the current PDF layer
-   - offline/sync state
-   - broader tenant/subscription entities
-6. Write a formal Phase 3 scope document so the project stops drifting against the much larger DOCX vision
+   - real hosted billing flows on top of the SaaS foundation
+   - desktop/offline boundary if hybrid deployment is still desired later
+   - broader tenant provisioning and commercialization flows
+6. Write a formal hosted-deployment scope so the project stops drifting between local-first and full SaaS expectations
 
 ## Final Assessment
 
@@ -543,7 +552,7 @@ The problem is that the codebase is currently much smaller than that vision and 
 
 The correct framing is:
 
-- **Current reality:** hardened backend pilot with head-office, hardware/POS, notifications, branded PDF-capable financial documents, and governance foundations
-- **Immediate target:** finish the remaining operational hardening plus delivery queue/compliance-grade document gaps
-- **Next expansion:** stronger centralized operations, desktop/offline architecture, and true external integrations
-- **Later product layers:** desktop, offline sync, hardware, mobile, SaaS
+- **Current reality:** hardened local-first backend with head-office, hardware/POS foundations, tanker operations, notifications, branded PDF-capable financial documents, SaaS scaffolding, and governance controls
+- **Immediate target:** finish the remaining production-readiness, commercial rollout, and deployment-depth gaps
+- **Next expansion:** stronger centralized operations, hosted rollout controls, and true external integrations
+- **Later product layers:** desktop, offline sync if still needed, mobile, and commercial SaaS growth

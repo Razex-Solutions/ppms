@@ -18,11 +18,14 @@ from app.schemas.financial_document import (
     FinancialDocumentResponse,
 )
 from app.services.financial_documents import (
+    document_dispatch_diagnostics,
     dispatch_document,
+    list_document_dispatches_filtered,
     process_due_financial_document_dispatches,
     render_document_pdf_bytes,
     render_customer_ledger_statement,
     render_customer_payment_receipt,
+    render_fuel_sale_einvoice_xml,
     render_fuel_sale_invoice,
     render_supplier_ledger_statement,
     render_supplier_payment_voucher,
@@ -65,6 +68,42 @@ def get_fuel_sale_invoice(
     if not sale:
         raise HTTPException(status_code=404, detail="Fuel sale not found")
     return render_fuel_sale_invoice(db, sale, current_user)
+
+
+@router.get("/fuel-sales/{sale_id}/einvoice")
+def get_fuel_sale_einvoice_payload(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view financial documents")
+    sale = db.query(FuelSale).filter(FuelSale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Fuel sale not found")
+    document = render_fuel_sale_invoice(db, sale, current_user)
+    return {
+        "document_number": document.document_number,
+        "compliance_context": document.compliance_context,
+        "payload": document.machine_payload,
+    }
+
+
+@router.get("/fuel-sales/{sale_id}/einvoice.xml")
+def download_fuel_sale_einvoice_xml(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view financial documents")
+    sale = db.query(FuelSale).filter(FuelSale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Fuel sale not found")
+    xml_content = render_fuel_sale_einvoice_xml(db, sale, current_user)
+    return Response(
+        content=xml_content,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="fuel_sale_{sale_id}_einvoice.xml"'},
+    )
 
 
 @router.get("/fuel-sales/{sale_id}/pdf")
@@ -310,20 +349,48 @@ def send_supplier_ledger_document(
 
 @router.get("/dispatches", response_model=list[FinancialDocumentDispatchResponse])
 def list_document_dispatches(
+    status: str | None = Query(None),
+    channel: str | None = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "reports", "read", detail="You do not have permission to view financial document dispatches")
-    query = db.query(FinancialDocumentDispatch)
-    if current_user.role.name == "Admin":
-        pass
-    elif current_user.role.name == "HeadOffice":
-        query = query.join(Station, Station.id == FinancialDocumentDispatch.station_id).filter(Station.organization_id == current_user.station.organization_id)
-    else:
-        query = query.filter(FinancialDocumentDispatch.station_id == current_user.station_id)
-    return query.order_by(FinancialDocumentDispatch.created_at.desc()).offset(skip).limit(limit).all()
+    return list_document_dispatches_filtered(
+        db,
+        current_user=current_user,
+        skip=skip,
+        limit=limit,
+        status=status,
+        channel=channel,
+    )
+
+
+@router.get("/dispatches/dead-letter", response_model=list[FinancialDocumentDispatchResponse])
+def list_dead_letter_document_dispatches(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view financial document dispatches")
+    return list_document_dispatches_filtered(
+        db,
+        current_user=current_user,
+        skip=skip,
+        limit=limit,
+        status="failed",
+    )
+
+
+@router.get("/dispatches/diagnostics")
+def get_document_dispatch_diagnostics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view financial document dispatch diagnostics")
+    return document_dispatch_diagnostics(db, current_user=current_user)
 
 
 @router.post("/dispatches/process-due")

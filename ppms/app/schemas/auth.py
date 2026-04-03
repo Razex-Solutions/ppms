@@ -15,15 +15,31 @@ class AdminResetPasswordRequest(BaseModel):
     new_password: str
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 class PasswordActionResponse(BaseModel):
     message: str
 
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user_id: int
     username: str
     full_name: str
     role_id: int
     station_id: int | None = None
+
+
+class SessionResponse(BaseModel):
+    id: int
+    is_active: bool
+    created_at: str
+    expires_at: str
+    revoked_at: str | None = None
+    last_seen_at: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None

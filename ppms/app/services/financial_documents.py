@@ -19,7 +19,10 @@ from app.services.audit import log_audit_event
 from app.services.compliance import (
     build_document_number,
     build_numbered_suffix,
+    build_fuel_sale_einvoice_payload,
+    build_fuel_sale_einvoice_xml,
     calculate_tax_breakdown,
+    get_document_policy_context,
     get_business_display_name,
     get_tax_label,
 )
@@ -304,6 +307,16 @@ def render_fuel_sale_invoice(db: Session, sale: FuelSale, current_user: User | N
     payment_terms = profile.payment_terms if profile and profile.payment_terms else "Payment due as per station policy."
     notes = profile.sale_invoice_notes if profile and profile.sale_invoice_notes else ""
     document_number = build_document_number(profile, build_numbered_suffix(profile, "FS", sale.id))
+    compliance_context = get_document_policy_context(profile)
+    machine_payload = build_fuel_sale_einvoice_payload(
+        profile=profile,
+        station=station,
+        sale=sale,
+        subtotal=subtotal,
+        tax_amount=tax_amount,
+        total_amount=grand_total,
+        document_number=document_number,
+    )
     context = {
         "business_name": profile.business_name if profile else station.name,
         "legal_name": get_business_display_name(profile, station),
@@ -360,7 +373,14 @@ def render_fuel_sale_invoice(db: Session, sale: FuelSale, current_user: User | N
         balance=round(sale.customer.outstanding_balance, 2) if sale.customer else None,
         generated_at=utc_now(),
         rendered_html=rendered_html,
+        compliance_context=compliance_context,
+        machine_payload=machine_payload,
     )
+
+
+def render_fuel_sale_einvoice_xml(db: Session, sale: FuelSale, current_user: User | None = None) -> str:
+    document = render_fuel_sale_invoice(db, sale, current_user)
+    return build_fuel_sale_einvoice_xml(document.machine_payload or {})
 
 
 def dispatch_document(
@@ -564,3 +584,43 @@ def process_due_financial_document_dispatches(db: Session, *, limit: int = 100) 
         processed += 1
     db.commit()
     return {"processed": processed}
+
+
+def list_document_dispatches_filtered(
+    db: Session,
+    *,
+    current_user: User,
+    skip: int = 0,
+    limit: int = 50,
+    status: str | None = None,
+    channel: str | None = None,
+) -> list[FinancialDocumentDispatch]:
+    query = db.query(FinancialDocumentDispatch)
+    if current_user.role.name == "Admin":
+        pass
+    elif current_user.role.name == "HeadOffice":
+        query = query.join(Station, Station.id == FinancialDocumentDispatch.station_id).filter(
+            Station.organization_id == current_user.station.organization_id
+        )
+    else:
+        query = query.filter(FinancialDocumentDispatch.station_id == current_user.station_id)
+    if status:
+        query = query.filter(FinancialDocumentDispatch.status == status)
+    if channel:
+        query = query.filter(FinancialDocumentDispatch.channel == channel)
+    return query.order_by(FinancialDocumentDispatch.created_at.desc()).offset(skip).limit(limit).all()
+
+
+def document_dispatch_diagnostics(db: Session, *, current_user: User) -> dict:
+    dispatches = list_document_dispatches_filtered(db, current_user=current_user, skip=0, limit=5000)
+    by_status: dict[str, int] = {}
+    by_channel: dict[str, int] = {}
+    for dispatch in dispatches:
+        by_status[dispatch.status] = by_status.get(dispatch.status, 0) + 1
+        by_channel[dispatch.channel] = by_channel.get(dispatch.channel, 0) + 1
+    return {
+        "total": len(dispatches),
+        "dead_letter": sum(1 for dispatch in dispatches if dispatch.status == "failed"),
+        "by_status": by_status,
+        "by_channel": by_channel,
+    }

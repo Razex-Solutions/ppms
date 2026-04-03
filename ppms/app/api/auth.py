@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.access import require_admin
 from app.core.database import get_db
-from app.core.security import verify_password, create_access_token, hash_password
+from app.core.permissions import ROLE_CAPABILITY_SUMMARY, get_effective_permissions
+from app.core.security import verify_password, create_access_token, decode_token, hash_password
 from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
@@ -11,17 +12,33 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     LoginRequest,
     PasswordActionResponse,
+    RefreshTokenRequest,
+    SessionResponse,
     TokenResponse,
 )
 from app.services.audit import log_audit_event
+from app.services.auth_sessions import (
+    create_user_session,
+    ensure_account_not_locked,
+    get_active_session,
+    list_user_sessions,
+    record_failed_login,
+    refresh_user_session,
+    reset_login_failures,
+    revoke_session,
+    revoke_user_sessions,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+def login(credentials: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == credentials.username).first()
+    if user:
+        ensure_account_not_locked(user)
     if not user or not verify_password(credentials.password, user.hashed_password):
+        record_failed_login(db, user)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
@@ -29,18 +46,27 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
 
-    token = create_access_token({"sub": str(user.id)})
+    reset_login_failures(user)
+    session, refresh_token = create_user_session(
+        db,
+        user=user,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    token = create_access_token({"sub": str(user.id), "sid": session.id})
     log_audit_event(
         db,
         current_user=user,
         module="auth",
         action="auth.login",
         entity_type="session",
+        entity_id=session.id,
         station_id=user.station_id,
     )
     db.commit()
     return TokenResponse(
         access_token=token,
+        refresh_token=refresh_token,
         user_id=user.id,
         username=user.username,
         full_name=user.full_name,
@@ -58,9 +84,114 @@ def get_me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "is_active": current_user.is_active,
         "role_id": current_user.role_id,
+        "role_name": current_user.role.name,
         "station_id": current_user.station_id,
         "organization_id": current_user.station.organization_id if current_user.station else None,
+        "role_summary": ROLE_CAPABILITY_SUMMARY.get(current_user.role.name),
+        "permissions": get_effective_permissions(current_user),
     }
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh_auth_token(payload: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
+    session, user, refresh_token = refresh_user_session(
+        db,
+        refresh_token=payload.refresh_token,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    access_token = create_access_token({"sub": str(user.id), "sid": session.id})
+    log_audit_event(
+        db,
+        current_user=user,
+        module="auth",
+        action="auth.refresh",
+        entity_type="session",
+        entity_id=session.id,
+        station_id=user.station_id,
+    )
+    db.commit()
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user_id=user.id,
+        username=user.username,
+        full_name=user.full_name,
+        role_id=user.role_id,
+        station_id=user.station_id,
+    )
+
+
+@router.get("/sessions", response_model=list[SessionResponse])
+def get_my_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sessions = list_user_sessions(db, user=current_user)
+    return [
+        SessionResponse(
+            id=session.id,
+            is_active=session.is_active,
+            created_at=session.created_at.isoformat(),
+            expires_at=session.expires_at.isoformat(),
+            revoked_at=session.revoked_at.isoformat() if session.revoked_at else None,
+            last_seen_at=session.last_seen_at.isoformat() if session.last_seen_at else None,
+            ip_address=session.ip_address,
+            user_agent=session.user_agent,
+        )
+        for session in sessions
+    ]
+
+
+@router.post("/logout", response_model=PasswordActionResponse)
+def logout(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "", 1).strip()
+    payload = decode_token(token) if token else None
+    session = None
+    if payload and payload.get("sid"):
+        session = get_active_session(db, int(payload["sid"]))
+    if session:
+        revoke_session(session)
+        log_audit_event(
+            db,
+            current_user=current_user,
+            module="auth",
+            action="auth.logout",
+            entity_type="session",
+            entity_id=session.id,
+            station_id=current_user.station_id,
+        )
+        db.commit()
+    return PasswordActionResponse(message="Logged out successfully")
+
+
+@router.post("/logout-all", response_model=PasswordActionResponse)
+def logout_all(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "", 1).strip()
+    payload = decode_token(token) if token else None
+    current_session_id = int(payload["sid"]) if payload and payload.get("sid") else None
+    revoked_count = revoke_user_sessions(db, user=current_user, except_session_id=current_session_id)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="auth",
+        action="auth.logout_all",
+        entity_type="session",
+        station_id=current_user.station_id,
+        details={"revoked_sessions": revoked_count},
+    )
+    db.commit()
+    return PasswordActionResponse(message="Other sessions logged out successfully")
 
 
 @router.post("/change-password", response_model=PasswordActionResponse)
@@ -78,6 +209,7 @@ def change_password(
         current_user.hashed_password = hash_password(payload.new_password)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    revoke_user_sessions(db, user=current_user)
 
     log_audit_event(
         db,
@@ -108,6 +240,7 @@ def admin_reset_password(
         user.hashed_password = hash_password(payload.new_password)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    revoke_user_sessions(db, user=user)
 
     log_audit_event(
         db,

@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from pathlib import Path
 
 from app.core.database import Base, get_db
 from app.main import create_app
@@ -781,6 +782,10 @@ def test_notification_preferences_and_financial_documents(client):
     assert pref_response.status_code == 200, pref_response.text
     assert pref_response.json()["email_enabled"] is True
 
+    preset_list = test_client.get("/invoice-profiles/compliance-presets", headers=manager_headers)
+    assert preset_list.status_code == 200, preset_list.text
+    assert any(item["code"] == "PK-DEFAULT" for item in preset_list.json()["items"])
+
     profile_response = test_client.put(
         f"/invoice-profiles/{data['station_a_id']}",
         headers=manager_headers,
@@ -808,6 +813,46 @@ def test_notification_preferences_and_financial_documents(client):
     )
     assert profile_response.status_code == 200, profile_response.text
     assert profile_response.json()["invoice_prefix"] == "MPP"
+
+    preset_apply = test_client.post(
+        f"/invoice-profiles/{data['station_a_id']}/apply-preset",
+        headers=manager_headers,
+        params={"preset_code": "PK-DEFAULT"},
+    )
+    assert preset_apply.status_code == 200, preset_apply.text
+    assert preset_apply.json()["compliance_mode"] == "regional_strict"
+    assert preset_apply.json()["currency_code"] == "PKR"
+
+    invalid_profile_response = test_client.put(
+        f"/invoice-profiles/{data['station_a_id']}",
+        headers=manager_headers,
+        json={
+            "business_name": "Strict Pump",
+            "legal_name": None,
+            "logo_url": None,
+            "registration_no": None,
+            "tax_registration_no": "GST-7788",
+            "tax_label_1": "GST",
+            "tax_value_1": None,
+            "tax_label_2": None,
+            "tax_value_2": None,
+            "default_tax_rate": 18,
+            "tax_inclusive": False,
+            "region_code": "PK",
+            "currency_code": "PKR",
+            "compliance_mode": "regional_strict",
+            "enforce_tax_registration": True,
+            "contact_email": None,
+            "contact_phone": None,
+            "footer_text": None,
+            "invoice_prefix": "SP",
+            "invoice_series": None,
+            "invoice_number_width": 6,
+            "payment_terms": None,
+            "sale_invoice_notes": None,
+        },
+    )
+    assert invalid_profile_response.status_code == 400
 
     db = session_local()
     try:
@@ -893,6 +938,25 @@ def test_notification_preferences_and_financial_documents(client):
     assert "GST" in sale_invoice.json()["rendered_html"] or "NTN" in sale_invoice.json()["rendered_html"]
     assert "Payment due within 7 days" in sale_invoice.json()["rendered_html"]
     assert "Total: 94.40" in sale_invoice.json()["rendered_html"]
+    assert sale_invoice.json()["compliance_context"]["currency_code"] == "PKR"
+    assert sale_invoice.json()["machine_payload"]["schema_version"] == "ppms.einvoice.v1"
+
+    sale_einvoice_payload = test_client.get(
+        f"/financial-documents/fuel-sales/{fuel_sale_id}/einvoice",
+        headers=accountant_headers,
+    )
+    assert sale_einvoice_payload.status_code == 200, sale_einvoice_payload.text
+    assert sale_einvoice_payload.json()["payload"]["seller"]["region_code"] == "PK"
+    assert sale_einvoice_payload.json()["payload"]["totals"]["grand_total"] == 94.4
+
+    sale_einvoice_xml = test_client.get(
+        f"/financial-documents/fuel-sales/{fuel_sale_id}/einvoice.xml",
+        headers=accountant_headers,
+    )
+    assert sale_einvoice_xml.status_code == 200, sale_einvoice_xml.text
+    assert sale_einvoice_xml.headers["content-type"].startswith("application/xml")
+    assert "PPMSEInvoice" in sale_einvoice_xml.text
+    assert "Fuel Sale Invoice" not in sale_einvoice_xml.text
 
     customer_receipt_pdf = test_client.get(
         f"/financial-documents/customer-payments/{customer_payment_id}/pdf",
@@ -1183,6 +1247,149 @@ def test_process_due_financial_document_dispatches_endpoint(client, monkeypatch)
     assert refreshed_dispatch["attempts_count"] == 2
 
 
+def test_online_api_hooks_support_catalog_diagnostics_and_inbound_capture(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    catalog_response = test_client.get("/online-api-hooks/event-types", headers=head_office_headers)
+    assert catalog_response.status_code == 200, catalog_response.text
+    assert "report_export.completed" in catalog_response.json()["items"]
+
+    hook_response = test_client.post(
+        f"/online-api-hooks/{data['organization_id']}",
+        headers=head_office_headers,
+        json={
+            "name": "erp-feed",
+            "event_type": "report_export.completed",
+            "target_url": "https://example.com/hooks/report-export",
+            "auth_type": "hmac_sha256",
+            "secret_key": "shared-secret",
+            "is_active": True,
+        },
+    )
+    assert hook_response.status_code == 200, hook_response.text
+    hook_id = hook_response.json()["id"]
+    assert hook_response.json()["signature_header"] == "X-PPMS-Signature"
+
+    ping_response = test_client.post(
+        f"/online-api-hooks/item/{hook_id}/ping",
+        headers=head_office_headers,
+        json={"payload": {"event": "report_export.completed", "job_id": 1}},
+    )
+    assert ping_response.status_code == 200, ping_response.text
+    assert ping_response.json()["status"] == "sent"
+
+    inbound_rejected = test_client.post(
+        f"/online-api-hooks/inbound/{data['organization_id']}/erp-feed",
+        headers={"X-PPMS-Event-Type": "report_export.completed", "X-PPMS-Signature": "sha256=bad"},
+        json={"event_type": "report_export.completed", "job_id": 2},
+    )
+    assert inbound_rejected.status_code == 401
+
+    inbound_accepted = test_client.post(
+        f"/online-api-hooks/inbound/{data['organization_id']}/erp-feed",
+        headers={"X-PPMS-Event-Type": "report_export.completed", "X-PPMS-Integration-Key": "shared-secret"},
+        json={"event_type": "report_export.completed", "job_id": 3},
+    )
+    assert inbound_accepted.status_code == 200, inbound_accepted.text
+
+    inbound_list = test_client.get(
+        f"/online-api-hooks/{data['organization_id']}/inbound-events",
+        headers=head_office_headers,
+    )
+    assert inbound_list.status_code == 200, inbound_list.text
+    assert len(inbound_list.json()) >= 2
+    assert any(item["status"] == "received" for item in inbound_list.json())
+    assert any(item["status"] == "rejected" for item in inbound_list.json())
+
+    diagnostics_response = test_client.get(
+        f"/online-api-hooks/{data['organization_id']}/diagnostics",
+        headers=head_office_headers,
+    )
+    assert diagnostics_response.status_code == 200, diagnostics_response.text
+    assert diagnostics_response.json()["hook_count"] >= 1
+    assert diagnostics_response.json()["inbound_event_count"] >= 2
+
+
+def test_delivery_dead_letter_and_diagnostics_views(client, monkeypatch):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    accountant_headers = login(test_client, "accountant", "accountant123")
+
+    pref_response = test_client.put(
+        "/notifications/preferences/report_export.completed",
+        headers=accountant_headers,
+        json={
+            "event_type": "report_export.completed",
+            "in_app_enabled": True,
+            "email_enabled": True,
+            "sms_enabled": False,
+            "whatsapp_enabled": False,
+        },
+    )
+    assert pref_response.status_code == 200, pref_response.text
+
+    monkeypatch.setattr("app.services.notifications.deliver_email", lambda **kwargs: ("failed", "smtp unavailable"))
+    monkeypatch.setattr("app.services.financial_documents.deliver_email", lambda **kwargs: ("failed", "mail unavailable"))
+    monkeypatch.setattr("app.services.notifications.should_retry", lambda status, attempts: False)
+    monkeypatch.setattr("app.services.financial_documents.should_retry", lambda status, attempts: False)
+
+    export_response = test_client.post(
+        "/report-exports/",
+        headers=accountant_headers,
+        json={"report_type": "customer_balances", "format": "csv"},
+    )
+    assert export_response.status_code == 200, export_response.text
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+
+        customer = db.query(Customer).filter(Customer.id == data["customer_id"]).first()
+        customer.outstanding_balance = 100
+        db.commit()
+    finally:
+        db.close()
+
+    customer_payment = test_client.post(
+        "/customer-payments/",
+        headers=accountant_headers,
+        json={
+            "customer_id": data["customer_id"],
+            "station_id": data["station_a_id"],
+            "amount": 20,
+            "payment_method": "cash",
+            "reference_no": "DL-1",
+        },
+    )
+    assert customer_payment.status_code == 200, customer_payment.text
+
+    dispatch_response = test_client.post(
+        f"/financial-documents/customer-payments/{customer_payment.json()['id']}/send",
+        headers=accountant_headers,
+        json={"channel": "email", "format": "pdf"},
+    )
+    assert dispatch_response.status_code == 200, dispatch_response.text
+    assert dispatch_response.json()["status"] == "failed"
+
+    notification_dead_letter = test_client.get("/notifications/deliveries/dead-letter", headers=accountant_headers)
+    assert notification_dead_letter.status_code == 200, notification_dead_letter.text
+    assert any(item["status"] == "failed" for item in notification_dead_letter.json())
+
+    notification_diag = test_client.get("/notifications/deliveries/diagnostics", headers=accountant_headers)
+    assert notification_diag.status_code == 200, notification_diag.text
+    assert notification_diag.json()["dead_letter"] >= 1
+
+    document_dead_letter = test_client.get("/financial-documents/dispatches/dead-letter", headers=accountant_headers)
+    assert document_dead_letter.status_code == 200, document_dead_letter.text
+    assert any(item["status"] == "failed" for item in document_dead_letter.json())
+
+    document_diag = test_client.get("/financial-documents/dispatches/diagnostics", headers=accountant_headers)
+    assert document_diag.status_code == 200, document_diag.text
+    assert document_diag.json()["dead_letter"] >= 1
+
+
 def test_unhandled_exceptions_are_sanitized_and_traced(tmp_path):
     db_path = tmp_path / "error_test.db"
     engine = create_engine(
@@ -1215,3 +1422,86 @@ def test_unhandled_exceptions_are_sanitized_and_traced(tmp_path):
         assert response.json()["request_id"] == response.headers["X-Request-ID"]
 
     error_app.dependency_overrides.clear()
+
+
+def test_maintenance_snapshot_backup_restore_and_integrity(client, monkeypatch):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+
+    db = session_local()
+    db_path = Path(db.bind.url.database).resolve()
+    db.close()
+    backup_dir = db_path.parent / "ops_backups"
+
+    monkeypatch.setattr("app.services.maintenance.DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr("app.services.maintenance.BACKUP_DIRECTORY", str(backup_dir))
+    monkeypatch.setattr("app.services.maintenance.BACKUP_RETENTION_COUNT", 5)
+    monkeypatch.setattr("app.main.DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr("app.main.BACKUP_DIRECTORY", str(backup_dir))
+
+    snapshot_response = test_client.get("/maintenance/snapshot", headers=admin_headers)
+    assert snapshot_response.status_code == 200, snapshot_response.text
+    assert snapshot_response.json()["database_exists"] is True
+    assert snapshot_response.json()["database_integrity"]["status"] == "ok"
+
+    backup_response = test_client.post("/maintenance/backup", headers=admin_headers)
+    assert backup_response.status_code == 200, backup_response.text
+    backup_name = Path(backup_response.json()["backup_path"]).name
+
+    integrity_response = test_client.get("/maintenance/integrity", headers=admin_headers)
+    assert integrity_response.status_code == 200, integrity_response.text
+    assert integrity_response.json()["status"] == "ok"
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+
+        extra_customer = Customer(
+            name="Restore Candidate",
+            code="RESTORE-1",
+            customer_type="company",
+            phone="000",
+            address="Restore Lane",
+            credit_limit=100,
+            outstanding_balance=0,
+            station_id=data["station_a_id"],
+        )
+        db.add(extra_customer)
+        db.commit()
+    finally:
+        db.close()
+
+    restore_response = test_client.post(
+        "/maintenance/restore",
+        headers=admin_headers,
+        json={"backup_name": backup_name},
+    )
+    assert restore_response.status_code == 200, restore_response.text
+
+    db = session_local()
+    try:
+        from app.models.customer import Customer
+
+        restored_customer = db.query(Customer).filter(Customer.code == "RESTORE-1").first()
+        assert restored_customer is None
+    finally:
+        db.close()
+
+
+def test_non_admin_cannot_use_maintenance_endpoints(client, monkeypatch):
+    test_client, session_local = client
+    seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+
+    db = session_local()
+    db_path = Path(db.bind.url.database).resolve()
+    db.close()
+    backup_dir = db_path.parent / "ops_backups_forbidden"
+
+    monkeypatch.setattr("app.services.maintenance.DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr("app.services.maintenance.BACKUP_DIRECTORY", str(backup_dir))
+
+    assert test_client.get("/maintenance/snapshot", headers=manager_headers).status_code == 403
+    assert test_client.get("/maintenance/integrity", headers=manager_headers).status_code == 403
+    assert test_client.post("/maintenance/backup", headers=manager_headers).status_code == 403

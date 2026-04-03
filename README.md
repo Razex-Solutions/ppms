@@ -25,6 +25,7 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
 ### Core Modules
 - **Authentication**: JWT-based login, role management (Admin, Manager, Operator, Accountant), and station assignment.
   - Password management includes self-service password change and admin password reset endpoints.
+  - Session hardening now includes refresh tokens, logout/revocation, session visibility, and temporary account lockout after repeated failed logins.
 - **Shift Management**: Tracking employee shifts, including initial cash, sales, and end-of-shift cash reconciliation with difference detection.
 - **Sales**: Management of fuel sales (cash/credit), automatic meter reading updates, and nozzle history.
 - **Inventory & Assets**: 
@@ -34,6 +35,7 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
 - **Operations**:
   - **Nozzle Readings**: Shift-wise tracking of start and end meter readings.
   - **Tank Dips**: Manual stick readings (mm) with automated volume calculation and loss/gain (evaporation/leakage) analysis.
+  - **Attendance & Payroll**: Attendance check-in/out, manual attendance correction, payroll run generation, and payroll finalization.
   - **Hardware Module**: Registry and event logging for dispenser and tank-probe devices, including safe simulator endpoints for backend testing.
 - **Accounting & Financials**:
   - **Ledgers**: Detailed customer and supplier ledgers with running balances.
@@ -88,12 +90,17 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
     pip install -r requirements.txt
     ```
 
-4.  **Run database migrations**:
+4.  **Create local environment config**:
+    ```bash
+    copy .env.example .env
+    ```
+
+5.  **Run database migrations**:
     ```bash
     venv\Scripts\python.exe -m alembic upgrade head
     ```
 
-5.  **Initialize seed data**:
+6.  **Initialize seed data**:
     Run the seeding script to create the initial roles, default organization, head-office station, and admin user.
     ```bash
     cd ppms
@@ -115,6 +122,30 @@ The API will be available at `http://127.0.0.1:8000`.
 - **Interactive Documentation (Swagger UI)**: `http://127.0.0.1:8000/docs`
 - **Alternative Documentation (Redoc)**: `http://127.0.0.1:8000/redoc`
 
+## Desktop Client Foundation
+
+- The repository now includes a Windows-friendly desktop foundation in [desktop_app](/C:/Fuel%20Management%20System/desktop_app).
+- It is a lightweight Tkinter client that talks to the existing backend instead of duplicating business logic locally.
+- Current desktop foundation includes:
+  - backend URL login screen
+  - authenticated session handling with refresh-aware API calls
+  - module-aware navigation based on backend permissions
+  - live dashboard loading
+  - session visibility screen
+  - placeholders for sales, inventory, reports, attendance, payroll, notifications, and settings
+
+Run it with:
+
+```bash
+venv\Scripts\python.exe main.py
+```
+
+Or:
+
+```bash
+venv\Scripts\python.exe -m desktop_app.main
+```
+
 ## Scripts
 
 -   **`ppms/seed.py`**: Initializes the database with default roles, a head office station, and a system administrator account.
@@ -130,11 +161,19 @@ The application uses `ppms/app/core/config.py` for configuration.
   - To use a different database, set the environment variable before running Alembic or the app.
 - **SECRET_KEY**: JWT signing secret for authentication tokens.
 - **ACCESS_TOKEN_EXPIRE_MINUTES**: Token lifetime in minutes.
+- **REFRESH_TOKEN_EXPIRE_DAYS**: Refresh-session lifetime in days.
+- **MAX_FAILED_LOGIN_ATTEMPTS**: Failed login threshold before temporary lockout.
+- **ACCOUNT_LOCK_MINUTES**: Temporary lockout duration after repeated failed logins.
 - **ENABLED_MODULES**: Comma-separated module list to enable selected backend areas for testing.
   - Default: `*`
   - Example: `ENABLED_MODULES=auth,customers,expenses,hardware`
 - **APP_ENV**: Runtime environment label used in health output and structured logs.
 - **LOG_LEVEL**: Logging verbosity for structured app logs.
+- **BACKUP_DIRECTORY**: Filesystem location used by local backup tooling under `/maintenance`.
+- **BACKUP_RETENTION_COUNT**: Maximum number of local backup files to keep before older snapshots are pruned.
+- **DELIVERY_WORKER_ENABLED**: Enables the in-process delivery retry worker for local/background processing.
+- **ONLINE_HOOKS_MODE**: Keeps online API hooks in safe local mock mode until real credentials and target URLs are available.
+- **HARDWARE_VENDOR_MODE**: Keeps vendor hardware adapters in safe mock mode until live endpoints and credentials are ready.
 
 ## Modular Testing
 
@@ -155,12 +194,58 @@ Use automated tests instead of hardcoded localhost verification scripts. The pro
 venv\Scripts\python.exe -m pytest tests
 ```
 
+## Maintenance Tooling
+
+- The backend now includes local-first maintenance helpers for snapshots and SQLite backups.
+- Endpoints:
+  - `GET /maintenance/snapshot`
+  - `POST /maintenance/backup`
+  - `GET /maintenance/backups`
+  - `GET /maintenance/integrity`
+  - `POST /maintenance/restore`
+- These helpers are intended for local and pilot deployments. For future online production use, keep the same API shape but move backups to managed infrastructure.
+
+## Attendance And Payroll
+
+- Attendance supports both self-service operational clocking and managed corrections.
+- Payroll runs are station-scoped and generated from attendance plus each employee's salary profile.
+- Attendance endpoints:
+  - `POST /attendance/check-in`
+  - `POST /attendance/{attendance_id}/check-out`
+  - `POST /attendance/`
+  - `GET /attendance/`
+  - `GET /attendance/{attendance_id}`
+  - `PUT /attendance/{attendance_id}`
+- Payroll endpoints:
+  - `POST /payroll/runs`
+  - `GET /payroll/runs`
+  - `GET /payroll/runs/{payroll_run_id}`
+  - `GET /payroll/runs/{payroll_run_id}/lines`
+  - `POST /payroll/runs/{payroll_run_id}/finalize`
+- Current payroll behavior:
+  - only payroll-enabled users are included
+  - attendance status affects payable days and payroll totals
+  - finalized payroll runs are locked for traceable approval flow
+
 ## Organization-Aware Access
 
 - `Admin` can read and manage all organizations, stations, users, and reports.
 - `HeadOffice` is a read-focused organization role. It can view stations, users, dashboards, and reports within its own organization.
 - `Manager`, `Operator`, and `Accountant` remain station-scoped for operational safety.
 - Report endpoints support `station_id` and `organization_id` filters, but non-admin users are automatically constrained to their allowed scope.
+- The backend now exposes an inspectable permission catalog for core roles, and the built-in system roles are treated as protected governance defaults.
+
+## Role Policy Catalog
+
+- Permission policy is still code-defined, but it is now explicit and queryable instead of hidden only inside the backend.
+- Endpoints:
+  - `GET /roles/permission-catalog`
+  - `GET /roles/permission-catalog/{role_name}`
+- `GET /auth/me` now also returns:
+  - `role_name`
+  - `role_summary`
+  - `permissions`
+- Core roles such as `Admin`, `HeadOffice`, `Manager`, `Operator`, and `Accountant` are protected from casual rename/delete operations.
 
 ## Expense Approval Workflow
 
@@ -284,6 +369,8 @@ venv\Scripts\python.exe -m pytest tests
   - `GET /notifications/preferences`
   - `PUT /notifications/preferences/{event_type}`
   - `GET /notifications/deliveries`
+  - `GET /notifications/deliveries/dead-letter`
+  - `GET /notifications/deliveries/diagnostics`
   - `POST /notifications/{id}/read`
   - `POST /notifications/read-all`
 
@@ -292,14 +379,43 @@ venv\Scripts\python.exe -m pytest tests
 - Each station can now maintain branding and invoice metadata used for generated financial documents.
 - Supported fields include:
   - business name
+  - legal name
   - logo URL
+  - registration number
   - NTN / GST or other custom tax labels
+  - region code
+  - currency code
+  - compliance mode
+  - tax-registration enforcement
   - contact email and phone
   - invoice prefix
+  - invoice series and numbering width
+  - payment terms
+  - sale invoice notes
   - footer text
+  - optional regional compliance presets
 - Endpoints:
+  - `GET /invoice-profiles/compliance-presets`
   - `GET /invoice-profiles/{station_id}`
   - `PUT /invoice-profiles/{station_id}`
+  - `POST /invoice-profiles/{station_id}/apply-preset?preset_code=...`
+
+## Document Templates
+
+- Stations can maintain reusable templates for:
+  - customer payment receipts
+  - supplier payment vouchers
+  - customer ledger statements
+  - supplier ledger statements
+  - fuel sale invoices
+- Default templates can be seeded per station, and templates support safe placeholder substitution plus previewing.
+- Endpoints:
+  - `GET /document-templates/{station_id}`
+  - `GET /document-templates/{station_id}/{document_type}`
+  - `PUT /document-templates/{station_id}/{document_type}`
+  - `POST /document-templates/{station_id}/seed-defaults`
+  - `GET /document-templates/placeholders/{document_type}`
+  - `POST /document-templates/preview/{document_type}`
 
 ## Financial Documents
 
@@ -308,6 +424,8 @@ venv\Scripts\python.exe -m pytest tests
   - supplier payment vouchers
   - customer ledger statements
   - supplier ledger statements
+  - fuel sale invoices
+- Fuel sale invoices can also be exposed as machine-readable e-invoice payloads and XML exports.
 - Documents are rendered as HTML payloads, can be downloaded as PDFs, and can be dispatched through:
   - `email`
   - `sms`
@@ -324,6 +442,11 @@ venv\Scripts\python.exe -m pytest tests
   - `GET /financial-documents/customer-payments/{id}`
   - `GET /financial-documents/customer-payments/{id}/pdf`
   - `POST /financial-documents/customer-payments/{id}/send`
+  - `GET /financial-documents/fuel-sales/{id}`
+  - `GET /financial-documents/fuel-sales/{id}/einvoice`
+  - `GET /financial-documents/fuel-sales/{id}/einvoice.xml`
+  - `GET /financial-documents/fuel-sales/{id}/pdf`
+  - `POST /financial-documents/fuel-sales/{id}/send`
   - `GET /financial-documents/supplier-payments/{id}`
   - `GET /financial-documents/supplier-payments/{id}/pdf`
   - `POST /financial-documents/supplier-payments/{id}/send`
@@ -334,11 +457,18 @@ venv\Scripts\python.exe -m pytest tests
   - `GET /financial-documents/supplier-ledgers/{id}/pdf?station_id=...`
   - `POST /financial-documents/supplier-ledgers/{id}/send?station_id=...`
   - `GET /financial-documents/dispatches`
+  - `GET /financial-documents/dispatches/dead-letter`
+  - `GET /financial-documents/dispatches/diagnostics`
 
 ## Auth Password Management
 
 - `POST /auth/change-password`: authenticated user changes their own password by supplying the current password.
 - `POST /auth/admin-reset-password/{user_id}`: admin resets another user's password.
+- `POST /auth/refresh`: exchange a refresh token for a new access token and rotated refresh token.
+- `GET /auth/sessions`: list the current user's known login sessions.
+- `POST /auth/logout`: revoke the current login session.
+- `POST /auth/logout-all`: revoke all other active sessions for the current user.
+- Repeated failed logins now trigger a temporary account lockout.
 
 ## Database Migrations
 
@@ -377,6 +507,64 @@ Notes:
 
 - `DELIVERY_MODE=mock` keeps email/SMS/WhatsApp delivery safe in local environments and tests.
 - When `DELIVERY_MODE` is not `mock` and provider credentials are configured, the backend will attempt real outbound delivery.
+
+## Hardware Vendor Adapters
+
+- The hardware module now supports vendor-aware `vendor_api` device configuration in addition to simulator mode.
+- Supported adapter profiles currently include:
+  - `gilbarco`
+  - `tokheim`
+  - `veederroot`
+  - `opw`
+  - `generic`
+- Vendor devices can define:
+  - `vendor_name`
+  - `protocol`
+  - `endpoint_url`
+  - `device_identifier`
+  - `api_key`
+- Endpoints:
+  - `GET /hardware/vendors`
+  - `POST /hardware/devices/{id}/adapter-check`
+  - `POST /hardware/devices/{id}/vendor-poll`
+- In local development and tests, vendor polling stays mock-safe unless `HARDWARE_VENDOR_MODE` is changed.
+
+## Online API Hooks
+
+- Organizations can register future-ready outbound API hooks without forcing a cloud deployment today.
+- Hooks are local-safe by default and can stay inactive until real URLs, tokens, and deployment needs exist.
+- The integration layer now also supports:
+  - supported event catalogs
+  - inbound webhook capture
+  - signature-aware hook auth
+  - organization-level hook diagnostics
+- Endpoints:
+  - `GET /online-api-hooks/event-types`
+  - `GET /online-api-hooks/{organization_id}`
+  - `GET /online-api-hooks/{organization_id}/diagnostics`
+  - `GET /online-api-hooks/{organization_id}/inbound-events`
+  - `POST /online-api-hooks/{organization_id}`
+  - `PUT /online-api-hooks/item/{hook_id}`
+  - `POST /online-api-hooks/item/{hook_id}/ping`
+  - `POST /online-api-hooks/inbound/{organization_id}/{hook_name}`
+
+## SaaS Foundation
+
+- The backend now includes an optional SaaS foundation that can remain disabled in local deployments.
+- Organizations can have:
+  - subscription plans
+  - organization subscriptions
+  - organization-level module toggles
+- This keeps local-first usage simple while preserving a clean path for future hosted rollout.
+
+## Current Backend Status
+
+- The backend is now in a strong local-first, future-online-ready state.
+- Core operations, approvals, reporting, notifications, financial documents, POS, tanker workflows, hardware foundations, attendance/payroll, SaaS scaffolding, and governance controls are all implemented.
+- The main remaining product layers are outside core backend completion:
+  - desktop client
+  - mobile client
+  - deeper commercial SaaS rollout
 
 ## License
 

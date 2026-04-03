@@ -8,11 +8,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api import ROUTER_REGISTRY
-from app.core.config import APP_ENV, ENABLED_MODULES, DELIVERY_WORKER_ENABLED, DELIVERY_WORKER_INTERVAL_SECONDS
+from app.core.config import APP_ENV, ENABLED_MODULES, DELIVERY_WORKER_ENABLED, DELIVERY_WORKER_INTERVAL_SECONDS, DATABASE_URL, BACKUP_DIRECTORY
 from app.core.database import engine
 from app.core.dependencies import get_current_user
 from app.core.logging import get_logger, setup_logging
-from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent, AuditLog, Organization, OrganizationModuleSetting, OrganizationSubscription, OnlineAPIHook, SubscriptionPlan, ReportExportJob, StationModuleSetting, TankerTrip, TankerDelivery, TankerTripExpense, MeterAdjustmentEvent, Notification, NotificationPreference, NotificationDelivery, InvoiceProfile, DocumentTemplate, FinancialDocumentDispatch
+from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent, AuditLog, Organization, OrganizationModuleSetting, OrganizationSubscription, OnlineAPIHook, InboundWebhookEvent, SubscriptionPlan, ReportExportJob, StationModuleSetting, TankerTrip, TankerDelivery, TankerTripExpense, MeterAdjustmentEvent, Notification, NotificationPreference, NotificationDelivery, InvoiceProfile, DocumentTemplate, FinancialDocumentDispatch, AuthSession, AttendanceRecord, PayrollRun, PayrollLine
 from app.services.delivery_worker import run_delivery_worker
 
 
@@ -182,6 +182,8 @@ def create_app(enabled_modules: str | None = None) -> FastAPI:
             "environment": APP_ENV,
             "enabled_modules": sorted(active_modules),
             "delivery_worker_enabled": DELIVERY_WORKER_ENABLED,
+            "database_configured": bool(DATABASE_URL),
+            "backup_directory": BACKUP_DIRECTORY,
         }
 
     return app

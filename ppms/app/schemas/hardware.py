@@ -9,6 +9,10 @@ class HardwareDeviceCreate(BaseModel):
     device_type: str
     vendor_name: str | None = None
     integration_mode: str = "simulated"
+    protocol: str | None = None
+    endpoint_url: str | None = None
+    device_identifier: str | None = None
+    api_key: str | None = None
     status: str = "offline"
     is_active: bool = True
     station_id: int
@@ -20,6 +24,10 @@ class HardwareDeviceUpdate(BaseModel):
     name: str | None = None
     vendor_name: str | None = None
     integration_mode: str | None = None
+    protocol: str | None = None
+    endpoint_url: str | None = None
+    device_identifier: str | None = None
+    api_key: str | None = None
     status: str | None = None
     is_active: bool | None = None
     dispenser_id: int | None = None
@@ -34,6 +42,9 @@ class HardwareDeviceResponse(BaseModel):
     device_type: str
     vendor_name: str | None = None
     integration_mode: str
+    protocol: str | None = None
+    endpoint_url: str | None = None
+    device_identifier: str | None = None
     status: str
     is_active: bool
     station_id: int

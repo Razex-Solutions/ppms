@@ -3,6 +3,37 @@ from fastapi import HTTPException
 from app.models.user import User
 
 
+CORE_ROLE_NAMES = {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"}
+
+ROLE_CAPABILITY_SUMMARY: dict[str, dict[str, str]] = {
+    "Admin": {
+        "scope": "System-wide",
+        "governance": "Full system control, configuration, security, and maintenance",
+        "operations": "All operational modules",
+    },
+    "HeadOffice": {
+        "scope": "Organization-wide",
+        "governance": "Approvals, oversight, reporting, and organization controls",
+        "operations": "Read-heavy with approval authority across the organization",
+    },
+    "Manager": {
+        "scope": "Station-wide",
+        "governance": "Station configuration and supervised operational management",
+        "operations": "Most station workflows except sensitive governance actions",
+    },
+    "Operator": {
+        "scope": "Station-wide",
+        "governance": "Day-to-day execution without governance authority",
+        "operations": "Sales, shifts, purchases, and frontline workflows",
+    },
+    "Accountant": {
+        "scope": "Station-wide",
+        "governance": "Financial review with limited operational mutation",
+        "operations": "Payments, ledgers, documents, and reporting",
+    },
+}
+
+
 PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
     "users": {
         "create": {"Admin"},
@@ -29,6 +60,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "create": {"Admin"},
         "update": {"Admin"},
         "delete": {"Admin"},
+        "read": {"Admin", "HeadOffice"},
     },
     "stations": {
         "create": {"Admin"},
@@ -131,6 +163,18 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "open": {"Admin", "Manager", "Operator"},
         "close": {"Admin", "Manager", "Operator"},
     },
+    "attendance": {
+        "check_in": {"Admin", "Manager", "Operator", "Accountant"},
+        "check_out": {"Admin", "Manager", "Operator", "Accountant"},
+        "create": {"Admin", "HeadOffice", "Manager", "Accountant"},
+        "update": {"Admin", "HeadOffice", "Manager", "Accountant"},
+        "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
+    },
+    "payroll": {
+        "create": {"Admin", "HeadOffice", "Manager", "Accountant"},
+        "finalize": {"Admin", "HeadOffice", "Accountant"},
+        "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
+    },
     "tank_dips": {
         "create": {"Admin", "Manager", "Operator"},
     },
@@ -169,6 +213,43 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "delete": {"Admin", "Manager"},
     },
 }
+
+
+def list_available_modules() -> list[str]:
+    return sorted(PERMISSION_MATRIX.keys())
+
+
+def get_role_permissions(role_name: str) -> dict[str, list[str]]:
+    role_permissions: dict[str, list[str]] = {}
+    for module, actions in PERMISSION_MATRIX.items():
+        allowed_actions = sorted(action for action, roles in actions.items() if role_name in roles)
+        if allowed_actions:
+            role_permissions[module] = allowed_actions
+    return role_permissions
+
+
+def get_effective_permissions(current_user: User) -> dict[str, list[str]]:
+    return get_role_permissions(current_user.role.name)
+
+
+def get_permission_catalog() -> dict:
+    return {
+        "core_roles": sorted(CORE_ROLE_NAMES),
+        "role_summaries": ROLE_CAPABILITY_SUMMARY,
+        "permission_matrix": {
+            module: {action: sorted(roles) for action, roles in actions.items()}
+            for module, actions in PERMISSION_MATRIX.items()
+        },
+    }
+
+
+def is_core_role_name(role_name: str) -> bool:
+    return role_name in CORE_ROLE_NAMES
+
+
+def ensure_core_role_mutation_allowed(role_name: str, action: str) -> None:
+    if is_core_role_name(role_name):
+        raise HTTPException(status_code=400, detail=f"Core role '{role_name}' cannot be {action}")
 
 
 def require_permission(current_user: User, module: str, action: str, detail: str | None = None) -> None:

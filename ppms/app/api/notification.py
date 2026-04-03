@@ -11,9 +11,11 @@ from app.schemas.notification_delivery import NotificationDeliveryResponse
 from app.schemas.notification import NotificationResponse
 from app.schemas.notification_preference import NotificationPreferenceResponse, NotificationPreferenceUpdate
 from app.services.notifications import (
+    delivery_diagnostics,
     list_notifications,
     list_preferences,
     list_deliveries,
+    list_deliveries_filtered,
     mark_all_notifications_read,
     mark_notification_read,
     notification_summary,
@@ -106,13 +108,35 @@ def put_preference(
 
 @router.get("/deliveries", response_model=list[NotificationDeliveryResponse])
 def get_notification_deliveries(
+    status: str | None = Query(None),
+    channel: str | None = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "notifications", "read", detail="You do not have permission to view notification deliveries")
-    return list_deliveries(db, current_user=current_user, skip=skip, limit=limit)
+    return list_deliveries_filtered(db, current_user=current_user, skip=skip, limit=limit, status=status, channel=channel)
+
+
+@router.get("/deliveries/dead-letter", response_model=list[NotificationDeliveryResponse])
+def get_notification_dead_letter_deliveries(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "notifications", "read", detail="You do not have permission to view notification deliveries")
+    return list_deliveries_filtered(db, current_user=current_user, skip=skip, limit=limit, status="failed")
+
+
+@router.get("/deliveries/diagnostics")
+def get_notification_delivery_diagnostics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "notifications", "read", detail="You do not have permission to view notification deliveries")
+    return delivery_diagnostics(db, current_user=current_user)
 
 
 @router.post("/deliveries/process-due")

@@ -20,12 +20,23 @@ from app.services.hardware import (
     check_hardware_adapter,
     create_hardware_device,
     ensure_hardware_access,
+    get_supported_hardware_vendors,
+    poll_vendor_hardware_device,
     simulate_dispenser_reading,
     simulate_tank_probe_reading,
     update_hardware_device,
 )
 
 router = APIRouter(prefix="/hardware", tags=["Hardware"])
+
+
+@router.get("/vendors")
+def list_hardware_vendors(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "hardware", "read", detail="You do not have permission to inspect hardware devices")
+    return get_supported_hardware_vendors()
 
 
 @router.post("/devices", response_model=HardwareDeviceResponse)
@@ -85,6 +96,19 @@ def run_device_adapter_check(
         raise HTTPException(status_code=404, detail="Hardware device not found")
     require_permission(current_user, "hardware", "read", detail="You do not have permission to inspect hardware devices")
     return check_hardware_adapter(device, current_user)
+
+
+@router.post("/devices/{device_id}/vendor-poll", response_model=HardwareEventResponse)
+def poll_vendor_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    device = db.query(HardwareDevice).filter(HardwareDevice.id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Hardware device not found")
+    require_permission(current_user, "hardware", "read", detail="You do not have permission to inspect hardware devices")
+    return poll_vendor_hardware_device(db, device=device, current_user=current_user)
 
 
 @router.put("/devices/{device_id}", response_model=HardwareDeviceResponse)

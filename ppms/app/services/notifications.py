@@ -307,15 +307,53 @@ def notification_summary(db: Session, *, current_user: User) -> dict:
 
 
 def list_deliveries(db: Session, *, current_user: User, limit: int = 50, skip: int = 0) -> list[NotificationDelivery]:
-    return (
+    return list_deliveries_filtered(db, current_user=current_user, limit=limit, skip=skip)
+
+
+def list_deliveries_filtered(
+    db: Session,
+    *,
+    current_user: User,
+    limit: int = 50,
+    skip: int = 0,
+    status: str | None = None,
+    channel: str | None = None,
+) -> list[NotificationDelivery]:
+    query = (
         db.query(NotificationDelivery)
         .join(Notification, Notification.id == NotificationDelivery.notification_id)
         .filter(Notification.recipient_user_id == current_user.id)
-        .order_by(NotificationDelivery.created_at.desc(), NotificationDelivery.id.desc())
+    )
+    if status:
+        query = query.filter(NotificationDelivery.status == status)
+    if channel:
+        query = query.filter(NotificationDelivery.channel == channel)
+    return (
+        query.order_by(NotificationDelivery.created_at.desc(), NotificationDelivery.id.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
+
+
+def delivery_diagnostics(db: Session, *, current_user: User) -> dict:
+    deliveries = (
+        db.query(NotificationDelivery)
+        .join(Notification, Notification.id == NotificationDelivery.notification_id)
+        .filter(Notification.recipient_user_id == current_user.id)
+        .all()
+    )
+    by_status: dict[str, int] = {}
+    by_channel: dict[str, int] = {}
+    for delivery in deliveries:
+        by_status[delivery.status] = by_status.get(delivery.status, 0) + 1
+        by_channel[delivery.channel] = by_channel.get(delivery.channel, 0) + 1
+    return {
+        "total": len(deliveries),
+        "dead_letter": sum(1 for delivery in deliveries if delivery.status == "failed"),
+        "by_status": by_status,
+        "by_channel": by_channel,
+    }
 
 
 def retry_delivery(db: Session, *, delivery: NotificationDelivery, current_user: User) -> NotificationDelivery:

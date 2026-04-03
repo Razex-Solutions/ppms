@@ -16,6 +16,7 @@ class OnlineAPIHook(Base):
     auth_type = Column(String, nullable=False, default="none")
     auth_token = Column(Text, nullable=True)
     secret_key = Column(Text, nullable=True)
+    signature_header = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=False)
     last_status = Column(String, nullable=True)
     last_detail = Column(Text, nullable=True)

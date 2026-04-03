@@ -1,5 +1,6 @@
 from app.api.accounting import router as accounting_router
 from app.api.audit import router as audit_router
+from app.api.attendance import router as attendance_router
 from app.api.auth import router as auth_router
 from app.api.customer import router as customer_router
 from app.api.customer_payment import router as customer_payment_router
@@ -16,12 +17,13 @@ from app.api.ledger import router as ledger_router
 from app.api.maintenance import router as maintenance_router
 from app.api.nozzle import router as nozzle_router
 from app.api.notification import router as notification_router
-from app.api.online_api_hook import router as online_api_hook_router
+from app.api.online_api_hook import router as online_api_hook_router, public_router as online_api_hook_public_router
 from app.api.organization import router as organization_router
 from app.api.organization_module import router as organization_module_router
 from app.api.purchase import router as purchase_router
 from app.api.pos_product import router as pos_product_router
 from app.api.pos_sale import router as pos_sale_router
+from app.api.payroll import router as payroll_router
 from app.api.report_export import router as report_export_router
 from app.api.role import router as role_router
 from app.api.saas import router as saas_router
@@ -40,6 +42,7 @@ from app.api.user import router as user_router
 ROUTER_REGISTRY = [
     {"name": "auth", "router": auth_router, "protected": False},
     {"name": "audit_logs", "router": audit_router, "protected": True},
+    {"name": "attendance", "router": attendance_router, "protected": True},
     {"name": "roles", "router": role_router, "protected": True},
     {"name": "organizations", "router": organization_router, "protected": True},
     {"name": "organization_modules", "router": organization_module_router, "protected": True},
@@ -52,6 +55,7 @@ ROUTER_REGISTRY = [
     {"name": "nozzles", "router": nozzle_router, "protected": True},
     {"name": "notifications", "router": notification_router, "protected": True},
     {"name": "online_api_hooks", "router": online_api_hook_router, "protected": True},
+    {"name": "online_api_hooks_public", "router": online_api_hook_public_router, "protected": False},
     {"name": "fuel_sales", "router": fuel_sale_router, "protected": True},
     {"name": "financial_documents", "router": financial_document_router, "protected": True},
     {"name": "saas", "router": saas_router, "protected": True},
@@ -63,6 +67,7 @@ ROUTER_REGISTRY = [
     {"name": "purchases", "router": purchase_router, "protected": True},
     {"name": "pos_products", "router": pos_product_router, "protected": True},
     {"name": "pos_sales", "router": pos_sale_router, "protected": True},
+    {"name": "payroll", "router": payroll_router, "protected": True},
     {"name": "tankers", "router": tanker_router, "protected": True},
     {"name": "expenses", "router": expense_router, "protected": True},
     {"name": "accounting", "router": accounting_router, "protected": True},

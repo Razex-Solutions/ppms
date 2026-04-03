@@ -18,6 +18,7 @@ from app.models.station import Station
 from app.models.station_module_setting import StationModuleSetting
 from app.models.subscription_plan import SubscriptionPlan
 from app.models.user import User
+from app.core.permissions import ROLE_CAPABILITY_SUMMARY
 from app.services.document_template_seed import seed_default_document_templates
 
 
@@ -34,11 +35,11 @@ db = SessionLocal()
 
 # Create default roles
 roles_data = [
-    {"name": "Admin", "description": "Full system access"},
-    {"name": "HeadOffice", "description": "Organization-wide read access"},
-    {"name": "Manager", "description": "Station management access"},
-    {"name": "Operator", "description": "Daily operations access"},
-    {"name": "Accountant", "description": "Financial access only"},
+    {"name": "Admin", "description": ROLE_CAPABILITY_SUMMARY["Admin"]["governance"]},
+    {"name": "HeadOffice", "description": ROLE_CAPABILITY_SUMMARY["HeadOffice"]["governance"]},
+    {"name": "Manager", "description": ROLE_CAPABILITY_SUMMARY["Manager"]["governance"]},
+    {"name": "Operator", "description": ROLE_CAPABILITY_SUMMARY["Operator"]["governance"]},
+    {"name": "Accountant", "description": ROLE_CAPABILITY_SUMMARY["Accountant"]["governance"]},
 ]
 
 for r in roles_data:

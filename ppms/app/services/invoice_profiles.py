@@ -6,7 +6,7 @@ from app.models.invoice_profile import InvoiceProfile
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.invoice_profile import InvoiceProfileUpdate
-from app.services.compliance import validate_invoice_profile_policy
+from app.services.compliance import apply_compliance_preset, validate_invoice_profile_policy
 
 
 def ensure_invoice_profile_access(db: Session, station_id: int, current_user: User) -> Station:
@@ -46,7 +46,22 @@ def update_invoice_profile(db: Session, station: Station, data: InvoiceProfileUp
     profile = get_or_create_invoice_profile(db, station)
     for field, value in data.model_dump().items():
         setattr(profile, field, value)
-    validate_invoice_profile_policy(profile)
+    try:
+        validate_invoice_profile_policy(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+def apply_invoice_profile_preset(db: Session, station: Station, preset_code: str) -> InvoiceProfile:
+    profile = get_or_create_invoice_profile(db, station)
+    try:
+        apply_compliance_preset(profile, preset_code)
+        validate_invoice_profile_policy(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     db.refresh(profile)
     return profile

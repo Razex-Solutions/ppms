@@ -8,6 +8,8 @@ class UserCreate(BaseModel):
     password: str
     role_id: int
     station_id: int | None = None
+    monthly_salary: float = 0
+    payroll_enabled: bool = True
 
 
 class UserUpdate(BaseModel):
@@ -16,6 +18,8 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
     role_id: int | None = None
     station_id: int | None = None
+    monthly_salary: float | None = None
+    payroll_enabled: bool | None = None
 
 
 class UserResponse(BaseModel):
@@ -27,5 +31,7 @@ class UserResponse(BaseModel):
     role_id: int
     station_id: int | None = None
     organization_id: int | None = None
+    monthly_salary: float
+    payroll_enabled: bool
 
     model_config = ConfigDict(from_attributes=True)
