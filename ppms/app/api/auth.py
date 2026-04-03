@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.access import require_admin
+from app.core.access import get_user_organization_id, require_admin
 from app.core.database import get_db
 from app.core.permissions import ROLE_CAPABILITY_SUMMARY, get_effective_permissions
 from app.core.security import verify_password, create_access_token, decode_token, hash_password
@@ -71,7 +71,11 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
         username=user.username,
         full_name=user.full_name,
         role_id=user.role_id,
-        station_id=user.station_id
+        role_name=user.role.name,
+        station_id=user.station_id,
+        organization_id=get_user_organization_id(user),
+        scope_level=user.scope_level,
+        is_platform_user=user.is_platform_user,
     )
 
 
@@ -86,7 +90,9 @@ def get_me(current_user: User = Depends(get_current_user)):
         "role_id": current_user.role_id,
         "role_name": current_user.role.name,
         "station_id": current_user.station_id,
-        "organization_id": current_user.station.organization_id if current_user.station else None,
+        "organization_id": get_user_organization_id(current_user),
+        "scope_level": current_user.scope_level,
+        "is_platform_user": current_user.is_platform_user,
         "role_summary": ROLE_CAPABILITY_SUMMARY.get(current_user.role.name),
         "permissions": get_effective_permissions(current_user),
     }
@@ -118,7 +124,11 @@ def refresh_auth_token(payload: RefreshTokenRequest, request: Request, db: Sessi
         username=user.username,
         full_name=user.full_name,
         role_id=user.role_id,
+        role_name=user.role.name,
         station_id=user.station_id,
+        organization_id=get_user_organization_id(user),
+        scope_level=user.scope_level,
+        is_platform_user=user.is_platform_user,
     )
 
 

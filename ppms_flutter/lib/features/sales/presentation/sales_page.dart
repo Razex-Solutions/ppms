@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/core/utils/document_file_actions.dart';
+import 'package:ppms_flutter/core/widgets/responsive_split.dart';
 
 class SalesPage extends StatefulWidget {
   const SalesPage({super.key, required this.sessionController});
@@ -243,6 +246,186 @@ class _SalesPageState extends State<SalesPage> {
     }
   }
 
+  Future<void> _previewSaleDocument(Map<String, dynamic> sale) async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      final document = await widget.sessionController.fetchFuelSaleDocument(
+        saleId: sale['id'] as int,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
+      await _showSaleDocumentDialog(sale, document);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _showSaleDocumentDialog(
+    Map<String, dynamic> sale,
+    Map<String, dynamic> document,
+  ) async {
+    final recipientNameController = TextEditingController(
+      text: document['recipient_name'] as String? ?? '',
+    );
+    final recipientContactController = TextEditingController(
+      text: document['recipient_contact'] as String? ?? '',
+    );
+    var channel = 'print';
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text('Sale Invoice #${sale['id']}'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(document['title'] as String? ?? 'Fuel Sale Invoice'),
+                    const SizedBox(height: 8),
+                    Text('Document #: ${document['document_number'] ?? '-'}'),
+                    Text('Recipient: ${document['recipient_name'] ?? '-'}'),
+                    Text('Total: ${_formatNumber(document['total_amount'])}'),
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      (document['rendered_html'] as String? ?? '')
+                          .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                          .replaceAll('&nbsp;', ' ')
+                          .replaceAll(RegExp(r'\s+'), ' ')
+                          .trim(),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: recipientNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Recipient Name',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: recipientContactController,
+                      decoration: const InputDecoration(
+                        labelText: 'Recipient Contact',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: channel,
+                      decoration: const InputDecoration(labelText: 'Channel'),
+                      items: const [
+                        DropdownMenuItem(value: 'print', child: Text('Print')),
+                        DropdownMenuItem(value: 'email', child: Text('Email')),
+                        DropdownMenuItem(value: 'sms', child: Text('SMS')),
+                        DropdownMenuItem(
+                          value: 'whatsapp',
+                          child: Text('WhatsApp'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setDialogState(() {
+                          channel = value ?? 'print';
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final bytes = await widget.sessionController
+                      .downloadFuelSalePdf(saleId: sale['id'] as int);
+                  final path = await writeBytesToLocalDocumentFile(
+                    'fuel_sale_${sale['id']}.pdf',
+                    bytes,
+                  );
+                  if (!mounted) return;
+                  await Clipboard.setData(ClipboardData(text: path));
+                  if (!mounted) return;
+                  setState(() {
+                    _feedbackMessage = 'Sale invoice saved to $path';
+                  });
+                },
+                child: const Text('Save PDF'),
+              ),
+              FilledButton.tonal(
+                onPressed: () async {
+                  final bytes = await widget.sessionController
+                      .downloadFuelSalePdf(saleId: sale['id'] as int);
+                  final path = await writeBytesToLocalDocumentFile(
+                    'fuel_sale_${sale['id']}.pdf',
+                    bytes,
+                  );
+                  if (!mounted) return;
+                  await openSavedDocument(path);
+                  if (!mounted) return;
+                  setState(() {
+                    _feedbackMessage = 'Opened $path';
+                  });
+                },
+                child: const Text('Open PDF'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final navigator = Navigator.of(dialogContext);
+                  try {
+                    final dispatch = await widget.sessionController
+                        .sendFuelSaleDocument(
+                          saleId: sale['id'] as int,
+                          payload: {
+                            'channel': channel,
+                            'format': 'pdf',
+                            'recipient_name': _emptyToNull(
+                              recipientNameController.text,
+                            ),
+                            'recipient_contact': _emptyToNull(
+                              recipientContactController.text,
+                            ),
+                          },
+                        );
+                    if (!mounted) return;
+                    navigator.pop();
+                    setState(() {
+                      _feedbackMessage =
+                          'Dispatch queued via ${dispatch['channel']} with status ${dispatch['status']}.';
+                    });
+                  } on ApiException catch (error) {
+                    if (!mounted) return;
+                    setState(() {
+                      _errorMessage = error.message;
+                    });
+                  }
+                },
+                child: const Text('Send'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      recipientNameController.dispose();
+      recipientContactController.dispose();
+    }
+  }
+
   Map<String, dynamic>? get _selectedNozzle {
     for (final nozzle in _nozzles) {
       if (nozzle['id'] == _selectedNozzleId) {
@@ -258,6 +441,11 @@ class _SalesPageState extends State<SalesPage> {
       return 'Fuel $fuelTypeId';
     }
     return match.first['name'] as String? ?? 'Fuel $fuelTypeId';
+  }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   @override
@@ -277,30 +465,36 @@ class _SalesPageState extends State<SalesPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 5,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Forecourt Sales',
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Create fuel sales directly against the live PPMS backend. This screen is shared for desktop and mobile growth.',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 20),
-                          DropdownButtonFormField<int>(
+          ResponsiveSplit(
+            breakpoint: 1150,
+            primary: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Forecourt Sales',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Create fuel sales directly against the live PPMS backend. This screen is shared for desktop and mobile growth.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 20),
+                      if (_stations.isEmpty) ...[
+                        _buildHintBanner(
+                          context,
+                          'No stations are available for this user yet.',
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final field = DropdownButtonFormField<int>(
                             key: ValueKey<String>(
                               'station-${_selectedStationId ?? 'none'}',
                             ),
@@ -318,226 +512,249 @@ class _SalesPageState extends State<SalesPage> {
                                 ),
                             ],
                             onChanged: (value) => _changeStation(value),
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<int>(
-                            key: ValueKey<String>(
-                              'nozzle-${_selectedNozzleId ?? 'none'}',
-                            ),
-                            initialValue: _selectedNozzleId,
-                            decoration: const InputDecoration(
-                              labelText: 'Nozzle',
-                            ),
-                            items: [
-                              for (final nozzle in _nozzles)
-                                DropdownMenuItem<int>(
-                                  value: nozzle['id'] as int,
-                                  child: Text(
-                                    '${nozzle['code']} - ${nozzle['name']}',
-                                  ),
-                                ),
-                            ],
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedNozzleId = value;
-                              });
-                            },
-                            validator: (value) =>
-                                value == null ? 'Select a nozzle' : null,
-                          ),
-                          if (selectedNozzle != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Fuel: ${_fuelTypeName(selectedNozzle['fuel_type_id'] as int)} • '
-                              'Current meter: ${_formatNumber(selectedNozzle['meter_reading'])} • '
-                              'Segment start: ${_formatNumber(selectedNozzle['current_segment_start_reading'])}',
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            key: ValueKey<String>('sale-type-$_saleType'),
-                            initialValue: _saleType,
-                            decoration: const InputDecoration(
-                              labelText: 'Sale Type',
-                            ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'cash',
-                                child: Text('Cash'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'credit',
-                                child: Text('Credit'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              setState(() {
-                                _saleType = value ?? 'cash';
-                                if (_saleType != 'credit') {
-                                  _selectedCustomerId = null;
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<int?>(
-                            key: ValueKey<String>(
-                              'customer-${_selectedCustomerId ?? 'none'}',
-                            ),
-                            initialValue: _selectedCustomerId,
-                            decoration: const InputDecoration(
-                              labelText: 'Customer',
-                            ),
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
-                                child: Text('Walk-in / cash customer'),
-                              ),
-                              for (final customer in _customers)
-                                DropdownMenuItem<int?>(
-                                  value: customer['id'] as int,
-                                  child: Text(
-                                    '${customer['code']} - ${customer['name']}',
-                                  ),
-                                ),
-                            ],
-                            onChanged: isCreditSale
-                                ? (value) {
-                                    setState(() {
-                                      _selectedCustomerId = value;
-                                    });
-                                  }
-                                : null,
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _rateController,
-                            decoration: const InputDecoration(
-                              labelText: 'Rate Per Liter',
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Enter the rate per liter';
-                              }
-                              if (double.tryParse(value.trim()) == null) {
-                                return 'Enter a valid rate';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _closingMeterController,
-                            decoration: const InputDecoration(
-                              labelText: 'Closing Meter',
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Enter the closing meter';
-                              }
-                              if (double.tryParse(value.trim()) == null) {
-                                return 'Enter a valid closing meter';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _shiftNameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Shift Name (optional)',
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          if (_errorMessage != null)
-                            Text(
-                              _errorMessage!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          if (_feedbackMessage != null)
-                            Text(
-                              _feedbackMessage!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          const SizedBox(height: 16),
-                          FilledButton.icon(
-                            onPressed: _isSubmitting ? null : _submitSale,
-                            icon: _isSubmitting
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text('Save Fuel Sale'),
-                            ),
-                          ),
-                        ],
+                          );
+                          return constraints.maxWidth < 500
+                              ? field
+                              : SizedBox(width: 420, child: field);
+                        },
                       ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 4,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Recent Sales',
-                          style: Theme.of(context).textTheme.headlineSmall,
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        key: ValueKey<String>(
+                          'nozzle-${_selectedNozzleId ?? 'none'}',
                         ),
+                        initialValue: _selectedNozzleId,
+                        decoration: const InputDecoration(labelText: 'Nozzle'),
+                        items: [
+                          for (final nozzle in _nozzles)
+                            DropdownMenuItem<int>(
+                              value: nozzle['id'] as int,
+                              child: Text(
+                                '${nozzle['code']} - ${nozzle['name']}',
+                              ),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedNozzleId = value;
+                          });
+                        },
+                        validator: (value) =>
+                            value == null ? 'Select a nozzle' : null,
+                      ),
+                      if (_nozzles.isEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildHintBanner(
+                          context,
+                          'No nozzles found for this station. Create inventory first in the Inventory workspace.',
+                        ),
+                      ],
+                      if (selectedNozzle != null) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'Latest sales for the selected station. Pull to refresh or save a new sale to update this list.',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          'Fuel: ${_fuelTypeName(selectedNozzle['fuel_type_id'] as int)} • '
+                          'Current meter: ${_formatNumber(selectedNozzle['meter_reading'])} • '
+                          'Segment start: ${_formatNumber(selectedNozzle['current_segment_start_reading'])}',
                         ),
-                        const SizedBox(height: 16),
-                        if (_recentSales.isEmpty)
-                          const Text(
-                            'No fuel sales found for this station yet.',
-                          )
-                        else
-                          for (final sale in _recentSales)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.receipt_long_outlined),
-                              title: Text(
-                                '${_formatNumber(sale['quantity'])}L • ${_formatNumber(sale['total_amount'])}',
-                              ),
-                              subtitle: Text(
-                                'Nozzle ${sale['nozzle_id']} • ${sale['sale_type']} • '
-                                '${(sale['created_at'] as String?)?.replaceFirst('T', ' ').substring(0, 19) ?? ''}',
-                              ),
-                              trailing: sale['shift_name'] != null
-                                  ? Chip(
-                                      label: Text(sale['shift_name'] as String),
-                                    )
-                                  : null,
-                            ),
                       ],
-                    ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        key: ValueKey<String>('sale-type-$_saleType'),
+                        initialValue: _saleType,
+                        decoration: const InputDecoration(
+                          labelText: 'Sale Type',
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                          DropdownMenuItem(
+                            value: 'credit',
+                            child: Text('Credit'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _saleType = value ?? 'cash';
+                            if (_saleType != 'credit') {
+                              _selectedCustomerId = null;
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int?>(
+                        key: ValueKey<String>(
+                          'customer-${_selectedCustomerId ?? 'none'}',
+                        ),
+                        initialValue: _selectedCustomerId,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer',
+                        ),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Walk-in / cash customer'),
+                          ),
+                          for (final customer in _customers)
+                            DropdownMenuItem<int?>(
+                              value: customer['id'] as int,
+                              child: Text(
+                                '${customer['code']} - ${customer['name']}',
+                              ),
+                            ),
+                        ],
+                        onChanged: isCreditSale
+                            ? (value) {
+                                setState(() {
+                                  _selectedCustomerId = value;
+                                });
+                              }
+                            : null,
+                      ),
+                      if (isCreditSale && _customers.isEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildHintBanner(
+                          context,
+                          'No customers exist for credit sales yet. Add one in the Parties workspace.',
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _rateController,
+                        decoration: const InputDecoration(
+                          labelText: 'Rate Per Liter',
+                          helperText: 'Enter the selling rate for this sale.',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Enter the rate per liter';
+                          }
+                          if (double.tryParse(value.trim()) == null) {
+                            return 'Enter a valid rate';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _closingMeterController,
+                        decoration: const InputDecoration(
+                          labelText: 'Closing Meter',
+                          helperText:
+                              'Must be greater than the nozzle’s current segment start.',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Enter the closing meter';
+                          }
+                          if (double.tryParse(value.trim()) == null) {
+                            return 'Enter a valid closing meter';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _shiftNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Shift Name (optional)',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_errorMessage != null)
+                        Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      if (_feedbackMessage != null)
+                        Text(
+                          _feedbackMessage!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _isSubmitting ? null : _submitSale,
+                        icon: _isSubmitting
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('Save Fuel Sale'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
+            secondary: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Recent Sales',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Latest sales for the selected station. Pull to refresh or save a new sale to update this list.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    if (_recentSales.isEmpty)
+                      _buildEmptyState(
+                        context,
+                        'No fuel sales found for this station yet.',
+                        'Create the first sale from the form to start the daily sales history.',
+                      )
+                    else
+                      for (final sale in _recentSales)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.receipt_long_outlined),
+                          title: Text(
+                            '${_formatNumber(sale['quantity'])}L • ${_formatNumber(sale['total_amount'])}',
+                          ),
+                          subtitle: Text(
+                            'Nozzle ${sale['nozzle_id']} • ${sale['sale_type']} • '
+                            '${(sale['created_at'] as String?)?.replaceFirst('T', ' ').substring(0, 19) ?? ''}',
+                          ),
+                          trailing: Wrap(
+                            spacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (sale['shift_name'] != null)
+                                Chip(label: Text(sale['shift_name'] as String)),
+                              IconButton(
+                                tooltip: 'Invoice Actions',
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : () => _previewSaleDocument(sale),
+                                icon: const Icon(Icons.description_outlined),
+                              ),
+                            ],
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -549,5 +766,38 @@ class _SalesPageState extends State<SalesPage> {
       return value.toStringAsFixed(2);
     }
     return '0.00';
+  }
+
+  Widget _buildHintBanner(BuildContext context, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, String title, String subtitle) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
   }
 }

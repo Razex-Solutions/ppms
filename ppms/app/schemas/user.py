@@ -7,7 +7,10 @@ class UserCreate(BaseModel):
     email: EmailStr | None = None
     password: str
     role_id: int
+    organization_id: int | None = None
     station_id: int | None = None
+    scope_level: str = "station"
+    is_platform_user: bool = False
     monthly_salary: float = 0
     payroll_enabled: bool = True
 
@@ -17,7 +20,10 @@ class UserUpdate(BaseModel):
     email: EmailStr | None = None
     is_active: bool | None = None
     role_id: int | None = None
+    organization_id: int | None = None
     station_id: int | None = None
+    scope_level: str | None = None
+    is_platform_user: bool | None = None
     monthly_salary: float | None = None
     payroll_enabled: bool | None = None
 
@@ -31,6 +37,9 @@ class UserResponse(BaseModel):
     role_id: int
     station_id: int | None = None
     organization_id: int | None = None
+    scope_level: str
+    is_platform_user: bool
+    created_by_user_id: int | None = None
     monthly_salary: float
     payroll_enabled: bool
 

@@ -284,6 +284,60 @@ class ApiClient {
     );
   }
 
+  Future<List<dynamic>> getExpenses(
+    String accessToken, {
+    int? stationId,
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    return _sendList(
+      'GET',
+      '/expenses/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createExpense(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/expenses/', accessToken: accessToken, body: payload);
+  }
+
+  Future<Map<String, dynamic>> approveExpense(
+    String accessToken, {
+    required int expenseId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/expenses/$expenseId/approve',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
+  Future<Map<String, dynamic>> rejectExpense(
+    String accessToken, {
+    required int expenseId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/expenses/$expenseId/reject',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
   Future<List<dynamic>> getPayrollRuns(String accessToken) async {
     return _sendList('GET', '/payroll/runs', accessToken: accessToken);
   }
@@ -328,6 +382,72 @@ class ApiClient {
     return _sendList('GET', '/stations/', accessToken: accessToken);
   }
 
+  Future<Map<String, dynamic>> createStation(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/stations/', accessToken: accessToken, body: payload);
+  }
+
+  Future<Map<String, dynamic>> updateStation(
+    String accessToken, {
+    required int stationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/stations/$stationId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteStation(
+    String accessToken, {
+    required int stationId,
+  }) async {
+    return _send('DELETE', '/stations/$stationId', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getOrganizations(String accessToken) async {
+    return _sendList('GET', '/organizations/', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getRoles(String accessToken) async {
+    return _sendList('GET', '/roles/', accessToken: accessToken);
+  }
+
+  Future<Map<String, dynamic>> createRole(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/roles/', accessToken: accessToken, body: payload);
+  }
+
+  Future<Map<String, dynamic>> updateRole(
+    String accessToken, {
+    required int roleId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/roles/$roleId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteRole(
+    String accessToken, {
+    required int roleId,
+  }) async {
+    return _send('DELETE', '/roles/$roleId', accessToken: accessToken);
+  }
+
+  Future<Map<String, dynamic>> getPermissionCatalog(String accessToken) async {
+    return _send('GET', '/roles/permission-catalog', accessToken: accessToken);
+  }
+
   Future<List<dynamic>> getUsers(String accessToken, {int? stationId}) async {
     final params = <String, String>{};
     if (stationId != null) {
@@ -338,6 +458,57 @@ class ApiClient {
       '/users/',
       accessToken: accessToken,
       queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createUser(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/users/', accessToken: accessToken, body: payload);
+  }
+
+  Future<Map<String, dynamic>> updateUser(
+    String accessToken, {
+    required int userId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/users/$userId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteUser(
+    String accessToken, {
+    required int userId,
+  }) async {
+    return _send('DELETE', '/users/$userId', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getStationModules(
+    String accessToken, {
+    required int stationId,
+  }) async {
+    return _sendList(
+      'GET',
+      '/station-modules/$stationId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateStationModule(
+    String accessToken, {
+    required int stationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/station-modules/$stationId',
+      accessToken: accessToken,
+      body: payload,
     );
   }
 
@@ -352,6 +523,33 @@ class ApiClient {
       accessToken: accessToken,
       queryParams: params,
     );
+  }
+
+  Future<Map<String, dynamic>> createNozzle(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/nozzles/', accessToken: accessToken, body: payload);
+  }
+
+  Future<Map<String, dynamic>> updateNozzle(
+    String accessToken, {
+    required int nozzleId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/nozzles/$nozzleId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteNozzle(
+    String accessToken, {
+    required int nozzleId,
+  }) async {
+    return _send('DELETE', '/nozzles/$nozzleId', accessToken: accessToken);
   }
 
   Future<List<dynamic>> getCustomers(
@@ -370,8 +568,507 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> createCustomer(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/customers/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateCustomer(
+    String accessToken, {
+    required int customerId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/customers/$customerId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteCustomer(
+    String accessToken, {
+    required int customerId,
+  }) async {
+    return _send('DELETE', '/customers/$customerId', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getNozzleAdjustments(
+    String accessToken, {
+    required int nozzleId,
+    int limit = 50,
+  }) async {
+    return _sendList(
+      'GET',
+      '/nozzles/$nozzleId/adjustments',
+      accessToken: accessToken,
+      queryParams: {'limit': '$limit'},
+    );
+  }
+
+  Future<Map<String, dynamic>> adjustNozzleMeter(
+    String accessToken, {
+    required int nozzleId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/nozzles/$nozzleId/adjust-meter',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> approveCustomerCreditOverride(
+    String accessToken, {
+    required int customerId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/customers/$customerId/approve-credit-override',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> rejectCustomerCreditOverride(
+    String accessToken, {
+    required int customerId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/customers/$customerId/reject-credit-override',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<List<dynamic>> getSuppliers(String accessToken) async {
     return _sendList('GET', '/suppliers/', accessToken: accessToken);
+  }
+
+  Future<Map<String, dynamic>> createSupplier(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/suppliers/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateSupplier(
+    String accessToken, {
+    required int supplierId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/suppliers/$supplierId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteSupplier(
+    String accessToken, {
+    required int supplierId,
+  }) async {
+    return _send('DELETE', '/suppliers/$supplierId', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getTanks(String accessToken, {int? stationId}) async {
+    final params = <String, String>{};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _sendList(
+      'GET',
+      '/tanks/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createTank(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/tanks/', accessToken: accessToken, body: payload);
+  }
+
+  Future<Map<String, dynamic>> updateTank(
+    String accessToken, {
+    required int tankId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/tanks/$tankId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteTank(
+    String accessToken, {
+    required int tankId,
+  }) async {
+    return _send('DELETE', '/tanks/$tankId', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getDispensers(
+    String accessToken, {
+    int? stationId,
+  }) async {
+    final params = <String, String>{};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _sendList(
+      'GET',
+      '/dispensers/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createDispenser(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/dispensers/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateDispenser(
+    String accessToken, {
+    required int dispenserId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/dispensers/$dispenserId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteDispenser(
+    String accessToken, {
+    required int dispenserId,
+  }) async {
+    return _send(
+      'DELETE',
+      '/dispensers/$dispenserId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<List<dynamic>> getHardwareDevices(
+    String accessToken, {
+    int? stationId,
+    String? deviceType,
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (deviceType != null && deviceType.isNotEmpty) {
+      params['device_type'] = deviceType;
+    }
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    return _sendList(
+      'GET',
+      '/hardware/devices',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createHardwareDevice(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/hardware/devices',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<List<dynamic>> getTankers(
+    String accessToken, {
+    int? stationId,
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    return _sendList(
+      'GET',
+      '/tankers/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createTanker(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send('POST', '/tankers/', accessToken: accessToken, body: payload);
+  }
+
+  Future<List<dynamic>> getTankerTrips(
+    String accessToken, {
+    int? stationId,
+    String? tripType,
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (tripType != null && tripType.isNotEmpty) {
+      params['trip_type'] = tripType;
+    }
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    return _sendList(
+      'GET',
+      '/tankers/trips',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createTankerTrip(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/tankers/trips',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> addTankerTripDelivery(
+    String accessToken, {
+    required int tripId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/tankers/trips/$tripId/deliveries',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> addTankerTripExpense(
+    String accessToken, {
+    required int tripId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/tankers/trips/$tripId/expenses',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> completeTankerTrip(
+    String accessToken, {
+    required int tripId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/tankers/trips/$tripId/complete',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
+  Future<List<dynamic>> getHardwareEvents(
+    String accessToken, {
+    int? stationId,
+    int? deviceId,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (deviceId != null) {
+      params['device_id'] = '$deviceId';
+    }
+    return _sendList(
+      'GET',
+      '/hardware/events',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> pollHardwareDevice(
+    String accessToken, {
+    required int deviceId,
+  }) async {
+    return _send(
+      'POST',
+      '/hardware/devices/$deviceId/vendor-poll',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> simulateDispenserReading(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/hardware/simulate/dispenser-reading',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> simulateTankProbeReading(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/hardware/simulate/tank-probe-reading',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<List<dynamic>> getPurchases(
+    String accessToken, {
+    int? stationId,
+    int limit = 25,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _sendList(
+      'GET',
+      '/purchases/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createPurchase(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/purchases/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> reversePurchase(
+    String accessToken, {
+    required int purchaseId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/purchases/$purchaseId/reverse',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
+  Future<Map<String, dynamic>> approvePurchase(
+    String accessToken, {
+    required int purchaseId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/purchases/$purchaseId/approve',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
+  Future<Map<String, dynamic>> rejectPurchase(
+    String accessToken, {
+    required int purchaseId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/purchases/$purchaseId/reject',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
+  Future<Map<String, dynamic>> approvePurchaseReversal(
+    String accessToken, {
+    required int purchaseId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/purchases/$purchaseId/approve-reversal',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
+  Future<Map<String, dynamic>> rejectPurchaseReversal(
+    String accessToken, {
+    required int purchaseId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/purchases/$purchaseId/reject-reversal',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
   }
 
   Future<List<dynamic>> getCustomerPayments(
@@ -388,6 +1085,31 @@ class ApiClient {
       '/customer-payments/',
       accessToken: accessToken,
       queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createCustomerPayment(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/customer-payments/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> reverseCustomerPayment(
+    String accessToken, {
+    required int paymentId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/customer-payments/$paymentId/reverse',
+      accessToken: accessToken,
+      body: payload ?? const {},
     );
   }
 
@@ -408,8 +1130,114 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> createSupplierPayment(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/supplier-payments/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> reverseSupplierPayment(
+    String accessToken, {
+    required int paymentId,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _send(
+      'POST',
+      '/supplier-payments/$paymentId/reverse',
+      accessToken: accessToken,
+      body: payload ?? const {},
+    );
+  }
+
   Future<List<dynamic>> getFuelTypes(String accessToken) async {
     return _sendList('GET', '/fuel-types/', accessToken: accessToken);
+  }
+
+  Future<Map<String, dynamic>> createFuelType(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/fuel-types/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateFuelType(
+    String accessToken, {
+    required int fuelTypeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/fuel-types/$fuelTypeId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteFuelType(
+    String accessToken, {
+    required int fuelTypeId,
+  }) async {
+    return _send(
+      'DELETE',
+      '/fuel-types/$fuelTypeId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> getInvoiceProfile(
+    String accessToken, {
+    required int stationId,
+  }) async {
+    return _send(
+      'GET',
+      '/invoice-profiles/$stationId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateInvoiceProfile(
+    String accessToken, {
+    required int stationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/invoice-profiles/$stationId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> getCompliancePresets(String accessToken) async {
+    return _send(
+      'GET',
+      '/invoice-profiles/compliance-presets',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> applyCompliancePreset(
+    String accessToken, {
+    required int stationId,
+    required String presetCode,
+  }) async {
+    return _send(
+      'POST',
+      '/invoice-profiles/$stationId/apply-preset',
+      accessToken: accessToken,
+      queryParams: {'preset_code': presetCode},
+    );
   }
 
   Future<List<dynamic>> getFuelSales(
@@ -562,6 +1390,30 @@ class ApiClient {
     );
   }
 
+  Future<List<int>> downloadFuelSalePdf(
+    String accessToken, {
+    required int saleId,
+  }) async {
+    return _sendBytes(
+      'GET',
+      '/financial-documents/fuel-sales/$saleId/pdf',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> sendFuelSaleDocument(
+    String accessToken, {
+    required int saleId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/financial-documents/fuel-sales/$saleId/send',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> getCustomerPaymentDocument(
     String accessToken, {
     required int paymentId,
@@ -573,6 +1425,30 @@ class ApiClient {
     );
   }
 
+  Future<List<int>> downloadCustomerPaymentPdf(
+    String accessToken, {
+    required int paymentId,
+  }) async {
+    return _sendBytes(
+      'GET',
+      '/financial-documents/customer-payments/$paymentId/pdf',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> sendCustomerPaymentDocument(
+    String accessToken, {
+    required int paymentId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/financial-documents/customer-payments/$paymentId/send',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> getSupplierPaymentDocument(
     String accessToken, {
     required int paymentId,
@@ -581,6 +1457,30 @@ class ApiClient {
       'GET',
       '/financial-documents/supplier-payments/$paymentId',
       accessToken: accessToken,
+    );
+  }
+
+  Future<List<int>> downloadSupplierPaymentPdf(
+    String accessToken, {
+    required int paymentId,
+  }) async {
+    return _sendBytes(
+      'GET',
+      '/financial-documents/supplier-payments/$paymentId/pdf',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> sendSupplierPaymentDocument(
+    String accessToken, {
+    required int paymentId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/financial-documents/supplier-payments/$paymentId/send',
+      accessToken: accessToken,
+      body: payload,
     );
   }
 
@@ -628,6 +1528,9 @@ class ApiClient {
           break;
         case 'GET':
           response = await _httpClient.get(uri, headers: headers);
+          break;
+        case 'DELETE':
+          response = await _httpClient.delete(uri, headers: headers);
           break;
         default:
           throw ApiException('Unsupported request method: $method');
@@ -735,6 +1638,48 @@ class ApiClient {
       );
     }
     return response.body;
+  }
+
+  Future<List<int>> _sendBytes(
+    String method,
+    String path, {
+    String? accessToken,
+    Map<String, String>? queryParams,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl$path',
+    ).replace(queryParameters: queryParams);
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (accessToken != null) {
+      headers['Authorization'] = 'Bearer $accessToken';
+    }
+
+    late http.Response response;
+    try {
+      switch (method) {
+        case 'GET':
+          response = await _httpClient.get(uri, headers: headers);
+          break;
+        default:
+          throw ApiException('Unsupported request method: $method');
+      }
+    } on http.ClientException catch (error) {
+      throw ApiException('Unable to reach PPMS backend: $error');
+    }
+
+    if (response.statusCode >= 400) {
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        decoded = <String, dynamic>{'detail': response.body};
+      }
+      throw ApiException(
+        _extractMessage(decoded),
+        statusCode: response.statusCode,
+      );
+    }
+    return response.bodyBytes;
   }
 
   String _extractMessage(dynamic decoded) {

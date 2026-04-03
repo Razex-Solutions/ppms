@@ -25,6 +25,27 @@ from app.services.document_template_seed import seed_default_document_templates
 router = APIRouter(prefix="/document-templates", tags=["Document Templates"])
 
 
+@router.get("/placeholders/{document_type}")
+def get_document_template_placeholders(
+    document_type: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "document_templates", "read", detail="You do not have permission to view document template placeholders")
+    return {"document_type": document_type, "placeholders": get_placeholder_catalog(document_type)}
+
+
+@router.post("/preview/{document_type}", response_model=DocumentTemplatePreviewResponse)
+def preview_station_document_template(
+    document_type: str,
+    data: DocumentTemplatePreviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "document_templates", "read", detail="You do not have permission to preview document templates")
+    return preview_document_template(document_type, data)
+
+
 @router.get("/{station_id}", response_model=list[DocumentTemplateResponse])
 def get_station_document_templates(
     station_id: int,
@@ -70,24 +91,3 @@ def seed_station_document_templates(
     require_permission(current_user, "document_templates", "update", detail="You do not have permission to seed document templates")
     station = ensure_document_template_access(db, station_id, current_user)
     return seed_default_document_templates(db, station)
-
-
-@router.get("/placeholders/{document_type}")
-def get_document_template_placeholders(
-    document_type: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_permission(current_user, "document_templates", "read", detail="You do not have permission to view document template placeholders")
-    return {"document_type": document_type, "placeholders": get_placeholder_catalog(document_type)}
-
-
-@router.post("/preview/{document_type}", response_model=DocumentTemplatePreviewResponse)
-def preview_station_document_template(
-    document_type: str,
-    data: DocumentTemplatePreviewRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_permission(current_user, "document_templates", "read", detail="You do not have permission to preview document templates")
-    return preview_document_template(document_type, data)

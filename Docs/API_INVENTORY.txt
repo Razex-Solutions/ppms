@@ -1,0 +1,629 @@
+PPMS BACKEND API INVENTORY
+Generated from current backend route modules
+
+Purpose
+- This file is a plain-text overview of the PPMS backend APIs.
+- It lists what modules exist, what they generally do, and which endpoints are currently available.
+- Most routes are protected and require login unless noted otherwise.
+
+Base Notes
+- Root health and app metadata live outside these module routers.
+- Authentication starts with /auth/login.
+- Most modules are role-scoped and station/organization scoped by backend rules.
+
+==================================================
+1. AUTH
+==================================================
+What it does
+- Login, token refresh, session visibility, logout, password changes, and admin password reset.
+
+Endpoints
+- POST /auth/login
+- GET /auth/me
+- POST /auth/refresh
+- GET /auth/sessions
+- POST /auth/logout
+- POST /auth/logout-all
+- POST /auth/change-password
+- POST /auth/admin-reset-password/{user_id}
+
+==================================================
+2. AUDIT LOGS
+==================================================
+What it does
+- View audit trail records for important backend actions.
+
+Endpoints
+- GET /audit-logs/
+- GET /audit-logs/{audit_log_id}
+
+==================================================
+3. ATTENDANCE
+==================================================
+What it does
+- Check-in/check-out, manual attendance records, attendance listing and updates.
+
+Endpoints
+- POST /attendance/check-in
+- POST /attendance/{attendance_id}/check-out
+- POST /attendance/
+- GET /attendance/
+- GET /attendance/{attendance_id}
+- PUT /attendance/{attendance_id}
+
+==================================================
+4. ROLES
+==================================================
+What it does
+- Manage system roles and inspect permission catalog / role capability summaries.
+
+Endpoints
+- GET /roles/permission-catalog
+- GET /roles/permission-catalog/{role_name}
+- POST /roles/
+- GET /roles/
+- GET /roles/{role_id}
+- PUT /roles/{role_id}
+- DELETE /roles/{role_id}
+
+==================================================
+5. ORGANIZATIONS
+==================================================
+What it does
+- Manage organizations for multi-station and SaaS structure.
+
+Endpoints
+- POST /organizations/
+- GET /organizations/
+- GET /organizations/{organization_id}
+- PUT /organizations/{organization_id}
+- DELETE /organizations/{organization_id}
+
+==================================================
+6. ORGANIZATION MODULES
+==================================================
+What it does
+- Turn organization-level modules on/off.
+
+Endpoints
+- GET /organization-modules/{organization_id}
+- PUT /organization-modules/{organization_id}
+
+==================================================
+7. STATIONS
+==================================================
+What it does
+- Manage petrol pump stations and station metadata.
+
+Endpoints
+- POST /stations/
+- GET /stations/
+- GET /stations/{station_id}
+- PUT /stations/{station_id}
+- DELETE /stations/{station_id}
+
+==================================================
+8. STATION MODULES
+==================================================
+What it does
+- Turn station-level modules on/off for feature control.
+
+Endpoints
+- GET /station-modules/{station_id}
+- PUT /station-modules/{station_id}
+
+==================================================
+9. USERS
+==================================================
+What it does
+- Manage login users and their assigned roles/stations.
+
+Endpoints
+- POST /users/
+- GET /users/
+- GET /users/{user_id}
+- PUT /users/{user_id}
+- DELETE /users/{user_id}
+
+==================================================
+10. FUEL TYPES
+==================================================
+What it does
+- Manage fuel type master data.
+
+Endpoints
+- POST /fuel-types/
+- GET /fuel-types/
+- GET /fuel-types/{fuel_type_id}
+- PUT /fuel-types/{fuel_type_id}
+- DELETE /fuel-types/{fuel_type_id}
+
+==================================================
+11. TANKS
+==================================================
+What it does
+- Manage station storage tanks.
+
+Endpoints
+- POST /tanks/
+- GET /tanks/
+- GET /tanks/{tank_id}
+- PUT /tanks/{tank_id}
+- DELETE /tanks/{tank_id}
+
+==================================================
+12. DISPENSERS
+==================================================
+What it does
+- Manage dispensers/pumps attached to a station.
+
+Endpoints
+- POST /dispensers/
+- GET /dispensers/
+- GET /dispensers/{dispenser_id}
+- PUT /dispensers/{dispenser_id}
+- DELETE /dispensers/{dispenser_id}
+
+==================================================
+13. NOZZLES
+==================================================
+What it does
+- Manage nozzles, read nozzle history, and support meter adjustments.
+
+Endpoints
+- POST /nozzles/
+- GET /nozzles/
+- GET /nozzles/{nozzle_id}
+- PUT /nozzles/{nozzle_id}
+- DELETE /nozzles/{nozzle_id}
+- GET /nozzles/{nozzle_id}/readings
+- POST /nozzles/{nozzle_id}/adjust-meter
+- GET /nozzles/{nozzle_id}/adjustments
+
+==================================================
+14. NOTIFICATIONS
+==================================================
+What it does
+- In-app notifications, preferences, delivery logs, dead-letter visibility, retry processing.
+
+Endpoints
+- GET /notifications/
+- POST /notifications/{notification_id}/read
+- POST /notifications/read-all
+- GET /notifications/summary
+- GET /notifications/preferences
+- PUT /notifications/preferences/{event_type}
+- GET /notifications/deliveries
+- GET /notifications/deliveries/dead-letter
+- GET /notifications/deliveries/diagnostics
+- POST /notifications/deliveries/process-due
+- POST /notifications/deliveries/{delivery_id}/retry
+
+==================================================
+15. ONLINE API HOOKS
+==================================================
+What it does
+- Outbound online hooks, inbound webhook capture, hook diagnostics, event-type listing.
+
+Protected Endpoints
+- GET /online-api-hooks/event-types
+- GET /online-api-hooks/{organization_id}
+- GET /online-api-hooks/{organization_id}/diagnostics
+- GET /online-api-hooks/{organization_id}/inbound-events
+- POST /online-api-hooks/{organization_id}
+- PUT /online-api-hooks/item/{hook_id}
+- POST /online-api-hooks/item/{hook_id}/ping
+
+Public Endpoint
+- POST /online-api-hooks/inbound/{organization_id}/{hook_name}
+
+==================================================
+16. FUEL SALES
+==================================================
+What it does
+- Record forecourt fuel sales, list them, get one sale, and handle reversal workflow.
+
+Endpoints
+- POST /fuel-sales/
+- GET /fuel-sales/{sale_id}
+- POST /fuel-sales/{sale_id}/reverse
+- POST /fuel-sales/{sale_id}/approve-reversal
+- POST /fuel-sales/{sale_id}/reject-reversal
+- GET /fuel-sales/
+
+==================================================
+17. FINANCIAL DOCUMENTS
+==================================================
+What it does
+- Generate previews, PDFs, dispatch/send actions, ledger documents, sale invoices, and e-invoice outputs.
+
+Customer Payment Documents
+- GET /financial-documents/customer-payments/{payment_id}
+- GET /financial-documents/customer-payments/{payment_id}/pdf
+- POST /financial-documents/customer-payments/{payment_id}/send
+
+Fuel Sale Documents
+- GET /financial-documents/fuel-sales/{sale_id}
+- GET /financial-documents/fuel-sales/{sale_id}/einvoice
+- GET /financial-documents/fuel-sales/{sale_id}/einvoice.xml
+- GET /financial-documents/fuel-sales/{sale_id}/pdf
+- POST /financial-documents/fuel-sales/{sale_id}/send
+
+Supplier Payment Documents
+- GET /financial-documents/supplier-payments/{payment_id}
+- GET /financial-documents/supplier-payments/{payment_id}/pdf
+- POST /financial-documents/supplier-payments/{payment_id}/send
+
+Customer Ledger Documents
+- GET /financial-documents/customer-ledgers/{customer_id}
+- GET /financial-documents/customer-ledgers/{customer_id}/pdf
+- POST /financial-documents/customer-ledgers/{customer_id}/send
+
+Supplier Ledger Documents
+- GET /financial-documents/supplier-ledgers/{supplier_id}
+- GET /financial-documents/supplier-ledgers/{supplier_id}/pdf
+- POST /financial-documents/supplier-ledgers/{supplier_id}/send
+
+Dispatch Monitoring
+- GET /financial-documents/dispatches
+- GET /financial-documents/dispatches/dead-letter
+- GET /financial-documents/dispatches/diagnostics
+- POST /financial-documents/dispatches/process-due
+- POST /financial-documents/dispatches/{dispatch_id}/retry
+
+==================================================
+18. SAAS
+==================================================
+What it does
+- Manage subscription plans and organization subscription records.
+
+Endpoints
+- POST /saas/plans
+- GET /saas/plans
+- PUT /saas/plans/{plan_id}
+- GET /saas/organizations/{organization_id}/subscription
+- PUT /saas/organizations/{organization_id}/subscription
+
+==================================================
+19. HARDWARE
+==================================================
+What it does
+- Hardware device registry, vendor polling, adapter checks, event history, and simulator inputs.
+
+Endpoints
+- GET /hardware/vendors
+- POST /hardware/devices
+- GET /hardware/devices
+- GET /hardware/devices/{device_id}
+- POST /hardware/devices/{device_id}/adapter-check
+- POST /hardware/devices/{device_id}/vendor-poll
+- PUT /hardware/devices/{device_id}
+- DELETE /hardware/devices/{device_id}
+- GET /hardware/events
+- GET /hardware/events/{event_id}
+- POST /hardware/simulate/dispenser-reading
+- POST /hardware/simulate/tank-probe-reading
+
+==================================================
+20. INVOICE PROFILES
+==================================================
+What it does
+- Station branding, invoice numbering, compliance profile, tax and business settings.
+
+Endpoints
+- GET /invoice-profiles/compliance-presets
+- GET /invoice-profiles/{station_id}
+- PUT /invoice-profiles/{station_id}
+- POST /invoice-profiles/{station_id}/apply-preset
+
+==================================================
+21. DOCUMENT TEMPLATES
+==================================================
+What it does
+- Manage per-station document templates, preview template output, seed defaults, and inspect placeholder catalog.
+
+Endpoints
+- GET /document-templates/placeholders/{document_type}
+- POST /document-templates/preview/{document_type}
+- GET /document-templates/{station_id}
+- GET /document-templates/{station_id}/{document_type}
+- PUT /document-templates/{station_id}/{document_type}
+- POST /document-templates/{station_id}/seed-defaults
+
+==================================================
+22. CUSTOMERS
+==================================================
+What it does
+- Manage customers and credit override workflow.
+
+Endpoints
+- POST /customers/
+- GET /customers/
+- GET /customers/{customer_id}
+- PUT /customers/{customer_id}
+- DELETE /customers/{customer_id}
+- POST /customers/{customer_id}/request-credit-override
+- POST /customers/{customer_id}/approve-credit-override
+- POST /customers/{customer_id}/reject-credit-override
+
+==================================================
+23. SUPPLIERS
+==================================================
+What it does
+- Manage supplier master data.
+
+Endpoints
+- POST /suppliers/
+- GET /suppliers/
+- GET /suppliers/{supplier_id}
+- PUT /suppliers/{supplier_id}
+- DELETE /suppliers/{supplier_id}
+
+==================================================
+24. PURCHASES
+==================================================
+What it does
+- Create fuel purchases, list them, approve/reject, and handle reversal workflow.
+
+Endpoints
+- POST /purchases/
+- GET /purchases/
+- GET /purchases/{purchase_id}
+- POST /purchases/{purchase_id}/approve
+- POST /purchases/{purchase_id}/reject
+- POST /purchases/{purchase_id}/reverse
+- POST /purchases/{purchase_id}/approve-reversal
+- POST /purchases/{purchase_id}/reject-reversal
+
+==================================================
+25. POS PRODUCTS
+==================================================
+What it does
+- Manage POS stock/product master data.
+
+Endpoints
+- POST /pos-products/
+- GET /pos-products/
+- GET /pos-products/{product_id}
+- PUT /pos-products/{product_id}
+- DELETE /pos-products/{product_id}
+
+==================================================
+26. POS SALES
+==================================================
+What it does
+- Create POS sales, list them, get one sale, and reverse a POS sale.
+
+Endpoints
+- POST /pos-sales/
+- GET /pos-sales/
+- GET /pos-sales/{sale_id}
+- POST /pos-sales/{sale_id}/reverse
+
+==================================================
+27. PAYROLL
+==================================================
+What it does
+- Create payroll runs, inspect lines, and finalize payroll.
+
+Endpoints
+- POST /payroll/runs
+- GET /payroll/runs
+- GET /payroll/runs/{payroll_run_id}
+- GET /payroll/runs/{payroll_run_id}/lines
+- POST /payroll/runs/{payroll_run_id}/finalize
+
+==================================================
+28. TANKERS
+==================================================
+What it does
+- Manage tanker vehicles and tanker trip operations including deliveries, expenses, and completion.
+
+Trip Endpoints
+- POST /tankers/trips
+- GET /tankers/trips
+- GET /tankers/trips/{trip_id}
+- POST /tankers/trips/{trip_id}/deliveries
+- POST /tankers/trips/{trip_id}/expenses
+- POST /tankers/trips/{trip_id}/complete
+
+Tanker Vehicle Endpoints
+- POST /tankers/
+- GET /tankers/
+- GET /tankers/{tanker_id}
+- PUT /tankers/{tanker_id}
+- DELETE /tankers/{tanker_id}
+
+==================================================
+29. EXPENSES
+==================================================
+What it does
+- Expense creation, update, deletion, and approval workflow.
+
+Endpoints
+- POST /expenses/
+- GET /expenses/
+- GET /expenses/{expense_id}
+- PUT /expenses/{expense_id}
+- DELETE /expenses/{expense_id}
+- POST /expenses/{expense_id}/approve
+- POST /expenses/{expense_id}/reject
+
+==================================================
+30. ACCOUNTING
+==================================================
+What it does
+- Profit summary and accounting overview.
+
+Endpoints
+- GET /accounting/profit-summary
+
+==================================================
+31. REPORTS
+==================================================
+What it does
+- Operational, finance, and tanker reports.
+
+Endpoints
+- GET /reports/daily-closing
+- GET /reports/shift-variance
+- GET /reports/stock-movement
+- GET /reports/customer-balances
+- GET /reports/supplier-balances
+- GET /reports/tanker-profit
+- GET /reports/tanker-deliveries
+- GET /reports/tanker-expenses
+
+==================================================
+32. REPORT EXPORTS
+==================================================
+What it does
+- Create export jobs for reports and download completed exports.
+
+Endpoints
+- POST /report-exports/
+- GET /report-exports/
+- GET /report-exports/{job_id}
+- GET /report-exports/{job_id}/download
+
+==================================================
+33. CUSTOMER PAYMENTS
+==================================================
+What it does
+- Record customer payments and manage payment reversal workflow.
+
+Endpoints
+- POST /customer-payments/
+- GET /customer-payments/
+- GET /customer-payments/{payment_id}
+- POST /customer-payments/{payment_id}/reverse
+- POST /customer-payments/{payment_id}/approve-reversal
+- POST /customer-payments/{payment_id}/reject-reversal
+
+==================================================
+34. SUPPLIER PAYMENTS
+==================================================
+What it does
+- Record supplier payments and manage payment reversal workflow.
+
+Endpoints
+- POST /supplier-payments/
+- GET /supplier-payments/
+- GET /supplier-payments/{payment_id}
+- POST /supplier-payments/{payment_id}/reverse
+- POST /supplier-payments/{payment_id}/approve-reversal
+- POST /supplier-payments/{payment_id}/reject-reversal
+
+==================================================
+35. LEDGER
+==================================================
+What it does
+- Customer and supplier ledger views.
+
+Endpoints
+- GET /ledger/customer/{customer_id}
+- GET /ledger/supplier/{supplier_id}
+
+==================================================
+36. MAINTENANCE
+==================================================
+What it does
+- Snapshot, backup, backup listing, integrity check, and restore.
+
+Endpoints
+- GET /maintenance/snapshot
+- POST /maintenance/backup
+- GET /maintenance/backups
+- GET /maintenance/integrity
+- POST /maintenance/restore
+
+==================================================
+37. SHIFTS
+==================================================
+What it does
+- Open shifts, close shifts, list shifts, and get shift details.
+
+Endpoints
+- POST /shifts/
+- POST /shifts/{shift_id}/close
+- GET /shifts/
+- GET /shifts/{shift_id}
+
+==================================================
+38. TANK DIPS
+==================================================
+What it does
+- Record and view tank dip measurements.
+
+Endpoints
+- POST /tank-dips/
+- GET /tank-dips/
+- GET /tank-dips/{dip_id}
+
+==================================================
+39. DASHBOARD
+==================================================
+What it does
+- Main dashboard summary endpoint for operational overview.
+
+Endpoints
+- GET /dashboard/
+
+==================================================
+40. QUICK MODULE MAP
+==================================================
+Operational Frontline
+- auth
+- dashboard
+- fuel-sales
+- shifts
+- attendance
+- expenses
+- pos-sales
+- hardware
+
+Master Data
+- stations
+- users
+- roles
+- customers
+- suppliers
+- fuel-types
+- tanks
+- dispensers
+- nozzles
+- pos-products
+- tankers
+
+Finance And Control
+- purchases
+- customer-payments
+- supplier-payments
+- ledger
+- reports
+- report-exports
+- accounting
+- governance-related actions inside purchases, expenses, sales, payments, and customers
+
+Documents And Delivery
+- financial-documents
+- document-templates
+- invoice-profiles
+- notifications
+- online-api-hooks
+
+SaaS / Multi-Org
+- organizations
+- organization-modules
+- saas
+
+Operations / Admin Tooling
+- maintenance
+- audit-logs
+- payroll
+
+==================================================
+41. IMPORTANT NOTE
+==================================================
+This file is an inventory, not a final contract specification.
+The backend still enforces role rules, station scope, organization scope, approvals, and module toggles beyond what is visible from route names alone.

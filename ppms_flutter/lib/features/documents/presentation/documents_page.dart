@@ -1,6 +1,17 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/core/utils/document_file_actions.dart';
+
+enum _DocumentSelectionType {
+  fuelSale,
+  customerPayment,
+  supplierPayment,
+  reportExport,
+}
 
 class DocumentsPage extends StatefulWidget {
   const DocumentsPage({super.key, required this.sessionController});
@@ -25,6 +36,9 @@ class _DocumentsPageState extends State<DocumentsPage> {
 
   Map<String, dynamic>? _selectedDocument;
   String? _selectedExportPreview;
+  _DocumentSelectionType? _selectionType;
+  int? _selectedEntityId;
+  String? _lastSavedPath;
 
   @override
   void initState() {
@@ -131,6 +145,8 @@ class _DocumentsPageState extends State<DocumentsPage> {
       setState(() {
         _selectedExportPreview = text;
         _selectedDocument = null;
+        _selectionType = _DocumentSelectionType.reportExport;
+        _selectedEntityId = jobId;
       });
     } on ApiException catch (error) {
       if (!mounted) {
@@ -164,6 +180,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
       setState(() {
         _selectedDocument = document;
         _selectedExportPreview = null;
+        _lastSavedPath = null;
       });
     } on ApiException catch (error) {
       if (!mounted) {
@@ -178,6 +195,83 @@ class _DocumentsPageState extends State<DocumentsPage> {
           _isSubmitting = false;
         });
       }
+    }
+  }
+
+  Future<void> _saveOrOpenCurrentDocument({required bool openAfterSave}) async {
+    if (_selectionType == null || _selectedEntityId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a document or export first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _feedbackMessage = null;
+      _errorMessage = null;
+    });
+
+    try {
+      late final String fileName;
+      late final List<int> bytes;
+
+      switch (_selectionType!) {
+        case _DocumentSelectionType.fuelSale:
+          fileName = 'fuel_sale_${_selectedEntityId!}.pdf';
+          bytes = await widget.sessionController.downloadFuelSalePdf(
+            saleId: _selectedEntityId!,
+          );
+        case _DocumentSelectionType.customerPayment:
+          fileName = 'customer_payment_${_selectedEntityId!}.pdf';
+          bytes = await widget.sessionController.downloadCustomerPaymentPdf(
+            paymentId: _selectedEntityId!,
+          );
+        case _DocumentSelectionType.supplierPayment:
+          fileName = 'supplier_payment_${_selectedEntityId!}.pdf';
+          bytes = await widget.sessionController.downloadSupplierPaymentPdf(
+            paymentId: _selectedEntityId!,
+          );
+        case _DocumentSelectionType.reportExport:
+          fileName = 'report_export_${_selectedEntityId!}.csv';
+          final text = await widget.sessionController.downloadReportExportText(
+            jobId: _selectedEntityId!,
+          );
+          bytes = utf8.encode(text);
+      }
+
+      final path = await writeBytesToLocalDocumentFile(fileName, bytes);
+      if (!mounted) return;
+
+      if (openAfterSave) {
+        await openSavedDocument(path);
+        if (!mounted) return;
+        setState(() {
+          _lastSavedPath = path;
+          _feedbackMessage = 'Opened $path';
+          _isSubmitting = false;
+        });
+      } else {
+        await Clipboard.setData(ClipboardData(text: path));
+        if (!mounted) return;
+        setState(() {
+          _lastSavedPath = path;
+          _feedbackMessage = 'Saved to $path and copied the path.';
+          _isSubmitting = false;
+        });
+      }
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Unable to save file: $error';
+        _isSubmitting = false;
+      });
     }
   }
 
@@ -229,7 +323,11 @@ class _DocumentsPageState extends State<DocumentsPage> {
                   ),
                   onTap: _isSubmitting
                       ? null
-                      : () => _openFuelSaleDocument(sale['id'] as int),
+                      : () async {
+                          _selectionType = _DocumentSelectionType.fuelSale;
+                          _selectedEntityId = sale['id'] as int;
+                          await _openFuelSaleDocument(sale['id'] as int);
+                        },
                 ),
               ),
               _buildListCard(
@@ -246,8 +344,14 @@ class _DocumentsPageState extends State<DocumentsPage> {
                   ),
                   onTap: _isSubmitting
                       ? null
-                      : () =>
-                            _openCustomerPaymentDocument(payment['id'] as int),
+                      : () async {
+                          _selectionType =
+                              _DocumentSelectionType.customerPayment;
+                          _selectedEntityId = payment['id'] as int;
+                          await _openCustomerPaymentDocument(
+                            payment['id'] as int,
+                          );
+                        },
                 ),
               ),
               _buildListCard(
@@ -264,141 +368,217 @@ class _DocumentsPageState extends State<DocumentsPage> {
                   ),
                   onTap: _isSubmitting
                       ? null
-                      : () =>
-                            _openSupplierPaymentDocument(payment['id'] as int),
+                      : () async {
+                          _selectionType =
+                              _DocumentSelectionType.supplierPayment;
+                          _selectedEntityId = payment['id'] as int;
+                          await _openSupplierPaymentDocument(
+                            payment['id'] as int,
+                          );
+                        },
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final useColumn = constraints.maxWidth < 1000;
+              final previewCard = Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Preview',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 12),
+                      if (_selectedDocument != null) ...[
+                        Text('${_selectedDocument!['title']}'),
+                        const SizedBox(height: 8),
                         Text(
-                          'Preview',
-                          style: Theme.of(context).textTheme.headlineSmall,
+                          'Document #: ${_selectedDocument!['document_number']}',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Recipient: ${_selectedDocument!['recipient_name']}',
+                        ),
+                        const SizedBox(height: 8),
+                        if (_selectedDocument!['total_amount'] != null)
+                          Text(
+                            'Total: ${_formatNumber(_selectedDocument!['total_amount'])}',
+                          ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _saveOrOpenCurrentDocument(
+                                      openAfterSave: false,
+                                    ),
+                              icon: const Icon(Icons.download_outlined),
+                              label: const Text('Save'),
+                            ),
+                            FilledButton.icon(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _saveOrOpenCurrentDocument(
+                                      openAfterSave: true,
+                                    ),
+                              icon: const Icon(Icons.open_in_new_outlined),
+                              label: const Text('Open PDF'),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
-                        if (_selectedDocument != null) ...[
-                          Text('${_selectedDocument!['title']}'),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Document #: ${_selectedDocument!['document_number']}',
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Recipient: ${_selectedDocument!['recipient_name']}',
-                          ),
-                          const SizedBox(height: 8),
-                          if (_selectedDocument!['total_amount'] != null)
-                            Text(
-                              'Total: ${_formatNumber(_selectedDocument!['total_amount'])}',
+                        SelectableText(
+                          (_selectedDocument!['rendered_html'] as String? ?? '')
+                              .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                              .replaceAll('&nbsp;', ' ')
+                              .replaceAll(RegExp(r'\s+'), ' ')
+                              .trim(),
+                        ),
+                      ] else if (_selectedExportPreview != null) ...[
+                        Text(
+                          'Export Preview',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _saveOrOpenCurrentDocument(
+                                      openAfterSave: false,
+                                    ),
+                              icon: const Icon(Icons.download_outlined),
+                              label: const Text('Save CSV'),
                             ),
-                          const SizedBox(height: 12),
-                          SelectableText(
-                            (_selectedDocument!['rendered_html'] as String? ??
-                                    '')
-                                .replaceAll(RegExp(r'<[^>]*>'), ' ')
-                                .replaceAll('&nbsp;', ' ')
-                                .replaceAll(RegExp(r'\s+'), ' ')
-                                .trim(),
-                          ),
-                        ] else if (_selectedExportPreview != null) ...[
-                          Text(
-                            'Export Preview',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 12),
-                          SelectableText(_selectedExportPreview!),
-                        ] else
-                          const Text(
-                            'Select an invoice, receipt, voucher, or export job to preview it here.',
-                          ),
-                      ],
-                    ),
+                            FilledButton.icon(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _saveOrOpenCurrentDocument(
+                                      openAfterSave: true,
+                                    ),
+                              icon: const Icon(Icons.open_in_new_outlined),
+                              label: const Text('Open File'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SelectableText(_selectedExportPreview!),
+                      ] else
+                        const Text(
+                          'Select an invoice, receipt, voucher, or export job to preview it here.',
+                        ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: Column(
+              );
+              final sideColumn = Column(
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Report Exports',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 12),
+                          if (_reportExports.isEmpty)
+                            const Text('No report exports available.')
+                          else
+                            for (final job in _reportExports.take(10))
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  job['file_name'] as String? ?? 'Export',
+                                ),
+                                subtitle: Text(
+                                  '${job['report_type']} • ${job['status']}',
+                                ),
+                                onTap: _isSubmitting
+                                    ? null
+                                    : () async {
+                                        _selectionType =
+                                            _DocumentSelectionType.reportExport;
+                                        _selectedEntityId = job['id'] as int;
+                                        await _previewExport(job['id'] as int);
+                                      },
+                              ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Dispatch History',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 12),
+                          if (_dispatches.isEmpty)
+                            const Text(
+                              'No financial document dispatches found.',
+                            )
+                          else
+                            for (final dispatch in _dispatches.take(10))
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  '${dispatch['document_type']} • ${dispatch['channel']}',
+                                ),
+                                subtitle: Text(
+                                  '${dispatch['status']} • ${_displayTimestamp(dispatch['created_at'])}',
+                                ),
+                              ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+
+              if (useColumn) {
+                return Column(
                   children: [
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Report Exports',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 12),
-                            if (_reportExports.isEmpty)
-                              const Text('No report exports available.')
-                            else
-                              for (final job in _reportExports.take(10))
-                                ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(
-                                    job['file_name'] as String? ?? 'Export',
-                                  ),
-                                  subtitle: Text(
-                                    '${job['report_type']} • ${job['status']}',
-                                  ),
-                                  onTap: _isSubmitting
-                                      ? null
-                                      : () => _previewExport(job['id'] as int),
-                                ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    previewCard,
                     const SizedBox(height: 16),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Dispatch History',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 12),
-                            if (_dispatches.isEmpty)
-                              const Text(
-                                'No financial document dispatches found.',
-                              )
-                            else
-                              for (final dispatch in _dispatches.take(10))
-                                ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(
-                                    '${dispatch['document_type']} • ${dispatch['channel']}',
-                                  ),
-                                  subtitle: Text(
-                                    '${dispatch['status']} • ${_displayTimestamp(dispatch['created_at'])}',
-                                  ),
-                                ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    sideColumn,
                   ],
-                ),
-              ),
-            ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: previewCard),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 2, child: sideColumn),
+                ],
+              );
+            },
           ),
+          if (_lastSavedPath != null) ...[
+            const SizedBox(height: 16),
+            SelectableText('Last saved file: $_lastSavedPath'),
+          ],
         ],
       ),
     );

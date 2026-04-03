@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.models.organization import Organization
 from app.models.organization_subscription import OrganizationSubscription
 from app.models.subscription_plan import SubscriptionPlan
@@ -13,7 +13,7 @@ def ensure_organization_access(db: Session, organization_id: int, current_user: 
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return organization
     if is_head_office_user(current_user) and get_user_organization_id(current_user) == organization_id:
         return organization

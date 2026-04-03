@@ -23,10 +23,16 @@ class User(Base):
     payroll_enabled = Column(Boolean, nullable=False, default=True)
 
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     station_id = Column(Integer, ForeignKey("stations.id"), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    scope_level = Column(String, nullable=False, default="station")
+    is_platform_user = Column(Boolean, nullable=False, default=False)
 
     role = relationship("Role", back_populates="users")
     station = relationship("Station", back_populates="users")
+    organization = relationship("Organization")
+    created_by = relationship("User", remote_side=[id], foreign_keys=[created_by_user_id])
     auth_sessions = relationship("AuthSession", back_populates="user")
     attendance_records = relationship(
         "AttendanceRecord",

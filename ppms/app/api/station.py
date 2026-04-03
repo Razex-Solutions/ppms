@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -41,12 +41,7 @@ def create_station(
             raise HTTPException(status_code=400, detail="Organization already has a head office station")
 
     station = Station(
-        name=station_data.name,
-        code=station_data.code,
-        address=station_data.address,
-        city=station_data.city,
-        organization_id=station_data.organization_id,
-        is_head_office=station_data.is_head_office,
+        **station_data.model_dump()
     )
     db.add(station)
     db.commit()
@@ -62,7 +57,7 @@ def list_stations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         query = db.query(Station)
         if organization_id is not None:
             query = query.filter(Station.organization_id == organization_id)
@@ -88,7 +83,7 @@ def get_station(
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         require_permission(current_user, "stations", "read", detail="You do not have permission to view stations")

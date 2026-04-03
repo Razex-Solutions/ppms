@@ -31,7 +31,11 @@ class TokenResponse(BaseModel):
     username: str
     full_name: str
     role_id: int
+    role_name: str | None = None
     station_id: int | None = None
+    organization_id: int | None = None
+    scope_level: str | None = None
+    is_platform_user: bool = False
 
 
 class SessionResponse(BaseModel):

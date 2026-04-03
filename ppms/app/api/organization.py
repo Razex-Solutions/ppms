@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -40,7 +40,7 @@ def list_organizations(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Organization)
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         if is_active is not None:
             query = query.filter(Organization.is_active == is_active)
         return query.offset(skip).limit(limit).all()
@@ -62,7 +62,7 @@ def get_organization(
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return organization
     if is_head_office_user(current_user):
         require_permission(current_user, "organizations", "read", detail="You do not have permission to view organizations")

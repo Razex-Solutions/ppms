@@ -3,13 +3,23 @@ from fastapi import HTTPException
 from app.models.user import User
 
 
-CORE_ROLE_NAMES = {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"}
+CORE_ROLE_NAMES = {"MasterAdmin", "Admin", "StationAdmin", "HeadOffice", "Manager", "Operator", "Accountant"}
 
 ROLE_CAPABILITY_SUMMARY: dict[str, dict[str, str]] = {
+    "MasterAdmin": {
+        "scope": "Platform-wide",
+        "governance": "Razex Solutions platform control, tenant onboarding, subscription control, and full support authority",
+        "operations": "Can inspect and override any tenant configuration or operational module when needed",
+    },
     "Admin": {
-        "scope": "System-wide",
-        "governance": "Full system control, configuration, security, and maintenance",
-        "operations": "All operational modules",
+        "scope": "Tenant-wide",
+        "governance": "Organization or station administration, configuration, and operational oversight",
+        "operations": "All core operational modules for the assigned scope",
+    },
+    "StationAdmin": {
+        "scope": "Station-wide",
+        "governance": "Station administration, user management, setup, and delegated control from the organization",
+        "operations": "Most station modules with limited cross-organization authority",
     },
     "HeadOffice": {
         "scope": "Organization-wide",
@@ -220,6 +230,11 @@ def list_available_modules() -> list[str]:
 
 
 def get_role_permissions(role_name: str) -> dict[str, list[str]]:
+    if role_name == "MasterAdmin":
+        return {
+            module: sorted(actions.keys())
+            for module, actions in PERMISSION_MATRIX.items()
+        }
     role_permissions: dict[str, list[str]] = {}
     for module, actions in PERMISSION_MATRIX.items():
         allowed_actions = sorted(action for action, roles in actions.items() if role_name in roles)
@@ -256,6 +271,9 @@ def require_permission(current_user: User, module: str, action: str, detail: str
     allowed_roles = PERMISSION_MATRIX.get(module, {}).get(action)
     if not allowed_roles:
         raise HTTPException(status_code=403, detail=detail or "Action is not permitted")
+
+    if current_user.role.name == "MasterAdmin" or getattr(current_user, "is_platform_user", False):
+        return
 
     if current_user.role.name not in allowed_roles:
         raise HTTPException(status_code=403, detail=detail or "You do not have permission for this action")

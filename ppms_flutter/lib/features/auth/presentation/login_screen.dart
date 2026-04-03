@@ -96,11 +96,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _baseUrlController,
                       decoration: const InputDecoration(
                         labelText: 'Backend URL',
+                        helperText: 'Example: http://127.0.0.1:8012',
                       ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Enter the PPMS backend URL'
-                          : null,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Enter the PPMS backend URL';
+                        }
+                        final uri = Uri.tryParse(value.trim());
+                        if (uri == null ||
+                            !uri.hasScheme ||
+                            uri.host.trim().isEmpty) {
+                          return 'Enter a valid backend URL';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -129,6 +138,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'Local default login: admin / admin123',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,

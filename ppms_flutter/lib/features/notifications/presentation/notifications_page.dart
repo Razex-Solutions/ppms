@@ -164,20 +164,38 @@ class _NotificationsPageState extends State<NotificationsPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              _MetricCard(label: 'Unread', value: '$unreadCount'),
-              _MetricCard(label: 'Total', value: '$totalCount'),
-              _MetricCard(label: 'Dead Letter', value: '$deadLetterCount'),
-              _MetricCard(
-                label: 'Channels',
-                value: byChannel.entries
-                    .map((entry) => '${entry.key}:${entry.value}')
-                    .join('  '),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 720;
+              return Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  _MetricCard(
+                    label: 'Unread',
+                    value: '$unreadCount',
+                    width: compact ? constraints.maxWidth : 220,
+                  ),
+                  _MetricCard(
+                    label: 'Total',
+                    value: '$totalCount',
+                    width: compact ? constraints.maxWidth : 220,
+                  ),
+                  _MetricCard(
+                    label: 'Dead Letter',
+                    value: '$deadLetterCount',
+                    width: compact ? constraints.maxWidth : 220,
+                  ),
+                  _MetricCard(
+                    label: 'Channels',
+                    value: byChannel.entries
+                        .map((entry) => '${entry.key}:${entry.value}')
+                        .join('  '),
+                    width: compact ? constraints.maxWidth : 220,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
           if (_errorMessage != null)
@@ -371,15 +389,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.label, required this.value});
+  const _MetricCard({
+    required this.label,
+    required this.value,
+    this.width = 220,
+  });
 
   final String label;
   final String value;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 220,
+      width: width,
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(18),

@@ -1,0 +1,848 @@
+import 'package:flutter/material.dart';
+import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_controller.dart';
+
+enum _HardwareSection { devices, events, meterOps }
+
+class HardwarePage extends StatefulWidget {
+  const HardwarePage({super.key, required this.sessionController});
+
+  final SessionController sessionController;
+
+  @override
+  State<HardwarePage> createState() => _HardwarePageState();
+}
+
+class _HardwarePageState extends State<HardwarePage> {
+  final _deviceNameController = TextEditingController();
+  final _deviceCodeController = TextEditingController();
+  final _deviceIdentifierController = TextEditingController();
+  final _meterReadingController = TextEditingController(text: '0');
+  final _meterReasonController = TextEditingController();
+  final _simulatedMeterController = TextEditingController(text: '0');
+  final _simulatedVolumeController = TextEditingController(text: '0');
+  final _tankProbeVolumeController = TextEditingController(text: '0');
+
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+  String? _feedbackMessage;
+
+  _HardwareSection _section = _HardwareSection.devices;
+  List<Map<String, dynamic>> _stations = const [];
+  List<Map<String, dynamic>> _dispensers = const [];
+  List<Map<String, dynamic>> _tanks = const [];
+  List<Map<String, dynamic>> _nozzles = const [];
+  List<Map<String, dynamic>> _devices = const [];
+  List<Map<String, dynamic>> _events = const [];
+  List<Map<String, dynamic>> _adjustments = const [];
+
+  int? _selectedStationId;
+  int? _selectedDeviceId;
+  int? _selectedDispenserId;
+  int? _selectedTankId;
+  int? _selectedNozzleId;
+  String _deviceType = 'dispenser_controller';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWorkspace();
+  }
+
+  @override
+  void dispose() {
+    _deviceNameController.dispose();
+    _deviceCodeController.dispose();
+    _deviceIdentifierController.dispose();
+    _meterReadingController.dispose();
+    _meterReasonController.dispose();
+    _simulatedMeterController.dispose();
+    _simulatedVolumeController.dispose();
+    _tankProbeVolumeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadWorkspace() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final stations = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchStations()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+      final preferredStationId =
+          widget.sessionController.currentUser?['station_id'] as int?;
+      final stationId =
+          _selectedStationId ??
+          preferredStationId ??
+          (stations.isNotEmpty ? stations.first['id'] as int : null);
+
+      final dispensers = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchDispensers(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final tanks = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchTanks(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final nozzles = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchNozzles(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final devices = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchHardwareDevices(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final events = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchHardwareEvents(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+
+      final nozzleId = _selectedNozzleId ?? _firstId(nozzles);
+      final adjustments = nozzleId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchNozzleAdjustments(
+                nozzleId: nozzleId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+
+      if (!mounted) return;
+
+      setState(() {
+        _stations = stations;
+        _selectedStationId = stationId;
+        _dispensers = dispensers;
+        _tanks = tanks;
+        _nozzles = nozzles;
+        _devices = devices;
+        _events = events;
+        _selectedDeviceId = _selectedDeviceId ?? _firstId(devices);
+        _selectedDispenserId = _selectedDispenserId ?? _firstId(dispensers);
+        _selectedTankId = _selectedTankId ?? _firstId(tanks);
+        _selectedNozzleId = nozzleId;
+        _adjustments = adjustments;
+        _isLoading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+    }
+  }
+
+  int? _firstId(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) return null;
+    return items.first['id'] as int;
+  }
+
+  Future<void> _changeStation(int? stationId) async {
+    if (stationId == null) return;
+    setState(() {
+      _selectedStationId = stationId;
+      _selectedDeviceId = null;
+      _selectedDispenserId = null;
+      _selectedTankId = null;
+      _selectedNozzleId = null;
+    });
+    await _loadWorkspace();
+  }
+
+  Future<void> _createDevice() async {
+    final stationId = _selectedStationId;
+    if (stationId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a station first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final payload = <String, dynamic>{
+        'name': _deviceNameController.text.trim(),
+        'code': _deviceCodeController.text.trim(),
+        'device_type': _deviceType,
+        'integration_mode': 'simulated',
+        'device_identifier': _emptyToNull(_deviceIdentifierController.text),
+        'station_id': stationId,
+      };
+      if (_deviceType == 'dispenser_controller' &&
+          _selectedDispenserId != null) {
+        payload['dispenser_id'] = _selectedDispenserId;
+      }
+      if (_deviceType == 'tank_probe' && _selectedTankId != null) {
+        payload['tank_id'] = _selectedTankId;
+      }
+
+      final device = await widget.sessionController.createHardwareDevice(
+        payload,
+      );
+      if (!mounted) return;
+
+      _deviceNameController.clear();
+      _deviceCodeController.clear();
+      _deviceIdentifierController.clear();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage = 'Hardware device ${device['name']} created.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _adjustMeter() async {
+    final nozzleId = _selectedNozzleId;
+    if (nozzleId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a nozzle first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final adjustment = await widget.sessionController.adjustNozzleMeter(
+        nozzleId: nozzleId,
+        payload: {
+          'new_reading': double.parse(_meterReadingController.text.trim()),
+          'reason': _meterReasonController.text.trim(),
+        },
+      );
+      if (!mounted) return;
+      _meterReasonController.clear();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Nozzle meter adjusted to ${_formatNumber(adjustment['new_reading'])}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _simulateDispenser() async {
+    final deviceId = _selectedDeviceId;
+    final nozzleId = _selectedNozzleId;
+    if (deviceId == null || nozzleId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a dispenser-side device and nozzle first.';
+      });
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      final event = await widget.sessionController.simulateDispenserReading({
+        'device_id': deviceId,
+        'nozzle_id': nozzleId,
+        'meter_reading': double.parse(_simulatedMeterController.text.trim()),
+        'volume': double.parse(_simulatedVolumeController.text.trim()),
+      });
+      if (!mounted) return;
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Simulated dispenser event #${event['id']} recorded.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _simulateTankProbe() async {
+    final deviceId = _selectedDeviceId;
+    if (deviceId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a hardware device first.';
+      });
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      final event = await widget.sessionController.simulateTankProbeReading({
+        'device_id': deviceId,
+        'volume': double.parse(_tankProbeVolumeController.text.trim()),
+      });
+      if (!mounted) return;
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Simulated tank probe event #${event['id']} recorded.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _pollSelectedDevice() async {
+    final deviceId = _selectedDeviceId;
+    if (deviceId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a hardware device first.';
+      });
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      final event = await widget.sessionController.pollHardwareDevice(
+        deviceId: deviceId,
+      );
+      if (!mounted) return;
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage = 'Vendor poll completed with event #${event['id']}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadWorkspace,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hardware Workspace',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Manage hardware devices, inspect recent events, and run nozzle meter operations.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          key: ValueKey<String>(
+                            'hardware-station-${_selectedStationId ?? 'none'}',
+                          ),
+                          initialValue: _selectedStationId,
+                          decoration: const InputDecoration(
+                            labelText: 'Station',
+                          ),
+                          items: [
+                            for (final station in _stations)
+                              DropdownMenuItem<int>(
+                                value: station['id'] as int,
+                                child: Text(
+                                  '${station['name']} (${station['code']})',
+                                ),
+                              ),
+                          ],
+                          onChanged: _changeStation,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SegmentedButton<_HardwareSection>(
+                          segments: const [
+                            ButtonSegment(
+                              value: _HardwareSection.devices,
+                              label: Text('Devices'),
+                              icon: Icon(Icons.memory_outlined),
+                            ),
+                            ButtonSegment(
+                              value: _HardwareSection.events,
+                              label: Text('Events'),
+                              icon: Icon(Icons.timeline_outlined),
+                            ),
+                            ButtonSegment(
+                              value: _HardwareSection.meterOps,
+                              label: Text('Meter Ops'),
+                              icon: Icon(Icons.speed_outlined),
+                            ),
+                          ],
+                          selected: {_section},
+                          onSelectionChanged: (selection) {
+                            setState(() {
+                              _section = selection.first;
+                              _errorMessage = null;
+                              _feedbackMessage = null;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  if (_section == _HardwareSection.devices)
+                    _buildDevices(context)
+                  else if (_section == _HardwareSection.events)
+                    _buildEvents(context)
+                  else
+                    _buildMeterOps(context),
+                  if (_errorMessage != null || _feedbackMessage != null)
+                    const SizedBox(height: 16),
+                  if (_errorMessage != null)
+                    Text(
+                      _errorMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  if (_feedbackMessage != null)
+                    Text(
+                      _feedbackMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDevices(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 5,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Register Device',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _deviceNameController,
+                decoration: const InputDecoration(labelText: 'Device Name'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _deviceCodeController,
+                decoration: const InputDecoration(labelText: 'Device Code'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey<String>('hardware-type-$_deviceType'),
+                initialValue: _deviceType,
+                decoration: const InputDecoration(labelText: 'Device Type'),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'dispenser_controller',
+                    child: Text('Dispenser Controller'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'tank_probe',
+                    child: Text('Tank Probe'),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _deviceType = value ?? 'dispenser_controller';
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              if (_deviceType == 'dispenser_controller')
+                DropdownButtonFormField<int>(
+                  key: ValueKey<String>(
+                    'hardware-dispenser-${_selectedDispenserId ?? 'none'}',
+                  ),
+                  initialValue: _selectedDispenserId,
+                  decoration: const InputDecoration(labelText: 'Dispenser'),
+                  items: [
+                    for (final dispenser in _dispensers)
+                      DropdownMenuItem<int>(
+                        value: dispenser['id'] as int,
+                        child: Text(
+                          '${dispenser['code']} - ${dispenser['name']}',
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedDispenserId = value;
+                    });
+                  },
+                ),
+              if (_deviceType == 'tank_probe')
+                DropdownButtonFormField<int>(
+                  key: ValueKey<String>(
+                    'hardware-tank-${_selectedTankId ?? 'none'}',
+                  ),
+                  initialValue: _selectedTankId,
+                  decoration: const InputDecoration(labelText: 'Tank'),
+                  items: [
+                    for (final tank in _tanks)
+                      DropdownMenuItem<int>(
+                        value: tank['id'] as int,
+                        child: Text('${tank['code']} - ${tank['name']}'),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedTankId = value;
+                    });
+                  },
+                ),
+              if (_deviceType == 'dispenser_controller' ||
+                  _deviceType == 'tank_probe')
+                const SizedBox(height: 12),
+              TextFormField(
+                controller: _deviceIdentifierController,
+                decoration: const InputDecoration(
+                  labelText: 'Device Identifier (optional)',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: _isSubmitting ? null : _createDevice,
+                    icon: _isSubmitting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_circle_outline),
+                    label: const Text('Create Device'),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSubmitting ? null : _pollSelectedDevice,
+                    icon: const Icon(Icons.sync_outlined),
+                    label: const Text('Poll Selected'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 4,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Devices',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  if (_devices.isEmpty)
+                    const Text('No hardware devices registered yet.')
+                  else
+                    for (final device in _devices)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        selected: device['id'] == _selectedDeviceId,
+                        title: Text('${device['code']} - ${device['name']}'),
+                        subtitle: Text(
+                          '${device['device_type']} • ${device['status']} • ${device['integration_mode']}',
+                        ),
+                        onTap: () {
+                          setState(() {
+                            _selectedDeviceId = device['id'] as int;
+                          });
+                        },
+                      ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEvents(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Recent Hardware Events',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            if (_events.isEmpty)
+              const Text('No hardware events recorded yet.')
+            else
+              for (final event in _events)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    '${event['event_type']} • ${event['status']} • device ${event['device_id']}',
+                  ),
+                  subtitle: Text(
+                    '${_formatDateTime(event['recorded_at'])}'
+                    '${event['meter_reading'] != null ? ' • meter ${_formatNumber(event['meter_reading'])}' : ''}'
+                    '${event['volume'] != null ? ' • volume ${_formatNumber(event['volume'])}' : ''}',
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMeterOps(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 5,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Nozzle Meter Operations',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'hardware-nozzle-${_selectedNozzleId ?? 'none'}',
+                ),
+                initialValue: _selectedNozzleId,
+                decoration: const InputDecoration(labelText: 'Nozzle'),
+                items: [
+                  for (final nozzle in _nozzles)
+                    DropdownMenuItem<int>(
+                      value: nozzle['id'] as int,
+                      child: Text('${nozzle['code']} - ${nozzle['name']}'),
+                    ),
+                ],
+                onChanged: (value) async {
+                  setState(() {
+                    _selectedNozzleId = value;
+                  });
+                  await _loadWorkspace();
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _meterReadingController,
+                decoration: const InputDecoration(
+                  labelText: 'New Meter Reading',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _meterReasonController,
+                decoration: const InputDecoration(
+                  labelText: 'Adjustment Reason',
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _isSubmitting ? null : _adjustMeter,
+                icon: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.tune_outlined),
+                label: const Text('Adjust Meter'),
+              ),
+              const SizedBox(height: 24),
+              Text('Simulation', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _simulatedMeterController,
+                decoration: const InputDecoration(
+                  labelText: 'Simulated Meter Reading',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _simulatedVolumeController,
+                decoration: const InputDecoration(
+                  labelText: 'Simulated Volume',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _tankProbeVolumeController,
+                decoration: const InputDecoration(
+                  labelText: 'Tank Probe Volume',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: _isSubmitting ? null : _simulateDispenser,
+                    icon: const Icon(Icons.sensors_outlined),
+                    label: const Text('Simulate Dispenser'),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSubmitting ? null : _simulateTankProbe,
+                    icon: const Icon(Icons.waterfall_chart_outlined),
+                    label: const Text('Simulate Tank Probe'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 4,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Recent Meter Adjustments',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  if (_adjustments.isEmpty)
+                    const Text(
+                      'No meter adjustments found for this nozzle yet.',
+                    )
+                  else
+                    for (final adjustment in _adjustments)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          '${_formatNumber(adjustment['old_reading'])} → ${_formatNumber(adjustment['new_reading'])}',
+                        ),
+                        subtitle: Text(
+                          '${adjustment['reason']} • ${_formatDateTime(adjustment['adjusted_at'])}',
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatNumber(dynamic value) {
+    if (value is num) return value.toStringAsFixed(2);
+    return '0.00';
+  }
+
+  String _formatDateTime(dynamic value) {
+    if (value is! String || value.isEmpty) return 'Unknown';
+    return value.replaceFirst('T', ' ').substring(0, 16);
+  }
+}

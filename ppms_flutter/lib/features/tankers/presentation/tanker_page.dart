@@ -1,0 +1,1222 @@
+import 'package:flutter/material.dart';
+import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+
+enum _TankerSection { tankers, trips, tripOps }
+
+class TankerPage extends StatefulWidget {
+  const TankerPage({super.key, required this.sessionController});
+
+  final SessionController sessionController;
+
+  @override
+  State<TankerPage> createState() => _TankerPageState();
+}
+
+class _TankerPageState extends State<TankerPage> {
+  final _tankerRegistrationController = TextEditingController();
+  final _tankerNameController = TextEditingController();
+  final _tankerCapacityController = TextEditingController();
+  final _tankerOwnerNameController = TextEditingController();
+  final _tankerDriverNameController = TextEditingController();
+  final _tankerDriverPhoneController = TextEditingController();
+  final _tripDestinationController = TextEditingController();
+  final _tripNotesController = TextEditingController();
+  final _deliveryDestinationController = TextEditingController();
+  final _deliveryQuantityController = TextEditingController();
+  final _deliveryFuelRateController = TextEditingController();
+  final _deliveryChargeController = TextEditingController(text: '0');
+  final _deliveryPaidAmountController = TextEditingController(text: '0');
+  final _expenseTypeController = TextEditingController(text: 'driver');
+  final _expenseAmountController = TextEditingController();
+  final _expenseNotesController = TextEditingController();
+  final _completeReasonController = TextEditingController();
+
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+  String? _feedbackMessage;
+
+  _TankerSection _section = _TankerSection.tankers;
+  List<Map<String, dynamic>> _stations = const [];
+  List<Map<String, dynamic>> _suppliers = const [];
+  List<Map<String, dynamic>> _customers = const [];
+  List<Map<String, dynamic>> _fuelTypes = const [];
+  List<Map<String, dynamic>> _tanks = const [];
+  List<Map<String, dynamic>> _tankers = const [];
+  List<Map<String, dynamic>> _trips = const [];
+
+  int? _selectedStationId;
+  int? _selectedTankerId;
+  int? _selectedTripId;
+  int? _selectedFuelTypeId;
+  int? _selectedSupplierId;
+  int? _selectedLinkedTankId;
+  int? _selectedDeliveryCustomerId;
+  String _tankerOwnershipType = 'owned';
+  String _tripType = 'supplier_to_station';
+  String _tripStatusFilter = 'all';
+  String _deliverySaleType = 'cash';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWorkspace();
+  }
+
+  @override
+  void dispose() {
+    _tankerRegistrationController.dispose();
+    _tankerNameController.dispose();
+    _tankerCapacityController.dispose();
+    _tankerOwnerNameController.dispose();
+    _tankerDriverNameController.dispose();
+    _tankerDriverPhoneController.dispose();
+    _tripDestinationController.dispose();
+    _tripNotesController.dispose();
+    _deliveryDestinationController.dispose();
+    _deliveryQuantityController.dispose();
+    _deliveryFuelRateController.dispose();
+    _deliveryChargeController.dispose();
+    _deliveryPaidAmountController.dispose();
+    _expenseTypeController.dispose();
+    _expenseAmountController.dispose();
+    _expenseNotesController.dispose();
+    _completeReasonController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadWorkspace() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final stations = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchStations()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+      final preferredStationId =
+          widget.sessionController.currentUser?['station_id'] as int?;
+      final stationId =
+          _selectedStationId ??
+          preferredStationId ??
+          (stations.isNotEmpty ? stations.first['id'] as int : null);
+
+      final suppliers = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchSuppliers()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+      final customers = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchCustomers(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final fuelTypes = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchFuelTypes()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+      final tanks = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchTanks(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final tankers = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchTankers(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final trips = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchTankerTrips(
+                stationId: stationId,
+                status: _tripStatusFilter == 'all' ? null : _tripStatusFilter,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+
+      if (!mounted) return;
+
+      final selectedTankerId = _resolveSelectedId(_selectedTankerId, tankers);
+      final selectedTripId = _resolveSelectedId(_selectedTripId, trips);
+      final selectedSupplierId = _resolveSelectedId(
+        _selectedSupplierId,
+        suppliers,
+      );
+      final selectedDeliveryCustomerId = _resolveSelectedId(
+        _selectedDeliveryCustomerId,
+        customers,
+      );
+      final selectedLinkedTankId = _resolveSelectedId(
+        _selectedLinkedTankId,
+        tanks,
+      );
+
+      int? selectedFuelTypeId = _resolveSelectedId(
+        _selectedFuelTypeId,
+        fuelTypes,
+      );
+      if (selectedFuelTypeId == null && selectedLinkedTankId != null) {
+        final linkedTank = tanks.cast<Map<String, dynamic>?>().firstWhere(
+          (tank) => tank?['id'] == selectedLinkedTankId,
+          orElse: () => null,
+        );
+        selectedFuelTypeId = linkedTank?['fuel_type_id'] as int?;
+      }
+
+      setState(() {
+        _stations = stations;
+        _suppliers = suppliers;
+        _customers = customers;
+        _fuelTypes = fuelTypes;
+        _tanks = tanks;
+        _tankers = tankers;
+        _trips = trips;
+        _selectedStationId = stationId;
+        _selectedTankerId = selectedTankerId;
+        _selectedTripId = selectedTripId;
+        _selectedSupplierId = selectedSupplierId;
+        _selectedDeliveryCustomerId = selectedDeliveryCustomerId;
+        _selectedLinkedTankId = selectedLinkedTankId;
+        _selectedFuelTypeId = selectedFuelTypeId;
+        _isLoading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+    }
+  }
+
+  int? _resolveSelectedId(int? current, List<Map<String, dynamic>> items) {
+    if (items.isEmpty) return null;
+    if (current != null && items.any((item) => item['id'] == current)) {
+      return current;
+    }
+    return items.first['id'] as int;
+  }
+
+  Future<void> _changeStation(int? stationId) async {
+    if (stationId == null) return;
+    setState(() {
+      _selectedStationId = stationId;
+      _selectedTankerId = null;
+      _selectedTripId = null;
+      _selectedSupplierId = null;
+      _selectedDeliveryCustomerId = null;
+      _selectedLinkedTankId = null;
+      _selectedFuelTypeId = null;
+    });
+    await _loadWorkspace();
+  }
+
+  Future<void> _changeTripStatus(String? status) async {
+    setState(() {
+      _tripStatusFilter = status ?? 'all';
+    });
+    await _loadWorkspace();
+  }
+
+  Future<void> _createTanker() async {
+    final stationId = _selectedStationId;
+    final fuelTypeId = _selectedFuelTypeId;
+    if (stationId == null || fuelTypeId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a station and fuel type first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final tanker = await widget.sessionController.createTanker({
+        'registration_no': _tankerRegistrationController.text.trim(),
+        'name': _tankerNameController.text.trim(),
+        'capacity': double.parse(_tankerCapacityController.text.trim()),
+        'ownership_type': _tankerOwnershipType,
+        'owner_name': _emptyToNull(_tankerOwnerNameController.text),
+        'driver_name': _emptyToNull(_tankerDriverNameController.text),
+        'driver_phone': _emptyToNull(_tankerDriverPhoneController.text),
+        'station_id': stationId,
+        'fuel_type_id': fuelTypeId,
+      });
+      if (!mounted) return;
+      _tankerRegistrationController.clear();
+      _tankerNameController.clear();
+      _tankerCapacityController.clear();
+      _tankerOwnerNameController.clear();
+      _tankerDriverNameController.clear();
+      _tankerDriverPhoneController.clear();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage = 'Tanker ${tanker['name']} created.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _createTrip() async {
+    final tankerId = _selectedTankerId;
+    final fuelTypeId = _selectedFuelTypeId;
+    if (tankerId == null || fuelTypeId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a tanker and fuel type first.';
+      });
+      return;
+    }
+    if (_tripType == 'supplier_to_station' && _selectedLinkedTankId == null) {
+      setState(() {
+        _feedbackMessage = 'Supplier-to-station trips require a linked tank.';
+      });
+      return;
+    }
+    if (_tripType == 'supplier_to_customer' &&
+        _tripDestinationController.text.trim().isEmpty) {
+      setState(() {
+        _feedbackMessage =
+            'Supplier-to-customer trips require a destination name.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final trip = await widget.sessionController.createTankerTrip({
+        'tanker_id': tankerId,
+        'supplier_id': _selectedSupplierId,
+        'fuel_type_id': fuelTypeId,
+        'trip_type': _tripType,
+        'linked_tank_id': _tripType == 'supplier_to_station'
+            ? _selectedLinkedTankId
+            : null,
+        'destination_name': _tripType == 'supplier_to_customer'
+            ? _tripDestinationController.text.trim()
+            : null,
+        'notes': _emptyToNull(_tripNotesController.text),
+      });
+      if (!mounted) return;
+      _tripDestinationController.clear();
+      _tripNotesController.clear();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _selectedTripId = trip['id'] as int?;
+        _feedbackMessage = 'Trip #${trip['id']} created.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _addDelivery() async {
+    final tripId = _selectedTripId;
+    if (tripId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a trip first.';
+      });
+      return;
+    }
+    if (_deliverySaleType == 'credit' && _selectedDeliveryCustomerId == null) {
+      setState(() {
+        _feedbackMessage = 'Credit deliveries require a customer.';
+      });
+      return;
+    }
+    if (_deliveryDestinationController.text.trim().isEmpty &&
+        _selectedDeliveryCustomerId == null) {
+      setState(() {
+        _feedbackMessage =
+            'Provide a destination name or choose a customer for the delivery.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final trip = await widget.sessionController.addTankerTripDelivery(
+        tripId: tripId,
+        payload: {
+          'customer_id': _selectedDeliveryCustomerId,
+          'destination_name': _emptyToNull(_deliveryDestinationController.text),
+          'quantity': double.parse(_deliveryQuantityController.text.trim()),
+          'fuel_rate': double.parse(_deliveryFuelRateController.text.trim()),
+          'delivery_charge': double.parse(
+            _deliveryChargeController.text.trim(),
+          ),
+          'sale_type': _deliverySaleType,
+          'paid_amount': double.parse(
+            _deliveryPaidAmountController.text.trim(),
+          ),
+        },
+      );
+      if (!mounted) return;
+      _deliveryDestinationController.clear();
+      _deliveryQuantityController.clear();
+      _deliveryFuelRateController.clear();
+      _deliveryChargeController.text = '0';
+      _deliveryPaidAmountController.text = '0';
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Delivery added. Trip quantity is ${_formatNumber(trip['total_quantity'])}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _addExpense() async {
+    final tripId = _selectedTripId;
+    if (tripId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a trip first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final trip = await widget.sessionController.addTankerTripExpense(
+        tripId: tripId,
+        payload: {
+          'expense_type': _expenseTypeController.text.trim(),
+          'amount': double.parse(_expenseAmountController.text.trim()),
+          'notes': _emptyToNull(_expenseNotesController.text),
+        },
+      );
+      if (!mounted) return;
+      _expenseAmountController.clear();
+      _expenseNotesController.clear();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Expense added. Trip expense total is ${_formatNumber(trip['expense_total'])}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _completeTrip() async {
+    final tripId = _selectedTripId;
+    if (tripId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a trip first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final trip = await widget.sessionController.completeTankerTrip(
+        tripId: tripId,
+        payload: {'reason': _emptyToNull(_completeReasonController.text)},
+      );
+      if (!mounted) return;
+      _completeReasonController.clear();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Trip #${trip['id']} completed with net profit ${_formatNumber(trip['net_profit'])}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  Map<String, dynamic>? get _selectedTrip {
+    return _trips.cast<Map<String, dynamic>?>().firstWhere(
+      (trip) => trip?['id'] == _selectedTripId,
+      orElse: () => null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadWorkspace,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tanker Workspace',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Manage tanker vehicles, create trips, post deliveries and expenses, and complete tanker runs.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final stationField = DropdownButtonFormField<int>(
+                        key: ValueKey<String>(
+                          'tankers-station-${_selectedStationId ?? 'none'}',
+                        ),
+                        initialValue: _selectedStationId,
+                        decoration: const InputDecoration(labelText: 'Station'),
+                        items: [
+                          for (final station in _stations)
+                            DropdownMenuItem<int>(
+                              value: station['id'] as int,
+                              child: Text(
+                                '${station['name']} (${station['code']})',
+                              ),
+                            ),
+                        ],
+                        onChanged: _changeStation,
+                      );
+                      final sections = SegmentedButton<_TankerSection>(
+                        segments: const [
+                          ButtonSegment(
+                            value: _TankerSection.tankers,
+                            label: Text('Tankers'),
+                            icon: Icon(Icons.local_shipping_outlined),
+                          ),
+                          ButtonSegment(
+                            value: _TankerSection.trips,
+                            label: Text('Trips'),
+                            icon: Icon(Icons.route_outlined),
+                          ),
+                          ButtonSegment(
+                            value: _TankerSection.tripOps,
+                            label: Text('Trip Ops'),
+                            icon: Icon(Icons.fact_check_outlined),
+                          ),
+                        ],
+                        selected: {_section},
+                        onSelectionChanged: (selection) {
+                          setState(() {
+                            _section = selection.first;
+                            _errorMessage = null;
+                            _feedbackMessage = null;
+                          });
+                        },
+                      );
+                      if (constraints.maxWidth < 900) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            stationField,
+                            const SizedBox(height: 12),
+                            sections,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: stationField),
+                          const SizedBox(width: 12),
+                          Expanded(child: sections),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  if (_section == _TankerSection.tankers)
+                    _buildTankersSection(context)
+                  else if (_section == _TankerSection.trips)
+                    _buildTripsSection(context)
+                  else
+                    _buildTripOpsSection(context),
+                  if (_errorMessage != null || _feedbackMessage != null)
+                    const SizedBox(height: 16),
+                  if (_errorMessage != null)
+                    Text(
+                      _errorMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  if (_feedbackMessage != null)
+                    Text(
+                      _feedbackMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTankersSection(BuildContext context) {
+    return ResponsiveSplit(
+      breakpoint: 1150,
+      primary: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Register Tanker',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankerRegistrationController,
+            decoration: const InputDecoration(labelText: 'Registration Number'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankerNameController,
+            decoration: const InputDecoration(labelText: 'Tanker Name'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankerCapacityController,
+            decoration: const InputDecoration(labelText: 'Capacity'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>('tanker-ownership-$_tankerOwnershipType'),
+            initialValue: _tankerOwnershipType,
+            decoration: const InputDecoration(labelText: 'Ownership Type'),
+            items: const [
+              DropdownMenuItem(value: 'owned', child: Text('Owned')),
+              DropdownMenuItem(
+                value: 'third_party',
+                child: Text('Third Party'),
+              ),
+              DropdownMenuItem(value: 'leased', child: Text('Leased')),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _tankerOwnershipType = value ?? 'owned';
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            key: ValueKey<String>(
+              'tanker-fuel-${_selectedFuelTypeId ?? 'none'}',
+            ),
+            initialValue: _selectedFuelTypeId,
+            decoration: const InputDecoration(labelText: 'Fuel Type'),
+            items: [
+              for (final fuelType in _fuelTypes)
+                DropdownMenuItem<int>(
+                  value: fuelType['id'] as int,
+                  child: Text(fuelType['name'] as String? ?? 'Fuel'),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedFuelTypeId = value;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankerOwnerNameController,
+            decoration: const InputDecoration(
+              labelText: 'Owner Name (optional)',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankerDriverNameController,
+            decoration: const InputDecoration(
+              labelText: 'Driver Name (optional)',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankerDriverPhoneController,
+            decoration: const InputDecoration(
+              labelText: 'Driver Phone (optional)',
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _isSubmitting ? null : _createTanker,
+            icon: _isSubmitting
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.local_shipping_outlined),
+            label: const Text('Create Tanker'),
+          ),
+        ],
+      ),
+      secondary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tankers', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              if (_tankers.isEmpty)
+                const Text('No tankers registered yet.')
+              else
+                for (final tanker in _tankers)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    selected: tanker['id'] == _selectedTankerId,
+                    title: Text(
+                      '${tanker['registration_no']} - ${tanker['name']}',
+                    ),
+                    subtitle: Text(
+                      '${tanker['ownership_type']} - capacity ${_formatNumber(tanker['capacity'])} - ${tanker['status']}',
+                    ),
+                    onTap: () {
+                      setState(() {
+                        _selectedTankerId = tanker['id'] as int;
+                        _selectedFuelTypeId = tanker['fuel_type_id'] as int?;
+                      });
+                    },
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTripsSection(BuildContext context) {
+    return ResponsiveSplit(
+      breakpoint: 1150,
+      primary: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Create Trip', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            key: ValueKey<String>('trip-tanker-${_selectedTankerId ?? 'none'}'),
+            initialValue: _selectedTankerId,
+            decoration: const InputDecoration(labelText: 'Tanker'),
+            items: [
+              for (final tanker in _tankers)
+                DropdownMenuItem<int>(
+                  value: tanker['id'] as int,
+                  child: Text(
+                    '${tanker['registration_no']} - ${tanker['name']}',
+                  ),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedTankerId = value;
+                final selected = _tankers
+                    .cast<Map<String, dynamic>?>()
+                    .firstWhere(
+                      (tanker) => tanker?['id'] == value,
+                      orElse: () => null,
+                    );
+                _selectedFuelTypeId = selected?['fuel_type_id'] as int?;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>('trip-type-$_tripType'),
+            initialValue: _tripType,
+            decoration: const InputDecoration(labelText: 'Trip Type'),
+            items: const [
+              DropdownMenuItem(
+                value: 'supplier_to_station',
+                child: Text('Supplier to Station'),
+              ),
+              DropdownMenuItem(
+                value: 'supplier_to_customer',
+                child: Text('Supplier to Customer'),
+              ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _tripType = value ?? 'supplier_to_station';
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            key: ValueKey<String>(
+              'trip-supplier-${_selectedSupplierId ?? 'none'}',
+            ),
+            initialValue: _selectedSupplierId,
+            decoration: const InputDecoration(labelText: 'Supplier'),
+            items: [
+              for (final supplier in _suppliers)
+                DropdownMenuItem<int>(
+                  value: supplier['id'] as int,
+                  child: Text('${supplier['code']} - ${supplier['name']}'),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedSupplierId = value;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            key: ValueKey<String>('trip-fuel-${_selectedFuelTypeId ?? 'none'}'),
+            initialValue: _selectedFuelTypeId,
+            decoration: const InputDecoration(labelText: 'Fuel Type'),
+            items: [
+              for (final fuelType in _fuelTypes)
+                DropdownMenuItem<int>(
+                  value: fuelType['id'] as int,
+                  child: Text(fuelType['name'] as String? ?? 'Fuel'),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedFuelTypeId = value;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          if (_tripType == 'supplier_to_station')
+            DropdownButtonFormField<int>(
+              key: ValueKey<String>(
+                'trip-tank-${_selectedLinkedTankId ?? 'none'}',
+              ),
+              initialValue: _selectedLinkedTankId,
+              decoration: const InputDecoration(labelText: 'Linked Tank'),
+              items: [
+                for (final tank in _tanks)
+                  DropdownMenuItem<int>(
+                    value: tank['id'] as int,
+                    child: Text('${tank['code']} - ${tank['name']}'),
+                  ),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _selectedLinkedTankId = value;
+                });
+              },
+            ),
+          if (_tripType == 'supplier_to_customer')
+            TextFormField(
+              controller: _tripDestinationController,
+              decoration: const InputDecoration(labelText: 'Destination Name'),
+            ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tripNotesController,
+            decoration: const InputDecoration(labelText: 'Notes'),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _isSubmitting ? null : _createTrip,
+            icon: _isSubmitting
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.route_outlined),
+            label: const Text('Create Trip'),
+          ),
+        ],
+      ),
+      secondary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Trips',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 140,
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey<String>(
+                        'trip-status-filter-$_tripStatusFilter',
+                      ),
+                      initialValue: _tripStatusFilter,
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('All')),
+                        DropdownMenuItem(value: 'draft', child: Text('Draft')),
+                        DropdownMenuItem(
+                          value: 'completed',
+                          child: Text('Completed'),
+                        ),
+                      ],
+                      onChanged: _changeTripStatus,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (_trips.isEmpty)
+                const Text('No tanker trips found for this station.')
+              else
+                for (final trip in _trips)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    selected: trip['id'] == _selectedTripId,
+                    title: Text(
+                      '#${trip['id']} - ${trip['trip_type']} - ${trip['status']}',
+                    ),
+                    subtitle: Text(
+                      'Qty ${_formatNumber(trip['total_quantity'])} - Profit ${_formatNumber(trip['net_profit'])}',
+                    ),
+                    onTap: () {
+                      setState(() {
+                        _selectedTripId = trip['id'] as int;
+                      });
+                    },
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTripOpsSection(BuildContext context) {
+    final selectedTrip = _selectedTrip;
+    return ResponsiveSplit(
+      breakpoint: 1150,
+      primary: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Trip Operations',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            key: ValueKey<String>('trip-ops-${_selectedTripId ?? 'none'}'),
+            initialValue: _selectedTripId,
+            decoration: const InputDecoration(labelText: 'Trip'),
+            items: [
+              for (final trip in _trips)
+                DropdownMenuItem<int>(
+                  value: trip['id'] as int,
+                  child: Text(
+                    '#${trip['id']} - ${trip['trip_type']} - ${trip['status']}',
+                  ),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedTripId = value;
+              });
+            },
+          ),
+          const SizedBox(height: 20),
+          Text('Add Delivery', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int?>(
+            key: ValueKey<String>(
+              'trip-delivery-customer-${_selectedDeliveryCustomerId ?? 'none'}',
+            ),
+            initialValue: _selectedDeliveryCustomerId,
+            decoration: const InputDecoration(labelText: 'Customer (optional)'),
+            items: [
+              const DropdownMenuItem<int?>(
+                value: null,
+                child: Text('No customer'),
+              ),
+              for (final customer in _customers)
+                DropdownMenuItem<int?>(
+                  value: customer['id'] as int,
+                  child: Text('${customer['code']} - ${customer['name']}'),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedDeliveryCustomerId = value;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _deliveryDestinationController,
+            decoration: const InputDecoration(
+              labelText: 'Delivery Destination',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _deliveryQuantityController,
+            decoration: const InputDecoration(labelText: 'Quantity'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _deliveryFuelRateController,
+            decoration: const InputDecoration(labelText: 'Fuel Rate'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _deliveryChargeController,
+            decoration: const InputDecoration(labelText: 'Delivery Charge'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>('delivery-sale-type-$_deliverySaleType'),
+            initialValue: _deliverySaleType,
+            decoration: const InputDecoration(labelText: 'Sale Type'),
+            items: const [
+              DropdownMenuItem(value: 'cash', child: Text('Cash')),
+              DropdownMenuItem(value: 'credit', child: Text('Credit')),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _deliverySaleType = value ?? 'cash';
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _deliveryPaidAmountController,
+            decoration: const InputDecoration(labelText: 'Paid Amount'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: _isSubmitting ? null : _addDelivery,
+            icon: const Icon(Icons.add_road_outlined),
+            label: const Text('Add Delivery'),
+          ),
+          const SizedBox(height: 24),
+          Text('Add Expense', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _expenseTypeController,
+            decoration: const InputDecoration(labelText: 'Expense Type'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _expenseAmountController,
+            decoration: const InputDecoration(labelText: 'Amount'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _expenseNotesController,
+            decoration: const InputDecoration(labelText: 'Notes'),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: _isSubmitting ? null : _addExpense,
+            icon: const Icon(Icons.money_off_csred_outlined),
+            label: const Text('Add Expense'),
+          ),
+          const SizedBox(height: 24),
+          Text('Complete Trip', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _completeReasonController,
+            decoration: const InputDecoration(
+              labelText: 'Completion Reason (optional)',
+            ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _isSubmitting ? null : _completeTrip,
+            icon: _isSubmitting
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check_circle_outline),
+            label: const Text('Complete Trip'),
+          ),
+        ],
+      ),
+      secondary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                selectedTrip == null
+                    ? 'Trip Summary'
+                    : 'Trip #${selectedTrip['id']} Summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedTrip == null)
+                const Text('Select a trip to view delivery and expense totals.')
+              else ...[
+                Text('Type: ${selectedTrip['trip_type']}'),
+                Text('Status: ${selectedTrip['status']}'),
+                Text(
+                  'Quantity: ${_formatNumber(selectedTrip['total_quantity'])}',
+                ),
+                Text(
+                  'Fuel Revenue: ${_formatNumber(selectedTrip['fuel_revenue'])}',
+                ),
+                Text(
+                  'Delivery Revenue: ${_formatNumber(selectedTrip['delivery_revenue'])}',
+                ),
+                Text(
+                  'Expense Total: ${_formatNumber(selectedTrip['expense_total'])}',
+                ),
+                Text(
+                  'Net Profit: ${_formatNumber(selectedTrip['net_profit'])}',
+                ),
+                const Divider(height: 24),
+                Text(
+                  'Deliveries',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if ((selectedTrip['deliveries'] as List<dynamic>? ?? const [])
+                    .isEmpty)
+                  const Text('No deliveries posted yet.')
+                else
+                  for (final rawDelivery
+                      in selectedTrip['deliveries'] as List<dynamic>)
+                    Builder(
+                      builder: (context) {
+                        final delivery = Map<String, dynamic>.from(
+                          rawDelivery as Map,
+                        );
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '${_formatNumber(delivery['quantity'])} at ${_formatNumber(delivery['fuel_rate'])}',
+                          ),
+                          subtitle: Text(
+                            '${delivery['sale_type']} - charge ${_formatNumber(delivery['delivery_charge'])}',
+                          ),
+                        );
+                      },
+                    ),
+                const Divider(height: 24),
+                Text(
+                  'Expenses',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if ((selectedTrip['expenses'] as List<dynamic>? ?? const [])
+                    .isEmpty)
+                  const Text('No trip expenses posted yet.')
+                else
+                  for (final rawExpense
+                      in selectedTrip['expenses'] as List<dynamic>)
+                    Builder(
+                      builder: (context) {
+                        final expense = Map<String, dynamic>.from(
+                          rawExpense as Map,
+                        );
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '${expense['expense_type']} - ${_formatNumber(expense['amount'])}',
+                          ),
+                          subtitle: Text(expense['notes'] as String? ?? '-'),
+                        );
+                      },
+                    ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatNumber(dynamic value) {
+    if (value is num) return value.toStringAsFixed(2);
+    return '0.00';
+  }
+}
