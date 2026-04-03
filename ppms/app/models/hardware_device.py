@@ -10,6 +10,7 @@ class HardwareDevice(Base):
     name = Column(String, nullable=False)
     code = Column(String, unique=True, nullable=False, index=True)
     device_type = Column(String, nullable=False)
+    vendor_name = Column(String, nullable=True)
     integration_mode = Column(String, nullable=False, default="simulated")
     status = Column(String, nullable=False, default="offline")
     is_active = Column(Boolean, nullable=False, default=True)

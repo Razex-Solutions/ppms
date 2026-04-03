@@ -7,6 +7,7 @@ class HardwareDeviceCreate(BaseModel):
     name: str
     code: str
     device_type: str
+    vendor_name: str | None = None
     integration_mode: str = "simulated"
     status: str = "offline"
     is_active: bool = True
@@ -17,6 +18,7 @@ class HardwareDeviceCreate(BaseModel):
 
 class HardwareDeviceUpdate(BaseModel):
     name: str | None = None
+    vendor_name: str | None = None
     integration_mode: str | None = None
     status: str | None = None
     is_active: bool | None = None
@@ -30,6 +32,7 @@ class HardwareDeviceResponse(BaseModel):
     name: str
     code: str
     device_type: str
+    vendor_name: str | None = None
     integration_mode: str
     status: str
     is_active: bool

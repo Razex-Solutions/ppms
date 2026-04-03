@@ -18,6 +18,7 @@ from app.schemas.hardware import (
     SimulatedDispenserReadingCreate,
     SimulatedTankProbeReadingCreate,
 )
+from app.services.hardware_adapters import get_hardware_adapter
 from app.services.audit import log_audit_event
 
 
@@ -241,6 +242,7 @@ def simulate_dispenser_reading(
         raise HTTPException(status_code=400, detail="Inactive hardware device cannot receive readings")
     if device.device_type != "dispenser":
         raise HTTPException(status_code=400, detail="Selected hardware device is not a dispenser device")
+    get_hardware_adapter(device).ensure_supported(device)
     if device.dispenser_id is None:
         raise HTTPException(status_code=400, detail="Dispenser hardware is not linked to a dispenser")
 
@@ -293,6 +295,7 @@ def simulate_tank_probe_reading(
         raise HTTPException(status_code=400, detail="Inactive hardware device cannot receive readings")
     if device.device_type != "tank_probe":
         raise HTTPException(status_code=400, detail="Selected hardware device is not a tank probe")
+    get_hardware_adapter(device).ensure_supported(device)
     if device.tank_id is None:
         raise HTTPException(status_code=400, detail="Tank probe hardware is not linked to a tank")
 
@@ -320,3 +323,8 @@ def simulate_tank_probe_reading(
             "notes": data.notes,
         },
     )
+
+
+def check_hardware_adapter(device: HardwareDevice, current_user: User) -> dict:
+    ensure_hardware_access(device, current_user)
+    return get_hardware_adapter(device).health_check(device)

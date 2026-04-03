@@ -13,6 +13,10 @@ class InvoiceProfileUpdate(BaseModel):
     tax_value_2: str | None = None
     default_tax_rate: float = 0
     tax_inclusive: bool = False
+    region_code: str | None = None
+    currency_code: str | None = None
+    compliance_mode: str = "standard"
+    enforce_tax_registration: bool = False
     contact_email: str | None = None
     contact_phone: str | None = None
     footer_text: str | None = None
@@ -37,6 +41,10 @@ class InvoiceProfileResponse(BaseModel):
     tax_value_2: str | None = None
     default_tax_rate: float
     tax_inclusive: bool
+    region_code: str | None = None
+    currency_code: str | None = None
+    compliance_mode: str
+    enforce_tax_registration: bool
     contact_email: str | None = None
     contact_phone: str | None = None
     footer_text: str | None = None

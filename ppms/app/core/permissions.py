@@ -16,6 +16,15 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "delete": {"Admin"},
         "read": {"Admin", "HeadOffice"},
     },
+    "organization_modules": {
+        "read": {"Admin", "HeadOffice"},
+        "update": {"Admin", "HeadOffice"},
+    },
+    "online_api_hooks": {
+        "read": {"Admin", "HeadOffice"},
+        "update": {"Admin", "HeadOffice"},
+        "trigger": {"Admin", "HeadOffice"},
+    },
     "roles": {
         "create": {"Admin"},
         "update": {"Admin"},
@@ -34,6 +43,18 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
     "invoice_profiles": {
         "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
         "update": {"Admin", "HeadOffice", "Manager"},
+    },
+    "document_templates": {
+        "read": {"Admin", "HeadOffice", "Manager", "Accountant"},
+        "update": {"Admin", "HeadOffice", "Manager"},
+    },
+    "maintenance": {
+        "read": {"Admin"},
+        "execute": {"Admin"},
+    },
+    "saas": {
+        "read": {"Admin", "HeadOffice"},
+        "manage": {"Admin"},
     },
     "fuel_types": {
         "create": {"Admin"},
@@ -142,6 +163,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "reject": {"Admin", "HeadOffice"},
     },
     "hardware": {
+        "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
         "create": {"Admin", "Manager"},
         "update": {"Admin", "Manager"},
         "delete": {"Admin", "Manager"},

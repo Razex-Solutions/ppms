@@ -856,7 +856,7 @@ def test_notification_preferences_and_financial_documents(client):
         headers=accountant_headers,
     )
     assert customer_receipt.status_code == 200, customer_receipt.text
-    assert "My Pump Pvt Ltd" in customer_receipt.json()["rendered_html"]
+    assert "My Pump Private Limited" in customer_receipt.json()["rendered_html"]
     assert "NTN" in customer_receipt.json()["rendered_html"]
     assert customer_receipt.json()["document_number"].startswith("MPP-2026-CP-")
 
@@ -892,7 +892,7 @@ def test_notification_preferences_and_financial_documents(client):
     assert "Fuel Sale Invoice" in sale_invoice.json()["rendered_html"]
     assert "GST" in sale_invoice.json()["rendered_html"] or "NTN" in sale_invoice.json()["rendered_html"]
     assert "Payment due within 7 days" in sale_invoice.json()["rendered_html"]
-    assert "Total: 35.40" in sale_invoice.json()["rendered_html"]
+    assert "Total: 94.40" in sale_invoice.json()["rendered_html"]
 
     customer_receipt_pdf = test_client.get(
         f"/financial-documents/customer-payments/{customer_payment_id}/pdf",

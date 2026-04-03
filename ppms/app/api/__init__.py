@@ -5,6 +5,7 @@ from app.api.customer import router as customer_router
 from app.api.customer_payment import router as customer_payment_router
 from app.api.dashboard import router as dashboard_router
 from app.api.dispenser import router as dispenser_router
+from app.api.document_template import router as document_template_router
 from app.api.expense import router as expense_router
 from app.api.fuel_sale import router as fuel_sale_router
 from app.api.fuel_type import router as fuel_type_router
@@ -12,14 +13,18 @@ from app.api.financial_document import router as financial_document_router
 from app.api.hardware import router as hardware_router
 from app.api.invoice_profile import router as invoice_profile_router
 from app.api.ledger import router as ledger_router
+from app.api.maintenance import router as maintenance_router
 from app.api.nozzle import router as nozzle_router
 from app.api.notification import router as notification_router
+from app.api.online_api_hook import router as online_api_hook_router
 from app.api.organization import router as organization_router
+from app.api.organization_module import router as organization_module_router
 from app.api.purchase import router as purchase_router
 from app.api.pos_product import router as pos_product_router
 from app.api.pos_sale import router as pos_sale_router
 from app.api.report_export import router as report_export_router
 from app.api.role import router as role_router
+from app.api.saas import router as saas_router
 from app.api.reports import router as reports_router
 from app.api.shift import router as shift_router
 from app.api.station import router as station_router
@@ -37,6 +42,7 @@ ROUTER_REGISTRY = [
     {"name": "audit_logs", "router": audit_router, "protected": True},
     {"name": "roles", "router": role_router, "protected": True},
     {"name": "organizations", "router": organization_router, "protected": True},
+    {"name": "organization_modules", "router": organization_module_router, "protected": True},
     {"name": "stations", "router": station_router, "protected": True},
     {"name": "station_modules", "router": station_module_router, "protected": True},
     {"name": "users", "router": user_router, "protected": True},
@@ -45,10 +51,13 @@ ROUTER_REGISTRY = [
     {"name": "dispensers", "router": dispenser_router, "protected": True},
     {"name": "nozzles", "router": nozzle_router, "protected": True},
     {"name": "notifications", "router": notification_router, "protected": True},
+    {"name": "online_api_hooks", "router": online_api_hook_router, "protected": True},
     {"name": "fuel_sales", "router": fuel_sale_router, "protected": True},
     {"name": "financial_documents", "router": financial_document_router, "protected": True},
+    {"name": "saas", "router": saas_router, "protected": True},
     {"name": "hardware", "router": hardware_router, "protected": True},
     {"name": "invoice_profiles", "router": invoice_profile_router, "protected": True},
+    {"name": "document_templates", "router": document_template_router, "protected": True},
     {"name": "customers", "router": customer_router, "protected": True},
     {"name": "suppliers", "router": supplier_router, "protected": True},
     {"name": "purchases", "router": purchase_router, "protected": True},
@@ -62,6 +71,7 @@ ROUTER_REGISTRY = [
     {"name": "customer_payments", "router": customer_payment_router, "protected": True},
     {"name": "supplier_payments", "router": supplier_payment_router, "protected": True},
     {"name": "ledger", "router": ledger_router, "protected": True},
+    {"name": "maintenance", "router": maintenance_router, "protected": True},
     {"name": "shifts", "router": shift_router, "protected": True},
     {"name": "tank_dips", "router": tank_dip_router, "protected": True},
     {"name": "dashboard", "router": dashboard_router, "protected": True},

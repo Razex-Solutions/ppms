@@ -12,7 +12,7 @@ from app.core.config import APP_ENV, ENABLED_MODULES, DELIVERY_WORKER_ENABLED, D
 from app.core.database import engine
 from app.core.dependencies import get_current_user
 from app.core.logging import get_logger, setup_logging
-from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent, AuditLog, Organization, ReportExportJob, StationModuleSetting, TankerTrip, TankerDelivery, TankerTripExpense, MeterAdjustmentEvent, Notification, NotificationPreference, NotificationDelivery, InvoiceProfile, FinancialDocumentDispatch
+from app.models import Role, User, Station, FuelType, Tank, Dispenser, Nozzle, FuelSale, Customer, Supplier, Purchase, Tanker, Expense, CustomerPayment, SupplierPayment, NozzleReading, TankDip, Shift, HardwareDevice, HardwareEvent, AuditLog, Organization, OrganizationModuleSetting, OrganizationSubscription, OnlineAPIHook, SubscriptionPlan, ReportExportJob, StationModuleSetting, TankerTrip, TankerDelivery, TankerTripExpense, MeterAdjustmentEvent, Notification, NotificationPreference, NotificationDelivery, InvoiceProfile, DocumentTemplate, FinancialDocumentDispatch
 from app.services.delivery_worker import run_delivery_worker
 
 

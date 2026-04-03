@@ -6,6 +6,7 @@ from app.models.invoice_profile import InvoiceProfile
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.invoice_profile import InvoiceProfileUpdate
+from app.services.compliance import validate_invoice_profile_policy
 
 
 def ensure_invoice_profile_access(db: Session, station_id: int, current_user: User) -> Station:
@@ -33,6 +34,7 @@ def get_or_create_invoice_profile(db: Session, station: Station) -> InvoiceProfi
             invoice_number_width=6,
             default_tax_rate=0,
             tax_inclusive=False,
+            compliance_mode="standard",
         )
         db.add(profile)
         db.commit()
@@ -44,6 +46,7 @@ def update_invoice_profile(db: Session, station: Station, data: InvoiceProfileUp
     profile = get_or_create_invoice_profile(db, station)
     for field, value in data.model_dump().items():
         setattr(profile, field, value)
+    validate_invoice_profile_policy(profile)
     db.commit()
     db.refresh(profile)
     return profile

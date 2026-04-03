@@ -17,6 +17,7 @@ from app.schemas.hardware import (
     SimulatedTankProbeReadingCreate,
 )
 from app.services.hardware import (
+    check_hardware_adapter,
     create_hardware_device,
     ensure_hardware_access,
     simulate_dispenser_reading,
@@ -71,6 +72,19 @@ def get_device(
         raise HTTPException(status_code=404, detail="Hardware device not found")
     ensure_hardware_access(device, current_user)
     return device
+
+
+@router.post("/devices/{device_id}/adapter-check")
+def run_device_adapter_check(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    device = db.query(HardwareDevice).filter(HardwareDevice.id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Hardware device not found")
+    require_permission(current_user, "hardware", "read", detail="You do not have permission to inspect hardware devices")
+    return check_hardware_adapter(device, current_user)
 
 
 @router.put("/devices/{device_id}", response_model=HardwareDeviceResponse)
