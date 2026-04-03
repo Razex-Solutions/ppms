@@ -35,7 +35,7 @@ The Flutter app currently includes:
   - reports
 - fifth working operational screen for:
   - notifications
-- first module placeholders for:
+- sixth working operational screen for:
   - settings
 
 ## Backend Module Mapping

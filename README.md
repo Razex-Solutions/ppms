@@ -161,7 +161,7 @@ venv\Scripts\python.exe -m desktop_app.main
   - live payroll screen
   - live reports screen
   - live notifications screen
-  - placeholder for settings
+  - live settings screen
 
 Run it with:
 

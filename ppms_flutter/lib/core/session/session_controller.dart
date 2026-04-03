@@ -22,6 +22,7 @@ class SessionController extends ChangeNotifier {
   ApiClient get apiClient => _apiClient;
   Map<String, dynamic>? get currentUser => _currentUser;
   Map<String, dynamic>? get rootInfo => _rootInfo;
+  String get baseUrl => _apiClient.baseUrl;
 
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
@@ -51,6 +52,12 @@ class SessionController extends ChangeNotifier {
     _rootInfo = await _apiClient.getRootInfo();
     _tokens = await _apiClient.login(username: username, password: password);
     await _refreshCurrentUser();
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> updateBaseUrl(String baseUrl) async {
+    _apiClient.baseUrl = baseUrl;
     await _persist();
     notifyListeners();
   }
