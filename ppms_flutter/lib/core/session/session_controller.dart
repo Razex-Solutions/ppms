@@ -23,6 +23,23 @@ class SessionController extends ChangeNotifier {
   Map<String, dynamic>? get currentUser => _currentUser;
   Map<String, dynamic>? get rootInfo => _rootInfo;
   String get baseUrl => _apiClient.baseUrl;
+  String get roleName => _currentUser?['role_name'] as String? ?? 'Unknown';
+  String get scopeLevel => _currentUser?['scope_level'] as String? ?? 'station';
+  bool get isPlatformUser => _currentUser?['is_platform_user'] == true;
+  bool get isMasterAdmin => roleName == 'MasterAdmin' || isPlatformUser;
+  int? get stationId => _currentUser?['station_id'] as int?;
+  int? get organizationId => _currentUser?['organization_id'] as int?;
+  Map<String, dynamic> get permissions =>
+      _currentUser?['permissions'] as Map<String, dynamic>? ?? const {};
+  List<String> get enabledModules =>
+      List<String>.from(_rootInfo?['enabled_modules'] ?? const []);
+  List<String> get creatableRoles =>
+      List<String>.from(_currentUser?['creatable_roles'] ?? const []);
+  Map<String, dynamic> get roleScopeRule =>
+      _currentUser?['role_scope_rule'] as Map<String, dynamic>? ?? const {};
+
+  bool canAccessModule(String module) =>
+      enabledModules.contains(module) || permissions.containsKey(module);
 
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
@@ -337,6 +354,15 @@ class SessionController extends ChangeNotifier {
     return _apiClient.getOrganizations(await _validAccessToken());
   }
 
+  Future<Map<String, dynamic>> createOrganization(
+    Map<String, dynamic> payload,
+  ) async {
+    return _apiClient.createOrganization(
+      await _validAccessToken(),
+      payload: payload,
+    );
+  }
+
   Future<List<dynamic>> fetchRoles() async {
     return _apiClient.getRoles(await _validAccessToken());
   }
@@ -430,7 +456,10 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> deleteNozzle({required int nozzleId}) async {
-    return _apiClient.deleteNozzle(await _validAccessToken(), nozzleId: nozzleId);
+    return _apiClient.deleteNozzle(
+      await _validAccessToken(),
+      nozzleId: nozzleId,
+    );
   }
 
   Future<List<dynamic>> fetchNozzleAdjustments({
@@ -899,9 +928,7 @@ class SessionController extends ChangeNotifier {
     );
   }
 
-  Future<Map<String, dynamic>> deleteFuelType({
-    required int fuelTypeId,
-  }) async {
+  Future<Map<String, dynamic>> deleteFuelType({required int fuelTypeId}) async {
     return _apiClient.deleteFuelType(
       await _validAccessToken(),
       fuelTypeId: fuelTypeId,

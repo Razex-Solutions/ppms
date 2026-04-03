@@ -13,6 +13,7 @@ from app.models.document_template import DocumentTemplate
 from app.models.financial_document_dispatch import FinancialDocumentDispatch
 from app.models.auth_session import AuthSession
 from app.models.attendance_record import AttendanceRecord
+from app.models.employee_profile import EmployeeProfile
 from app.models.payroll_run import PayrollRun
 from app.models.payroll_line import PayrollLine
 from app.models.user import User

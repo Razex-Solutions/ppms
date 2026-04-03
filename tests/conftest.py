@@ -57,12 +57,14 @@ def client(tmp_path):
 def seed_base_data(session_local):
     db = session_local()
     try:
+        master_admin_role = Role(name="MasterAdmin", description="Platform access")
         admin_role = Role(name="Admin", description="Full access")
+        station_admin_role = Role(name="StationAdmin", description="Station administration")
         head_office_role = Role(name="HeadOffice", description="Organization-wide read access")
         manager_role = Role(name="Manager", description="Station management")
         accountant_role = Role(name="Accountant", description="Financial operations")
         operator_role = Role(name="Operator", description="Daily operations")
-        db.add_all([admin_role, head_office_role, manager_role, accountant_role, operator_role])
+        db.add_all([master_admin_role, admin_role, station_admin_role, head_office_role, manager_role, accountant_role, operator_role])
         db.flush()
 
         organization = Organization(
@@ -129,7 +131,9 @@ def seed_base_data(session_local):
             hashed_password=hash_password("admin123"),
             is_active=True,
             role_id=admin_role.id,
+            organization_id=organization.id,
             station_id=station_a.id,
+            scope_level="organization",
         )
         operator = User(
             full_name="Operator User",
@@ -138,7 +142,9 @@ def seed_base_data(session_local):
             hashed_password=hash_password("operator123"),
             is_active=True,
             role_id=operator_role.id,
+            organization_id=organization.id,
             station_id=station_a.id,
+            scope_level="station",
         )
         manager = User(
             full_name="Manager User",
@@ -147,7 +153,9 @@ def seed_base_data(session_local):
             hashed_password=hash_password("manager123"),
             is_active=True,
             role_id=manager_role.id,
+            organization_id=organization.id,
             station_id=station_a.id,
+            scope_level="station",
         )
         accountant = User(
             full_name="Accountant User",
@@ -156,7 +164,9 @@ def seed_base_data(session_local):
             hashed_password=hash_password("accountant123"),
             is_active=True,
             role_id=accountant_role.id,
+            organization_id=organization.id,
             station_id=station_a.id,
+            scope_level="station",
         )
         head_office = User(
             full_name="Head Office User",
@@ -165,7 +175,9 @@ def seed_base_data(session_local):
             hashed_password=hash_password("headoffice123"),
             is_active=True,
             role_id=head_office_role.id,
+            organization_id=organization.id,
             station_id=station_a.id,
+            scope_level="organization",
         )
         foreign_manager = User(
             full_name="Foreign Manager",
@@ -174,7 +186,9 @@ def seed_base_data(session_local):
             hashed_password=hash_password("foreign123"),
             is_active=True,
             role_id=manager_role.id,
+            organization_id=foreign_organization.id,
             station_id=station_c.id,
+            scope_level="station",
         )
         db.add_all([admin, operator, manager, accountant, head_office, foreign_manager])
         db.flush()

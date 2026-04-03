@@ -242,6 +242,8 @@ def test_permission_catalog_and_core_role_governance(client):
     assert me_response.json()["role_name"] == "Admin"
     assert "users" in me_response.json()["permissions"]
     assert me_response.json()["role_summary"]["scope"] == "System-wide"
+    assert "StationAdmin" in me_response.json()["creatable_roles"]
+    assert me_response.json()["role_scope_rule"]["scope_level"] == "organization"
 
     catalog_response = test_client.get("/roles/permission-catalog", headers=head_office_headers)
     assert catalog_response.status_code == 200, catalog_response.text
@@ -271,3 +273,96 @@ def test_permission_catalog_and_core_role_governance(client):
 
     delete_response = test_client.delete(f"/roles/{admin_role_id}", headers=admin_headers)
     assert delete_response.status_code == 400
+
+
+def test_role_creation_hierarchy_is_enforced(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    db = session_local()
+    try:
+        from app.models.role import Role
+
+        roles = {role.name: role.id for role in db.query(Role).all()}
+    finally:
+        db.close()
+
+    allowed_station_admin = test_client.post(
+        "/users/",
+        headers=head_office_headers,
+        json={
+            "full_name": "Station Admin A",
+            "username": "stationadmina",
+            "email": "stationadmina@example.com",
+            "password": "stationadmin123",
+            "role_id": roles["StationAdmin"],
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert allowed_station_admin.status_code == 200, allowed_station_admin.text
+    assert allowed_station_admin.json()["scope_level"] == "station"
+    assert allowed_station_admin.json()["organization_id"] == data["organization_id"]
+
+    forbidden_head_office = test_client.post(
+        "/users/",
+        headers=admin_headers,
+        json={
+            "full_name": "Blocked Head Office",
+            "username": "blockedheadoffice",
+            "email": "blockedheadoffice@example.com",
+            "password": "blocked123",
+            "role_id": roles["HeadOffice"],
+            "organization_id": data["organization_id"],
+        },
+    )
+    assert forbidden_head_office.status_code == 403
+
+
+def test_employee_profiles_follow_station_scope_and_allow_profile_only_staff(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    create_profile = test_client.post(
+        "/employee-profiles/",
+        headers=manager_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "full_name": "Driver One",
+            "staff_type": "tanker_driver",
+            "employee_code": "DRV-001",
+            "phone": "0300000000",
+            "monthly_salary": 25000,
+            "can_login": False,
+        },
+    )
+    assert create_profile.status_code == 200, create_profile.text
+    profile_id = create_profile.json()["id"]
+    assert create_profile.json()["linked_user_id"] is None
+    assert create_profile.json()["organization_id"] == data["organization_id"]
+
+    own_org_profiles = test_client.get("/employee-profiles/", headers=head_office_headers)
+    assert own_org_profiles.status_code == 200, own_org_profiles.text
+    profile_names = {profile["full_name"] for profile in own_org_profiles.json()}
+    assert "Driver One" in profile_names
+
+    forbidden_foreign_station = test_client.post(
+        "/employee-profiles/",
+        headers=head_office_headers,
+        json={
+            "station_id": data["station_c_id"],
+            "full_name": "Blocked Driver",
+            "staff_type": "tanker_driver",
+        },
+    )
+    assert forbidden_foreign_station.status_code == 403
+
+    require_linked_user = test_client.put(
+        f"/employee-profiles/{profile_id}",
+        headers=manager_headers,
+        json={"can_login": True},
+    )
+    assert require_linked_user.status_code == 400

@@ -7,6 +7,7 @@ from app.api.customer_payment import router as customer_payment_router
 from app.api.dashboard import router as dashboard_router
 from app.api.dispenser import router as dispenser_router
 from app.api.document_template import router as document_template_router
+from app.api.employee_profile import router as employee_profile_router
 from app.api.expense import router as expense_router
 from app.api.fuel_sale import router as fuel_sale_router
 from app.api.fuel_type import router as fuel_type_router
@@ -62,6 +63,7 @@ ROUTER_REGISTRY = [
     {"name": "hardware", "router": hardware_router, "protected": True},
     {"name": "invoice_profiles", "router": invoice_profile_router, "protected": True},
     {"name": "document_templates", "router": document_template_router, "protected": True},
+    {"name": "employee_profiles", "router": employee_profile_router, "protected": True},
     {"name": "customers", "router": customer_router, "protected": True},
     {"name": "suppliers", "router": supplier_router, "protected": True},
     {"name": "purchases", "router": purchase_router, "protected": True},

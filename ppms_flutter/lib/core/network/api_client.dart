@@ -413,6 +413,18 @@ class ApiClient {
     return _sendList('GET', '/organizations/', accessToken: accessToken);
   }
 
+  Future<Map<String, dynamic>> createOrganization(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/organizations/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<List<dynamic>> getRoles(String accessToken) async {
     return _sendList('GET', '/roles/', accessToken: accessToken);
   }
@@ -1188,11 +1200,7 @@ class ApiClient {
     String accessToken, {
     required int fuelTypeId,
   }) async {
-    return _send(
-      'DELETE',
-      '/fuel-types/$fuelTypeId',
-      accessToken: accessToken,
-    );
+    return _send('DELETE', '/fuel-types/$fuelTypeId', accessToken: accessToken);
   }
 
   Future<Map<String, dynamic>> getInvoiceProfile(

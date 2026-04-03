@@ -5,6 +5,59 @@ from app.models.user import User
 
 CORE_ROLE_NAMES = {"MasterAdmin", "Admin", "StationAdmin", "HeadOffice", "Manager", "Operator", "Accountant"}
 
+ROLE_SCOPE_RULES: dict[str, dict[str, object]] = {
+    "MasterAdmin": {
+        "scope_level": "platform",
+        "requires_organization": False,
+        "requires_station": False,
+        "platform_only": True,
+    },
+    "HeadOffice": {
+        "scope_level": "organization",
+        "requires_organization": True,
+        "requires_station": False,
+        "platform_only": False,
+    },
+    "Admin": {
+        "scope_level": "organization",
+        "requires_organization": True,
+        "requires_station": False,
+        "platform_only": False,
+    },
+    "StationAdmin": {
+        "scope_level": "station",
+        "requires_organization": True,
+        "requires_station": True,
+        "platform_only": False,
+    },
+    "Manager": {
+        "scope_level": "station",
+        "requires_organization": True,
+        "requires_station": True,
+        "platform_only": False,
+    },
+    "Accountant": {
+        "scope_level": "station",
+        "requires_organization": True,
+        "requires_station": True,
+        "platform_only": False,
+    },
+    "Operator": {
+        "scope_level": "station",
+        "requires_organization": True,
+        "requires_station": True,
+        "platform_only": False,
+    },
+}
+
+ROLE_CREATION_RULES: dict[str, set[str]] = {
+    "MasterAdmin": {"MasterAdmin", "HeadOffice", "Admin", "StationAdmin", "Manager", "Accountant", "Operator"},
+    "HeadOffice": {"Admin", "StationAdmin", "Manager", "Accountant", "Operator"},
+    "Admin": {"StationAdmin", "Manager", "Accountant", "Operator"},
+    "StationAdmin": {"Manager", "Accountant", "Operator"},
+    "Manager": {"Operator"},
+}
+
 ROLE_CAPABILITY_SUMMARY: dict[str, dict[str, str]] = {
     "MasterAdmin": {
         "scope": "Platform-wide",
@@ -50,6 +103,12 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "update": {"Admin"},
         "delete": {"Admin"},
         "read": {"Admin", "HeadOffice"},
+    },
+    "employee_profiles": {
+        "create": {"MasterAdmin", "Admin", "HeadOffice", "StationAdmin", "Manager"},
+        "update": {"MasterAdmin", "Admin", "HeadOffice", "StationAdmin", "Manager"},
+        "delete": {"MasterAdmin", "Admin", "HeadOffice", "StationAdmin"},
+        "read": {"MasterAdmin", "Admin", "HeadOffice", "StationAdmin", "Manager", "Accountant"},
     },
     "organizations": {
         "create": {"Admin"},
@@ -251,6 +310,8 @@ def get_permission_catalog() -> dict:
     return {
         "core_roles": sorted(CORE_ROLE_NAMES),
         "role_summaries": ROLE_CAPABILITY_SUMMARY,
+        "role_scope_rules": ROLE_SCOPE_RULES,
+        "role_creation_rules": {role: sorted(targets) for role, targets in ROLE_CREATION_RULES.items()},
         "permission_matrix": {
             module: {action: sorted(roles) for action, roles in actions.items()}
             for module, actions in PERMISSION_MATRIX.items()
@@ -265,6 +326,33 @@ def is_core_role_name(role_name: str) -> bool:
 def ensure_core_role_mutation_allowed(role_name: str, action: str) -> None:
     if is_core_role_name(role_name):
         raise HTTPException(status_code=400, detail=f"Core role '{role_name}' cannot be {action}")
+
+
+def get_creatable_roles(role_name: str) -> list[str]:
+    return sorted(ROLE_CREATION_RULES.get(role_name, set()))
+
+
+def ensure_role_creation_allowed(current_user: User, target_role_name: str) -> None:
+    if current_user.role.name == "MasterAdmin" or getattr(current_user, "is_platform_user", False):
+        return
+    allowed_targets = ROLE_CREATION_RULES.get(current_user.role.name, set())
+    if target_role_name not in allowed_targets:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You are not allowed to create users with the role '{target_role_name}'",
+        )
+
+
+def get_role_scope_rule(role_name: str) -> dict[str, object]:
+    return ROLE_SCOPE_RULES.get(
+        role_name,
+        {
+            "scope_level": "station",
+            "requires_organization": True,
+            "requires_station": True,
+            "platform_only": False,
+        },
+    )
 
 
 def require_permission(current_user: User, module: str, action: str, detail: str | None = None) -> None:

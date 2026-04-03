@@ -140,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                     const SizedBox(height: 8),
                     Text(
-                      'Local default login: admin / admin123',
+                      'Local default logins: admin / admin123, masteradmin / master123',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 20),

@@ -5,6 +5,7 @@ import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/features/admin/presentation/admin_page.dart';
 import 'package:ppms_flutter/features/attendance/presentation/attendance_page.dart';
 import 'package:ppms_flutter/features/dashboard/presentation/dashboard_page.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/platform_dashboard_page.dart';
 import 'package:ppms_flutter/features/documents/presentation/documents_page.dart';
 import 'package:ppms_flutter/features/expenses/presentation/expenses_page.dart';
 import 'package:ppms_flutter/features/finance/presentation/finance_page.dart';
@@ -12,6 +13,7 @@ import 'package:ppms_flutter/features/governance/presentation/governance_page.da
 import 'package:ppms_flutter/features/hardware/presentation/hardware_page.dart';
 import 'package:ppms_flutter/features/inventory/presentation/inventory_page.dart';
 import 'package:ppms_flutter/features/notifications/presentation/notifications_page.dart';
+import 'package:ppms_flutter/features/onboarding/presentation/onboarding_page.dart';
 import 'package:ppms_flutter/features/parties/presentation/parties_page.dart';
 import 'package:ppms_flutter/features/payroll/presentation/payroll_page.dart';
 import 'package:ppms_flutter/features/pos/presentation/pos_page.dart';
@@ -19,6 +21,7 @@ import 'package:ppms_flutter/features/reports/presentation/reports_page.dart';
 import 'package:ppms_flutter/features/sales/presentation/sales_page.dart';
 import 'package:ppms_flutter/features/settings/presentation/settings_page.dart';
 import 'package:ppms_flutter/features/setup/presentation/setup_page.dart';
+import 'package:ppms_flutter/features/setup/presentation/station_setup_page.dart';
 import 'package:ppms_flutter/features/shifts/presentation/shift_page.dart';
 import 'package:ppms_flutter/features/tankers/presentation/tanker_page.dart';
 
@@ -71,12 +74,9 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final user = widget.sessionController.currentUser ?? const {};
-    final roleName = user['role_name'] ?? 'Unknown';
-    final permissions =
-        user['permissions'] as Map<String, dynamic>? ?? const {};
-    final enabledModules = List<String>.from(
-      widget.sessionController.rootInfo?['enabled_modules'] ?? const [],
-    );
+    final roleName = widget.sessionController.roleName;
+    final permissions = widget.sessionController.permissions;
+    final enabledModules = widget.sessionController.enabledModules;
     final destinations = _buildDestinations(enabledModules, permissions);
     if (_selectedIndex >= destinations.length) {
       _selectedIndex = 0;
@@ -277,8 +277,56 @@ class _AppShellState extends State<AppShell> {
     List<String> enabledModules,
     Map<String, dynamic> permissions,
   ) {
-    final currentRoleName =
-        widget.sessionController.currentUser?['role_name'] as String?;
+    final currentRoleName = widget.sessionController.roleName;
+    final isPlatformUser = widget.sessionController.isMasterAdmin;
+    if (isPlatformUser) {
+      return [
+        _ShellDestination(
+          label: 'Platform',
+          icon: Icons.dashboard_customize_outlined,
+          page: PlatformDashboardPage(
+            sessionController: widget.sessionController,
+          ),
+        ),
+        if (permissions.containsKey('organizations') ||
+            permissions.containsKey('users'))
+          _ShellDestination(
+            label: 'Onboarding',
+            icon: Icons.playlist_add_check_circle_outlined,
+            page: OnboardingPage(sessionController: widget.sessionController),
+          ),
+        if (permissions.containsKey('stations') ||
+            permissions.containsKey('tanks') ||
+            permissions.containsKey('dispensers') ||
+            permissions.containsKey('nozzles') ||
+            permissions.containsKey('invoice_profiles'))
+          _ShellDestination(
+            label: 'Station Setup',
+            icon: Icons.architecture_outlined,
+            page: StationSetupPage(sessionController: widget.sessionController),
+          ),
+        if (permissions.containsKey('organizations') ||
+            permissions.containsKey('users') ||
+            permissions.containsKey('roles') ||
+            permissions.containsKey('saas'))
+          _ShellDestination(
+            label: 'Admin',
+            icon: Icons.admin_panel_settings_outlined,
+            page: AdminPage(sessionController: widget.sessionController),
+          ),
+        if (permissions.containsKey('reports'))
+          _ShellDestination(
+            label: 'Reports',
+            icon: Icons.assessment_outlined,
+            page: ReportsPage(sessionController: widget.sessionController),
+          ),
+        _ShellDestination(
+          label: 'Settings',
+          icon: Icons.settings_outlined,
+          page: SettingsPage(sessionController: widget.sessionController),
+        ),
+      ];
+    }
     return [
       _ShellDestination(
         label: 'Dashboard',

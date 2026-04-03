@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.core.access import get_user_organization_id, require_admin
 from app.core.database import get_db
-from app.core.permissions import ROLE_CAPABILITY_SUMMARY, get_effective_permissions
+from app.core.permissions import (
+    ROLE_CAPABILITY_SUMMARY,
+    get_creatable_roles,
+    get_effective_permissions,
+    get_role_scope_rule,
+)
 from app.core.security import verify_password, create_access_token, decode_token, hash_password
 from app.core.dependencies import get_current_user
 from app.models.user import User
@@ -94,6 +99,8 @@ def get_me(current_user: User = Depends(get_current_user)):
         "scope_level": current_user.scope_level,
         "is_platform_user": current_user.is_platform_user,
         "role_summary": ROLE_CAPABILITY_SUMMARY.get(current_user.role.name),
+        "role_scope_rule": get_role_scope_rule(current_user.role.name),
+        "creatable_roles": get_creatable_roles(current_user.role.name),
         "permissions": get_effective_permissions(current_user),
     }
 
