@@ -55,6 +55,29 @@ class _FinancePageState extends State<FinancePage> {
   String _customerPaymentMethod = 'cash';
   String _supplierPaymentMethod = 'cash';
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    return modulePermissions?.contains(action) ?? false;
+  }
+
+  bool get _canCreatePurchases => _hasAction('purchases', 'create');
+  bool get _canReversePurchases => _hasAction('purchases', 'reverse');
+  bool get _canCreateCustomerPayments =>
+      _hasAction('customer_payments', 'create');
+  bool get _canReverseCustomerPayments =>
+      _hasAction('customer_payments', 'reverse');
+  bool get _canCreateSupplierPayments =>
+      _hasAction('supplier_payments', 'create');
+  bool get _canReverseSupplierPayments =>
+      _hasAction('supplier_payments', 'reverse');
+
+  bool get _canReadPurchases => _canCreatePurchases || _canReversePurchases;
+  bool get _canReadCustomerPayments =>
+      _canCreateCustomerPayments || _canReverseCustomerPayments;
+  bool get _canReadSupplierPayments =>
+      _canCreateSupplierPayments || _canReverseSupplierPayments;
+
   @override
   void initState() {
     super.initState();
@@ -684,6 +707,15 @@ class _FinancePageState extends State<FinancePage> {
       return Center(child: Text(_errorMessage!));
     }
 
+    final availableSections = <_FinanceSection>[
+      if (_canReadPurchases) _FinanceSection.purchases,
+      if (_canReadCustomerPayments) _FinanceSection.customerPayments,
+      if (_canReadSupplierPayments) _FinanceSection.supplierPayments,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
+    }
+
     return RefreshIndicator(
       onRefresh: _loadFinanceWorkspace,
       child: ListView(
@@ -701,7 +733,7 @@ class _FinancePageState extends State<FinancePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Manage fuel purchases, customer receipts, and supplier payments from one shared station workspace.',
+                    _roleSummary(),
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
@@ -725,22 +757,25 @@ class _FinancePageState extends State<FinancePage> {
                         onChanged: _changeStation,
                       );
                       final sections = SegmentedButton<_FinanceSection>(
-                        segments: const [
-                          ButtonSegment(
-                            value: _FinanceSection.purchases,
-                            label: Text('Purchases'),
-                            icon: Icon(Icons.inventory_2_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _FinanceSection.customerPayments,
-                            label: Text('Customer'),
-                            icon: Icon(Icons.account_balance_wallet_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _FinanceSection.supplierPayments,
-                            label: Text('Supplier'),
-                            icon: Icon(Icons.payments_outlined),
-                          ),
+                        segments: [
+                          if (_canReadPurchases)
+                            const ButtonSegment(
+                              value: _FinanceSection.purchases,
+                              label: Text('Purchases'),
+                              icon: Icon(Icons.inventory_2_outlined),
+                            ),
+                          if (_canReadCustomerPayments)
+                            const ButtonSegment(
+                              value: _FinanceSection.customerPayments,
+                              label: Text('Customer'),
+                              icon: Icon(Icons.account_balance_wallet_outlined),
+                            ),
+                          if (_canReadSupplierPayments)
+                            const ButtonSegment(
+                              value: _FinanceSection.supplierPayments,
+                              label: Text('Supplier'),
+                              icon: Icon(Icons.payments_outlined),
+                            ),
                         ],
                         selected: {_section},
                         onSelectionChanged: (selection) {
@@ -814,6 +849,12 @@ class _FinancePageState extends State<FinancePage> {
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!_canCreatePurchases) ...[
+            _buildPermissionNotice(
+              'This role can review purchase records here but cannot create new purchases.',
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             'Create Purchase',
             style: Theme.of(context).textTheme.titleLarge,
@@ -839,11 +880,13 @@ class _FinancePageState extends State<FinancePage> {
                   child: Text('${supplier['code']} - ${supplier['name']}'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedSupplierId = value;
-              });
-            },
+            onChanged: _canCreatePurchases
+                ? (value) {
+                    setState(() {
+                      _selectedSupplierId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
@@ -857,16 +900,20 @@ class _FinancePageState extends State<FinancePage> {
                   child: Text('${tank['code']} - ${tank['name']}'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedTankId = value;
-                final match = _tanks.cast<Map<String, dynamic>?>().firstWhere(
-                  (tank) => tank?['id'] == value,
-                  orElse: () => null,
-                );
-                _selectedFuelTypeId = match?['fuel_type_id'] as int?;
-              });
-            },
+            onChanged: _canCreatePurchases
+                ? (value) {
+                    setState(() {
+                      _selectedTankId = value;
+                      final match = _tanks
+                          .cast<Map<String, dynamic>?>()
+                          .firstWhere(
+                            (tank) => tank?['id'] == value,
+                            orElse: () => null,
+                          );
+                      _selectedFuelTypeId = match?['fuel_type_id'] as int?;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
@@ -882,15 +929,18 @@ class _FinancePageState extends State<FinancePage> {
                   child: Text(fuelType['name'] as String? ?? 'Fuel'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedFuelTypeId = value;
-              });
-            },
+            onChanged: _canCreatePurchases
+                ? (value) {
+                    setState(() {
+                      _selectedFuelTypeId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _purchaseQuantityController,
+            enabled: _canCreatePurchases,
             decoration: const InputDecoration(
               labelText: 'Quantity',
               helperText: 'Total liters received in this purchase.',
@@ -900,6 +950,7 @@ class _FinancePageState extends State<FinancePage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _purchaseRateController,
+            enabled: _canCreatePurchases,
             decoration: const InputDecoration(
               labelText: 'Rate Per Liter',
               helperText: 'Purchase price per liter.',
@@ -909,17 +960,21 @@ class _FinancePageState extends State<FinancePage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _purchaseReferenceController,
+            enabled: _canCreatePurchases,
             decoration: const InputDecoration(labelText: 'Reference No'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _purchaseNotesController,
+            enabled: _canCreatePurchases,
             decoration: const InputDecoration(labelText: 'Notes'),
             maxLines: 2,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _submitPurchase,
+            onPressed: !_canCreatePurchases || _isSubmitting
+                ? null
+                : _submitPurchase,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -940,6 +995,12 @@ class _FinancePageState extends State<FinancePage> {
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!_canCreateCustomerPayments) ...[
+            _buildPermissionNotice(
+              'This role can review customer receipts here but cannot create new customer payments.',
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             'Customer Receipt',
             style: Theme.of(context).textTheme.titleLarge,
@@ -965,11 +1026,13 @@ class _FinancePageState extends State<FinancePage> {
                   child: Text('${customer['code']} - ${customer['name']}'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedCustomerId = value;
-              });
-            },
+            onChanged: _canCreateCustomerPayments
+                ? (value) {
+                    setState(() {
+                      _selectedCustomerId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -983,15 +1046,18 @@ class _FinancePageState extends State<FinancePage> {
               DropdownMenuItem(value: 'bank', child: Text('Bank')),
               DropdownMenuItem(value: 'card', child: Text('Card')),
             ],
-            onChanged: (value) {
-              setState(() {
-                _customerPaymentMethod = value ?? 'cash';
-              });
-            },
+            onChanged: _canCreateCustomerPayments
+                ? (value) {
+                    setState(() {
+                      _customerPaymentMethod = value ?? 'cash';
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerAmountController,
+            enabled: _canCreateCustomerPayments,
             decoration: const InputDecoration(
               labelText: 'Amount',
               helperText: 'Received amount for the selected customer.',
@@ -1001,17 +1067,21 @@ class _FinancePageState extends State<FinancePage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerReferenceController,
+            enabled: _canCreateCustomerPayments,
             decoration: const InputDecoration(labelText: 'Reference No'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerNotesController,
+            enabled: _canCreateCustomerPayments,
             decoration: const InputDecoration(labelText: 'Notes'),
             maxLines: 2,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _submitCustomerPayment,
+            onPressed: !_canCreateCustomerPayments || _isSubmitting
+                ? null
+                : _submitCustomerPayment,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -1032,6 +1102,12 @@ class _FinancePageState extends State<FinancePage> {
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!_canCreateSupplierPayments) ...[
+            _buildPermissionNotice(
+              'This role can review supplier payments here but cannot create new supplier payments.',
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             'Supplier Payment',
             style: Theme.of(context).textTheme.titleLarge,
@@ -1057,11 +1133,13 @@ class _FinancePageState extends State<FinancePage> {
                   child: Text('${supplier['code']} - ${supplier['name']}'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedSupplierId = value;
-              });
-            },
+            onChanged: _canCreateSupplierPayments
+                ? (value) {
+                    setState(() {
+                      _selectedSupplierId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -1075,15 +1153,18 @@ class _FinancePageState extends State<FinancePage> {
               DropdownMenuItem(value: 'bank', child: Text('Bank')),
               DropdownMenuItem(value: 'card', child: Text('Card')),
             ],
-            onChanged: (value) {
-              setState(() {
-                _supplierPaymentMethod = value ?? 'cash';
-              });
-            },
+            onChanged: _canCreateSupplierPayments
+                ? (value) {
+                    setState(() {
+                      _supplierPaymentMethod = value ?? 'cash';
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _supplierAmountController,
+            enabled: _canCreateSupplierPayments,
             decoration: const InputDecoration(
               labelText: 'Amount',
               helperText: 'Paid amount for the selected supplier.',
@@ -1093,17 +1174,21 @@ class _FinancePageState extends State<FinancePage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _supplierReferenceController,
+            enabled: _canCreateSupplierPayments,
             decoration: const InputDecoration(labelText: 'Reference No'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _supplierNotesController,
+            enabled: _canCreateSupplierPayments,
             decoration: const InputDecoration(labelText: 'Notes'),
             maxLines: 2,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _submitSupplierPayment,
+            onPressed: !_canCreateSupplierPayments || _isSubmitting
+                ? null
+                : _submitSupplierPayment,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -1207,7 +1292,9 @@ class _FinancePageState extends State<FinancePage> {
               ],
               const SizedBox(height: 12),
               FilledButton.tonalIcon(
-                onPressed: _isReversing ? null : _reverseCurrentSelection,
+                onPressed: !_canReversePurchases || _isReversing
+                    ? null
+                    : _reverseCurrentSelection,
                 icon: _isReversing
                     ? const SizedBox.square(
                         dimension: 18,
@@ -1312,7 +1399,9 @@ class _FinancePageState extends State<FinancePage> {
               ],
               const SizedBox(height: 12),
               FilledButton.tonalIcon(
-                onPressed: _isReversing ? null : _reverseCurrentSelection,
+                onPressed: !_canReverseCustomerPayments || _isReversing
+                    ? null
+                    : _reverseCurrentSelection,
                 icon: _isReversing
                     ? const SizedBox.square(
                         dimension: 18,
@@ -1417,7 +1506,9 @@ class _FinancePageState extends State<FinancePage> {
               ],
               const SizedBox(height: 12),
               FilledButton.tonalIcon(
-                onPressed: _isReversing ? null : _reverseCurrentSelection,
+                onPressed: !_canReverseSupplierPayments || _isReversing
+                    ? null
+                    : _reverseCurrentSelection,
                 icon: _isReversing
                     ? const SizedBox.square(
                         dimension: 18,
@@ -1452,6 +1543,33 @@ class _FinancePageState extends State<FinancePage> {
 
   Widget _buildDetailWrap(List<Widget> children) {
     return Wrap(spacing: 12, runSpacing: 12, children: children);
+  }
+
+  String _roleSummary() {
+    switch (widget.sessionController.roleName) {
+      case 'HeadOffice':
+        return 'Review organization-wide finance records and document history without posting day-to-day station transactions.';
+      case 'Accountant':
+        return 'Manage collections, supplier payments, purchase review, and financial document actions.';
+      case 'Manager':
+        return 'Handle station purchases and payment activity with operational finance visibility.';
+      default:
+        return 'Manage fuel purchases, customer receipts, and supplier payments from one shared station workspace.';
+    }
+  }
+
+  Widget _buildPermissionNotice(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
   }
 
   Widget _buildHintBanner(BuildContext context, String message) {

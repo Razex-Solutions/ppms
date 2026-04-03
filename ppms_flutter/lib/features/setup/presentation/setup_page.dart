@@ -51,6 +51,21 @@ class _SetupPageState extends State<SetupPage> {
   bool _taxInclusive = false;
   bool _enforceTaxRegistration = false;
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    return modulePermissions?.contains(action) ?? false;
+  }
+
+  bool get _canManageFuelTypes =>
+      _hasAction('fuel_types', 'create') ||
+      _hasAction('fuel_types', 'update') ||
+      _hasAction('fuel_types', 'delete');
+  bool get _canReadFuelTypes => _canManageFuelTypes || _fuelTypes.isNotEmpty;
+  bool get _canManageInvoiceProfile => _hasAction('invoice_profiles', 'update');
+  bool get _canReadInvoiceProfile =>
+      _hasAction('invoice_profiles', 'read') || _canManageInvoiceProfile;
+
   @override
   void initState() {
     super.initState();
@@ -396,10 +411,32 @@ class _SetupPageState extends State<SetupPage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  Widget _buildPermissionNotice(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    final availableSections = <_SetupSection>[
+      if (_canReadFuelTypes) _SetupSection.fuelTypes,
+      if (_canReadInvoiceProfile) _SetupSection.invoiceProfile,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
     }
 
     return RefreshIndicator(
@@ -419,7 +456,7 @@ class _SetupPageState extends State<SetupPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Configure core business setup like fuel types and invoice profile details for the station.',
+                    'Configure station business setup, with edit controls only where this role is allowed to manage them.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
@@ -449,17 +486,19 @@ class _SetupPageState extends State<SetupPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: SegmentedButton<_SetupSection>(
-                          segments: const [
-                            ButtonSegment(
-                              value: _SetupSection.fuelTypes,
-                              label: Text('Fuel Types'),
-                              icon: Icon(Icons.opacity_outlined),
-                            ),
-                            ButtonSegment(
-                              value: _SetupSection.invoiceProfile,
-                              label: Text('Invoice Profile'),
-                              icon: Icon(Icons.receipt_outlined),
-                            ),
+                          segments: [
+                            if (_canReadFuelTypes)
+                              const ButtonSegment(
+                                value: _SetupSection.fuelTypes,
+                                label: Text('Fuel Types'),
+                                icon: Icon(Icons.opacity_outlined),
+                              ),
+                            if (_canReadInvoiceProfile)
+                              const ButtonSegment(
+                                value: _SetupSection.invoiceProfile,
+                                label: Text('Invoice Profile'),
+                                icon: Icon(Icons.receipt_outlined),
+                              ),
                           ],
                           selected: {_section},
                           onSelectionChanged: (selection) {
@@ -509,6 +548,12 @@ class _SetupPageState extends State<SetupPage> {
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!_canManageFuelTypes) ...[
+            _buildPermissionNotice(
+              'This role can review fuel types here but cannot create, update, or delete them.',
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             _selectedFuelTypeId == null ? 'Create Fuel Type' : 'Edit Fuel Type',
             style: Theme.of(context).textTheme.titleLarge,
@@ -516,11 +561,13 @@ class _SetupPageState extends State<SetupPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _fuelTypeNameController,
+            enabled: _canManageFuelTypes,
             decoration: const InputDecoration(labelText: 'Fuel Type Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _fuelTypeDescriptionController,
+            enabled: _canManageFuelTypes,
             decoration: const InputDecoration(labelText: 'Description'),
             maxLines: 2,
           ),
@@ -530,7 +577,9 @@ class _SetupPageState extends State<SetupPage> {
             runSpacing: 12,
             children: [
               FilledButton.icon(
-                onPressed: _isSubmitting ? null : _createFuelType,
+                onPressed: !_canManageFuelTypes || _isSubmitting
+                    ? null
+                    : _createFuelType,
                 icon: Icon(
                   _selectedFuelTypeId == null
                       ? Icons.add_circle_outline
@@ -542,7 +591,7 @@ class _SetupPageState extends State<SetupPage> {
                       : 'Save Fuel Type',
                 ),
               ),
-              if (_selectedFuelTypeId != null)
+              if (_selectedFuelTypeId != null && _canManageFuelTypes)
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
@@ -584,7 +633,9 @@ class _SetupPageState extends State<SetupPage> {
                     contentPadding: EdgeInsets.zero,
                     title: Text(fuelType['name'] as String? ?? 'Fuel'),
                     subtitle: Text(fuelType['description'] as String? ?? '-'),
-                    onTap: () => _selectFuelType(fuelType),
+                    onTap: _canManageFuelTypes
+                        ? () => _selectFuelType(fuelType)
+                        : null,
                   ),
             ],
           ),
@@ -597,6 +648,12 @@ class _SetupPageState extends State<SetupPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (!_canManageInvoiceProfile) ...[
+          _buildPermissionNotice(
+            'This role can review invoice profile settings here but cannot change them.',
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -612,6 +669,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _businessNameController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Business Name',
                     ),
@@ -619,11 +677,13 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _legalNameController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(labelText: 'Legal Name'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _registrationNoController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Registration No',
                     ),
@@ -631,6 +691,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _taxRegistrationNoController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Tax Registration No',
                     ),
@@ -638,6 +699,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _taxRateController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Default Tax Rate',
                     ),
@@ -665,20 +727,24 @@ class _SetupPageState extends State<SetupPage> {
                       ),
                       DropdownMenuItem(value: 'strict', child: Text('Strict')),
                     ],
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedComplianceMode = value ?? 'standard';
-                      });
-                    },
+                    onChanged: _canManageInvoiceProfile
+                        ? (value) {
+                            setState(() {
+                              _selectedComplianceMode = value ?? 'standard';
+                            });
+                          }
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _regionCodeController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(labelText: 'Region Code'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _currencyCodeController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Currency Code',
                     ),
@@ -686,6 +752,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _contactEmailController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Contact Email',
                     ),
@@ -693,6 +760,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _contactPhoneController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Contact Phone',
                     ),
@@ -700,6 +768,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _invoicePrefixController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Invoice Prefix',
                     ),
@@ -707,6 +776,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _invoiceSeriesController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Invoice Series',
                     ),
@@ -714,6 +784,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _invoiceWidthController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Invoice Number Width',
                     ),
@@ -722,6 +793,7 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _paymentTermsController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Payment Terms',
                     ),
@@ -729,12 +801,14 @@ class _SetupPageState extends State<SetupPage> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _footerTextController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(labelText: 'Footer Text'),
                     maxLines: 2,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _saleNotesController,
+                    enabled: _canManageInvoiceProfile,
                     decoration: const InputDecoration(
                       labelText: 'Sale Invoice Notes',
                     ),
@@ -745,27 +819,33 @@ class _SetupPageState extends State<SetupPage> {
                     contentPadding: EdgeInsets.zero,
                     value: _taxInclusive,
                     title: const Text('Tax Inclusive'),
-                    onChanged: (value) {
-                      setState(() {
-                        _taxInclusive = value;
-                      });
-                    },
+                    onChanged: _canManageInvoiceProfile
+                        ? (value) {
+                            setState(() {
+                              _taxInclusive = value;
+                            });
+                          }
+                        : null,
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: _enforceTaxRegistration,
                     title: const Text('Enforce Tax Registration'),
-                    onChanged: (value) {
-                      setState(() {
-                        _enforceTaxRegistration = value;
-                      });
-                    },
+                    onChanged: _canManageInvoiceProfile
+                        ? (value) {
+                            setState(() {
+                              _enforceTaxRegistration = value;
+                            });
+                          }
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       FilledButton.icon(
-                        onPressed: _isSubmitting ? null : _saveInvoiceProfile,
+                        onPressed: !_canManageInvoiceProfile || _isSubmitting
+                            ? null
+                            : _saveInvoiceProfile,
                         icon: const Icon(Icons.save_outlined),
                         label: const Text('Save Profile'),
                       ),
@@ -798,7 +878,9 @@ class _SetupPageState extends State<SetupPage> {
                       ),
                       const SizedBox(width: 12),
                       FilledButton.tonalIcon(
-                        onPressed: _isSubmitting ? null : _applyPreset,
+                        onPressed: !_canManageInvoiceProfile || _isSubmitting
+                            ? null
+                            : _applyPreset,
                         icon: const Icon(Icons.rule_folder_outlined),
                         label: const Text('Apply Preset'),
                       ),

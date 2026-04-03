@@ -3,7 +3,7 @@ import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
 
-enum _AdminSection { users, stations, roles, modules }
+enum _AdminSection { users, employeeProfiles, stations, roles, modules }
 
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key, required this.sessionController});
@@ -26,6 +26,13 @@ class _AdminPageState extends State<AdminPage> {
   final _stationCityController = TextEditingController();
   final _roleNameController = TextEditingController();
   final _roleDescriptionController = TextEditingController();
+  final _employeeFullNameController = TextEditingController();
+  final _employeeCodeController = TextEditingController();
+  final _employeePhoneController = TextEditingController();
+  final _employeeNationalIdController = TextEditingController();
+  final _employeeAddressController = TextEditingController();
+  final _employeeSalaryController = TextEditingController(text: '0');
+  final _employeeNotesController = TextEditingController();
 
   bool _isLoading = true;
   bool _isSubmitting = false;
@@ -37,6 +44,7 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> _organizations = const [];
   List<Map<String, dynamic>> _roles = const [];
   List<Map<String, dynamic>> _users = const [];
+  List<Map<String, dynamic>> _employeeProfiles = const [];
   List<Map<String, dynamic>> _stationModules = const [];
   Map<String, dynamic>? _permissionCatalog;
 
@@ -44,10 +52,51 @@ class _AdminPageState extends State<AdminPage> {
   int? _selectedOrganizationId;
   int? _selectedRoleId;
   int? _selectedUserId;
+  int? _selectedEmployeeProfileId;
   int? _selectedRoleEditId;
   int? _selectedStationEditId;
   bool _userPayrollEnabled = true;
+  bool _employeeIsActive = true;
+  bool _employeePayrollEnabled = true;
+  bool _employeeCanLogin = false;
   bool _stationIsHeadOffice = false;
+  String _selectedStaffType = 'attendant';
+
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    return modulePermissions?.contains(action) ?? false;
+  }
+
+  bool get _canReadUsers =>
+      _hasAction('users', 'read') || _hasAction('users', 'create');
+  bool get _canManageUsers =>
+      _hasAction('users', 'create') ||
+      _hasAction('users', 'update') ||
+      _hasAction('users', 'delete');
+  bool get _canReadEmployeeProfiles =>
+      _hasAction('employee_profiles', 'read') ||
+      _hasAction('employee_profiles', 'create');
+  bool get _canManageEmployeeProfiles =>
+      _hasAction('employee_profiles', 'create') ||
+      _hasAction('employee_profiles', 'update') ||
+      _hasAction('employee_profiles', 'delete');
+  bool get _canReadStations =>
+      _hasAction('stations', 'read') || _hasAction('stations', 'create');
+  bool get _canManageStations =>
+      _hasAction('stations', 'create') ||
+      _hasAction('stations', 'update') ||
+      _hasAction('stations', 'delete');
+  bool get _canReadRoles =>
+      _hasAction('roles', 'read') || _hasAction('roles', 'create');
+  bool get _canManageRoles =>
+      _hasAction('roles', 'create') ||
+      _hasAction('roles', 'update') ||
+      _hasAction('roles', 'delete');
+  bool get _canReadModules =>
+      _hasAction('station_modules', 'read') ||
+      _hasAction('station_modules', 'update');
+  bool get _canManageModules => _hasAction('station_modules', 'update');
 
   @override
   void initState() {
@@ -68,6 +117,13 @@ class _AdminPageState extends State<AdminPage> {
     _stationCityController.dispose();
     _roleNameController.dispose();
     _roleDescriptionController.dispose();
+    _employeeFullNameController.dispose();
+    _employeeCodeController.dispose();
+    _employeePhoneController.dispose();
+    _employeeNationalIdController.dispose();
+    _employeeAddressController.dispose();
+    _employeeSalaryController.dispose();
+    _employeeNotesController.dispose();
     super.dispose();
   }
 
@@ -108,6 +164,12 @@ class _AdminPageState extends State<AdminPage> {
           stationId: stationId,
         )).map((item) => Map<String, dynamic>.from(item as Map)),
       );
+      final employeeProfiles = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchEmployeeProfiles(
+          stationId: stationId,
+          organizationId: _selectedOrganizationId,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
       final stationModules = stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
@@ -122,15 +184,29 @@ class _AdminPageState extends State<AdminPage> {
           _selectedOrganizationId ??
           widget.sessionController.currentUser?['organization_id'] as int? ??
           (organizations.isNotEmpty ? organizations.first['id'] as int : null);
+      final creatableRoleNames = widget.sessionController.creatableRoles;
+      final creatableRoles = creatableRoleNames.isEmpty
+          ? roles
+          : roles
+                .where(
+                  (role) =>
+                      creatableRoleNames.contains(role['name'] as String?),
+                )
+                .toList();
       final roleId =
-          _selectedRoleId ??
-          (roles.isNotEmpty ? roles.first['id'] as int : null);
+          (_selectedRoleId != null &&
+              creatableRoles.any((role) => role['id'] == _selectedRoleId))
+          ? _selectedRoleId
+          : (creatableRoles.isNotEmpty
+                ? creatableRoles.first['id'] as int
+                : null);
 
       setState(() {
         _stations = stations;
         _organizations = organizations;
         _roles = roles;
         _users = users;
+        _employeeProfiles = employeeProfiles;
         _stationModules = stationModules;
         _permissionCatalog = permissionCatalog;
         _selectedStationId = stationId;
@@ -153,6 +229,14 @@ class _AdminPageState extends State<AdminPage> {
       _selectedStationId = stationId;
     });
     await _loadWorkspace();
+  }
+
+  List<Map<String, dynamic>> get _creatableRoleOptions {
+    final allowedNames = widget.sessionController.creatableRoles;
+    if (allowedNames.isEmpty) {
+      return _roles;
+    }
+    return _roles.where((role) => allowedNames.contains(role['name'])).toList();
   }
 
   Future<void> _createUser() async {
@@ -198,6 +282,61 @@ class _AdminPageState extends State<AdminPage> {
       setState(() {
         _feedbackMessage =
             'User ${user['username']} ${isEditing ? 'updated' : 'created'}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _createEmployeeProfile() async {
+    final stationId = _selectedStationId;
+    if (stationId == null) {
+      setState(() {
+        _feedbackMessage = 'Select a station first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final payload = {
+        'station_id': stationId,
+        'full_name': _employeeFullNameController.text.trim(),
+        'staff_type': _selectedStaffType,
+        'employee_code': _emptyToNull(_employeeCodeController.text),
+        'phone': _emptyToNull(_employeePhoneController.text),
+        'national_id': _emptyToNull(_employeeNationalIdController.text),
+        'address': _emptyToNull(_employeeAddressController.text),
+        'is_active': _employeeIsActive,
+        'payroll_enabled': _employeePayrollEnabled,
+        'monthly_salary': double.parse(_employeeSalaryController.text.trim()),
+        'can_login': _employeeCanLogin,
+        'notes': _emptyToNull(_employeeNotesController.text),
+      };
+      final isEditing = _selectedEmployeeProfileId != null;
+      final profile = isEditing
+          ? await widget.sessionController.updateEmployeeProfile(
+              profileId: _selectedEmployeeProfileId!,
+              payload: payload,
+            )
+          : await widget.sessionController.createEmployeeProfile(payload);
+      if (!mounted) return;
+      _resetEmployeeProfileForm();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Employee profile ${profile['full_name']} ${isEditing ? 'updated' : 'created'}.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -362,6 +501,43 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Future<void> _deleteEmployeeProfile() async {
+    final profileId = _selectedEmployeeProfileId;
+    if (profileId == null) return;
+    final confirmed = await _confirmDelete(
+      title: 'Delete Employee Profile',
+      message:
+          'Delete this staff profile only if it is not needed for payroll or operational assignment anymore.',
+    );
+    if (!confirmed) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      final response = await widget.sessionController.deleteEmployeeProfile(
+        profileId: profileId,
+      );
+      if (!mounted) return;
+      _resetEmployeeProfileForm();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            response['message'] as String? ??
+            'Employee profile deleted successfully.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
   Future<void> _deleteStation() async {
     final stationId = _selectedStationEditId;
     if (stationId == null) return;
@@ -464,6 +640,27 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
+  void _selectEmployeeProfile(Map<String, dynamic> profile) {
+    setState(() {
+      _selectedEmployeeProfileId = profile['id'] as int;
+      _employeeFullNameController.text = profile['full_name'] as String? ?? '';
+      _employeeCodeController.text = profile['employee_code'] as String? ?? '';
+      _employeePhoneController.text = profile['phone'] as String? ?? '';
+      _employeeNationalIdController.text =
+          profile['national_id'] as String? ?? '';
+      _employeeAddressController.text = profile['address'] as String? ?? '';
+      _employeeSalaryController.text =
+          ((profile['monthly_salary'] as num?) ?? 0).toString();
+      _employeeNotesController.text = profile['notes'] as String? ?? '';
+      _selectedStaffType = profile['staff_type'] as String? ?? 'attendant';
+      _employeeIsActive = profile['is_active'] as bool? ?? true;
+      _employeePayrollEnabled = profile['payroll_enabled'] as bool? ?? true;
+      _employeeCanLogin = profile['can_login'] as bool? ?? false;
+      _feedbackMessage = 'Editing employee profile ${profile['full_name']}.';
+      _errorMessage = null;
+    });
+  }
+
   void _selectRole(Map<String, dynamic> role) {
     setState(() {
       _selectedRoleEditId = role['id'] as int;
@@ -497,6 +694,21 @@ class _AdminPageState extends State<AdminPage> {
     _selectedRoleEditId = null;
     _roleNameController.clear();
     _roleDescriptionController.clear();
+  }
+
+  void _resetEmployeeProfileForm() {
+    _selectedEmployeeProfileId = null;
+    _employeeFullNameController.clear();
+    _employeeCodeController.clear();
+    _employeePhoneController.clear();
+    _employeeNationalIdController.clear();
+    _employeeAddressController.clear();
+    _employeeSalaryController.text = '0';
+    _employeeNotesController.clear();
+    _selectedStaffType = 'attendant';
+    _employeeIsActive = true;
+    _employeePayrollEnabled = true;
+    _employeeCanLogin = false;
   }
 
   Future<void> _toggleStationModule(String moduleName, bool isEnabled) async {
@@ -541,6 +753,17 @@ class _AdminPageState extends State<AdminPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final availableSections = <_AdminSection>[
+      if (_canReadUsers) _AdminSection.users,
+      if (_canReadEmployeeProfiles) _AdminSection.employeeProfiles,
+      if (_canReadStations) _AdminSection.stations,
+      if (_canReadRoles) _AdminSection.roles,
+      if (_canReadModules) _AdminSection.modules,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
+    }
+
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
@@ -582,27 +805,37 @@ class _AdminPageState extends State<AdminPage> {
                         onChanged: _changeStation,
                       );
                       final sections = SegmentedButton<_AdminSection>(
-                        segments: const [
-                          ButtonSegment(
-                            value: _AdminSection.users,
-                            label: Text('Users'),
-                            icon: Icon(Icons.group_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _AdminSection.stations,
-                            label: Text('Stations'),
-                            icon: Icon(Icons.store_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _AdminSection.roles,
-                            label: Text('Roles'),
-                            icon: Icon(Icons.admin_panel_settings_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _AdminSection.modules,
-                            label: Text('Modules'),
-                            icon: Icon(Icons.toggle_on_outlined),
-                          ),
+                        segments: [
+                          if (_canReadUsers)
+                            const ButtonSegment(
+                              value: _AdminSection.users,
+                              label: Text('Users'),
+                              icon: Icon(Icons.group_outlined),
+                            ),
+                          if (_canReadEmployeeProfiles)
+                            const ButtonSegment(
+                              value: _AdminSection.employeeProfiles,
+                              label: Text('Staff'),
+                              icon: Icon(Icons.badge_outlined),
+                            ),
+                          if (_canReadStations)
+                            const ButtonSegment(
+                              value: _AdminSection.stations,
+                              label: Text('Stations'),
+                              icon: Icon(Icons.store_outlined),
+                            ),
+                          if (_canReadRoles)
+                            const ButtonSegment(
+                              value: _AdminSection.roles,
+                              label: Text('Roles'),
+                              icon: Icon(Icons.admin_panel_settings_outlined),
+                            ),
+                          if (_canReadModules)
+                            const ButtonSegment(
+                              value: _AdminSection.modules,
+                              label: Text('Modules'),
+                              icon: Icon(Icons.toggle_on_outlined),
+                            ),
                         ],
                         selected: {_section},
                         onSelectionChanged: (selection) {
@@ -663,6 +896,8 @@ class _AdminPageState extends State<AdminPage> {
     switch (_section) {
       case _AdminSection.users:
         return _buildUsersSection(context);
+      case _AdminSection.employeeProfiles:
+        return _buildEmployeeProfilesSection(context);
       case _AdminSection.stations:
         return _buildStationsSection(context);
       case _AdminSection.roles:
@@ -673,6 +908,17 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget _buildUsersSection(BuildContext context) {
+    final creatableRoles = [..._creatableRoleOptions];
+    if (_selectedRoleId != null &&
+        !creatableRoles.any((role) => role['id'] == _selectedRoleId)) {
+      final currentRole = _roles.cast<Map<String, dynamic>?>().firstWhere(
+        (role) => role?['id'] == _selectedRoleId,
+        orElse: () => null,
+      );
+      if (currentRole != null) {
+        creatableRoles.add(currentRole);
+      }
+    }
     final selectedUser = _users.cast<Map<String, dynamic>?>().firstWhere(
       (user) => user?['id'] == _selectedUserId,
       orElse: () => null,
@@ -682,6 +928,12 @@ class _AdminPageState extends State<AdminPage> {
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!_canManageUsers) ...[
+            _buildReadOnlyNotice(
+              'This role can review user records but cannot create, update, or delete users.',
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             _selectedUserId == null ? 'Create User' : 'Edit User',
             style: Theme.of(context).textTheme.titleLarge,
@@ -689,44 +941,54 @@ class _AdminPageState extends State<AdminPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _userFullNameController,
+            enabled: _canManageUsers,
             decoration: const InputDecoration(labelText: 'Full Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userUsernameController,
+            enabled: _canManageUsers,
             decoration: const InputDecoration(labelText: 'Username'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userEmailController,
+            enabled: _canManageUsers,
             decoration: const InputDecoration(labelText: 'Email'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userPasswordController,
+            enabled: _canManageUsers,
             decoration: const InputDecoration(labelText: 'Password'),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             key: ValueKey<String>('admin-role-${_selectedRoleId ?? 'none'}'),
             initialValue: _selectedRoleId,
-            decoration: const InputDecoration(labelText: 'Role'),
+            decoration: const InputDecoration(
+              labelText: 'Role',
+              helperText: 'Only roles allowed by your current scope are shown.',
+            ),
             items: [
-              for (final role in _roles)
+              for (final role in creatableRoles)
                 DropdownMenuItem<int>(
                   value: role['id'] as int,
                   child: Text(role['name'] as String? ?? 'Role'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedRoleId = value;
-              });
-            },
+            onChanged: _canManageUsers
+                ? (value) {
+                    setState(() {
+                      _selectedRoleId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userSalaryController,
+            enabled: _canManageUsers,
             decoration: const InputDecoration(labelText: 'Monthly Salary'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
@@ -735,23 +997,28 @@ class _AdminPageState extends State<AdminPage> {
             contentPadding: EdgeInsets.zero,
             value: _userPayrollEnabled,
             title: const Text('Payroll Enabled'),
-            onChanged: (value) {
-              setState(() {
-                _userPayrollEnabled = value;
-              });
-            },
+            onChanged: _canManageUsers
+                ? (value) {
+                    setState(() {
+                      _userPayrollEnabled = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _isSubmitting ? null : _createUser,
-            icon: Icon(
-              _selectedUserId == null
-                  ? Icons.person_add_alt_1_outlined
-                  : Icons.save_outlined,
+          if (_canManageUsers)
+            FilledButton.icon(
+              onPressed: _isSubmitting ? null : _createUser,
+              icon: Icon(
+                _selectedUserId == null
+                    ? Icons.person_add_alt_1_outlined
+                    : Icons.save_outlined,
+              ),
+              label: Text(
+                _selectedUserId == null ? 'Create User' : 'Save User',
+              ),
             ),
-            label: Text(_selectedUserId == null ? 'Create User' : 'Save User'),
-          ),
-          if (_selectedUserId != null) ...[
+          if (_selectedUserId != null && _canManageUsers) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -850,6 +1117,12 @@ class _AdminPageState extends State<AdminPage> {
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!_canManageStations) ...[
+            _buildReadOnlyNotice(
+              'This role can review station records but cannot create, update, or delete stations.',
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             _selectedStationEditId == null ? 'Create Station' : 'Edit Station',
             style: Theme.of(context).textTheme.titleLarge,
@@ -870,30 +1143,36 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedOrganizationId = value;
-              });
-            },
+            onChanged: _canManageStations
+                ? (value) {
+                    setState(() {
+                      _selectedOrganizationId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _stationNameController,
+            enabled: _canManageStations,
             decoration: const InputDecoration(labelText: 'Station Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _stationCodeController,
+            enabled: _canManageStations,
             decoration: const InputDecoration(labelText: 'Station Code'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _stationAddressController,
+            enabled: _canManageStations,
             decoration: const InputDecoration(labelText: 'Address'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _stationCityController,
+            enabled: _canManageStations,
             decoration: const InputDecoration(labelText: 'City'),
           ),
           const SizedBox(height: 12),
@@ -901,27 +1180,30 @@ class _AdminPageState extends State<AdminPage> {
             contentPadding: EdgeInsets.zero,
             value: _stationIsHeadOffice,
             title: const Text('Head Office Station'),
-            onChanged: (value) {
-              setState(() {
-                _stationIsHeadOffice = value;
-              });
-            },
+            onChanged: _canManageStations
+                ? (value) {
+                    setState(() {
+                      _stationIsHeadOffice = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _isSubmitting ? null : _createStation,
-            icon: Icon(
-              _selectedStationEditId == null
-                  ? Icons.add_business_outlined
-                  : Icons.save_outlined,
+          if (_canManageStations)
+            FilledButton.icon(
+              onPressed: _isSubmitting ? null : _createStation,
+              icon: Icon(
+                _selectedStationEditId == null
+                    ? Icons.add_business_outlined
+                    : Icons.save_outlined,
+              ),
+              label: Text(
+                _selectedStationEditId == null
+                    ? 'Create Station'
+                    : 'Save Station',
+              ),
             ),
-            label: Text(
-              _selectedStationEditId == null
-                  ? 'Create Station'
-                  : 'Save Station',
-            ),
-          ),
-          if (_selectedStationEditId != null) ...[
+          if (_selectedStationEditId != null && _canManageStations) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -1017,6 +1299,258 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  Widget _buildEmployeeProfilesSection(BuildContext context) {
+    const staffTypes = [
+      'attendant',
+      'tanker_driver',
+      'manager',
+      'cashier',
+      'mechanic',
+      'helper',
+      'security',
+      'other',
+    ];
+    final selectedProfile = _employeeProfiles
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (profile) => profile?['id'] == _selectedEmployeeProfileId,
+          orElse: () => null,
+        );
+    return ResponsiveSplit(
+      breakpoint: 1150,
+      primary: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!_canManageEmployeeProfiles) ...[
+            _buildReadOnlyNotice(
+              'This role can review staff profiles but cannot create, update, or delete them.',
+            ),
+            const SizedBox(height: 12),
+          ],
+          Text(
+            _selectedEmployeeProfileId == null
+                ? 'Create Staff Profile'
+                : 'Edit Staff Profile',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _employeeFullNameController,
+            enabled: _canManageEmployeeProfiles,
+            decoration: const InputDecoration(labelText: 'Full Name'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>('staff-type-$_selectedStaffType'),
+            initialValue: _selectedStaffType,
+            decoration: const InputDecoration(labelText: 'Staff Type'),
+            items: [
+              for (final staffType in staffTypes)
+                DropdownMenuItem<String>(
+                  value: staffType,
+                  child: Text(staffType.replaceAll('_', ' ')),
+                ),
+            ],
+            onChanged: _canManageEmployeeProfiles
+                ? (value) {
+                    setState(() {
+                      _selectedStaffType = value ?? 'attendant';
+                    });
+                  }
+                : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _employeeCodeController,
+            enabled: _canManageEmployeeProfiles,
+            decoration: const InputDecoration(labelText: 'Employee Code'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _employeePhoneController,
+            enabled: _canManageEmployeeProfiles,
+            decoration: const InputDecoration(labelText: 'Phone'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _employeeNationalIdController,
+            enabled: _canManageEmployeeProfiles,
+            decoration: const InputDecoration(labelText: 'National ID'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _employeeAddressController,
+            enabled: _canManageEmployeeProfiles,
+            decoration: const InputDecoration(labelText: 'Address'),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _employeeSalaryController,
+            enabled: _canManageEmployeeProfiles,
+            decoration: const InputDecoration(labelText: 'Monthly Salary'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _employeeNotesController,
+            enabled: _canManageEmployeeProfiles,
+            decoration: const InputDecoration(labelText: 'Notes'),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _employeeIsActive,
+            title: const Text('Active'),
+            onChanged: _canManageEmployeeProfiles
+                ? (value) {
+                    setState(() {
+                      _employeeIsActive = value;
+                    });
+                  }
+                : null,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _employeePayrollEnabled,
+            title: const Text('Payroll Enabled'),
+            onChanged: _canManageEmployeeProfiles
+                ? (value) {
+                    setState(() {
+                      _employeePayrollEnabled = value;
+                    });
+                  }
+                : null,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _employeeCanLogin,
+            title: const Text('Can Login'),
+            subtitle: const Text(
+              'Keep this off for profile-only staff unless a linked login user will exist.',
+            ),
+            onChanged: _canManageEmployeeProfiles
+                ? (value) {
+                    setState(() {
+                      _employeeCanLogin = value;
+                    });
+                  }
+                : null,
+          ),
+          const SizedBox(height: 16),
+          if (_canManageEmployeeProfiles)
+            FilledButton.icon(
+              onPressed: _isSubmitting ? null : _createEmployeeProfile,
+              icon: Icon(
+                _selectedEmployeeProfileId == null
+                    ? Icons.person_add_alt_1_outlined
+                    : Icons.save_outlined,
+              ),
+              label: Text(
+                _selectedEmployeeProfileId == null
+                    ? 'Create Staff Profile'
+                    : 'Save Staff Profile',
+              ),
+            ),
+          if (_selectedEmployeeProfileId != null &&
+              _canManageEmployeeProfiles) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                OutlinedButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () {
+                          setState(() {
+                            _resetEmployeeProfileForm();
+                            _feedbackMessage = 'Staff profile edit cancelled.';
+                          });
+                        },
+                  child: const Text('Cancel Edit'),
+                ),
+                OutlinedButton(
+                  onPressed: _isSubmitting ? null : _deleteEmployeeProfile,
+                  child: const Text('Delete Staff Profile'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+      secondary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Staff Profiles',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (_employeeProfiles.isEmpty)
+                const Text('No staff profiles found for this scope.')
+              else
+                for (final profile in _employeeProfiles)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(profile['full_name'] as String? ?? 'Staff'),
+                    subtitle: Text(
+                      '${profile['staff_type'] ?? '-'} • ${profile['employee_code'] ?? 'no code'}',
+                    ),
+                    trailing: Text(
+                      profile['can_login'] == true ? 'login' : 'profile-only',
+                    ),
+                    onTap: () => _selectEmployeeProfile(profile),
+                  ),
+              if (selectedProfile != null) ...[
+                const Divider(height: 24),
+                Text(
+                  'Selected Staff Details',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Name',
+                    selectedProfile['full_name'] as String? ?? '-',
+                  ),
+                  _buildDetailItem(
+                    'Type',
+                    selectedProfile['staff_type'] as String? ?? '-',
+                  ),
+                  _buildDetailItem(
+                    'Code',
+                    selectedProfile['employee_code'] as String? ?? '-',
+                  ),
+                  _buildDetailItem(
+                    'Phone',
+                    selectedProfile['phone'] as String? ?? '-',
+                  ),
+                  _buildDetailItem(
+                    'Payroll',
+                    selectedProfile['payroll_enabled'] == true
+                        ? 'enabled'
+                        : 'disabled',
+                  ),
+                  _buildDetailItem(
+                    'Access',
+                    selectedProfile['can_login'] == true
+                        ? 'login-enabled'
+                        : 'profile-only',
+                  ),
+                ]),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRolesSection(BuildContext context) {
     final roleSummaries = Map<String, dynamic>.from(
       _permissionCatalog?['role_summaries'] as Map? ?? const {},
@@ -1030,6 +1564,12 @@ class _AdminPageState extends State<AdminPage> {
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (!_canManageRoles) ...[
+            _buildReadOnlyNotice(
+              'This role can review the role catalog but cannot create, update, or delete roles.',
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             _selectedRoleEditId == null ? 'Create Role' : 'Edit Role',
             style: Theme.of(context).textTheme.titleLarge,
@@ -1037,27 +1577,30 @@ class _AdminPageState extends State<AdminPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _roleNameController,
+            enabled: _canManageRoles,
             decoration: const InputDecoration(labelText: 'Role Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _roleDescriptionController,
+            enabled: _canManageRoles,
             decoration: const InputDecoration(labelText: 'Description'),
             maxLines: 2,
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _isSubmitting ? null : _createRole,
-            icon: Icon(
-              _selectedRoleEditId == null
-                  ? Icons.shield_outlined
-                  : Icons.save_outlined,
+          if (_canManageRoles)
+            FilledButton.icon(
+              onPressed: _isSubmitting ? null : _createRole,
+              icon: Icon(
+                _selectedRoleEditId == null
+                    ? Icons.shield_outlined
+                    : Icons.save_outlined,
+              ),
+              label: Text(
+                _selectedRoleEditId == null ? 'Create Role' : 'Save Role',
+              ),
             ),
-            label: Text(
-              _selectedRoleEditId == null ? 'Create Role' : 'Save Role',
-            ),
-          ),
-          if (_selectedRoleEditId != null) ...[
+          if (_selectedRoleEditId != null && _canManageRoles) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -1174,6 +1717,12 @@ class _AdminPageState extends State<AdminPage> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
+            if (!_canManageModules) ...[
+              _buildReadOnlyNotice(
+                'This role can review module state but cannot change module toggles.',
+              ),
+              const SizedBox(height: 12),
+            ],
             if (_selectedStationId == null)
               const Text('Select a station to manage modules.')
             else if (_stationModules.isEmpty)
@@ -1185,7 +1734,7 @@ class _AdminPageState extends State<AdminPage> {
                   value: module['is_enabled'] as bool? ?? false,
                   title: Text(module['module_name'] as String? ?? 'Module'),
                   subtitle: Text('Station ${module['station_id']}'),
-                  onChanged: _isSubmitting
+                  onChanged: !_canManageModules || _isSubmitting
                       ? null
                       : (value) => _toggleStationModule(
                           module['module_name'] as String,
@@ -1215,6 +1764,20 @@ class _AdminPageState extends State<AdminPage> {
 
   Widget _buildDetailWrap(List<Widget> children) {
     return Wrap(spacing: 12, runSpacing: 12, children: children);
+  }
+
+  Widget _buildReadOnlyNotice(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
   }
 
   Widget _buildDetailItem(String label, String value) {

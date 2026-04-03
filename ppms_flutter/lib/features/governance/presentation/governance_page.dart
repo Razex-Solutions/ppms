@@ -32,6 +32,23 @@ class _GovernancePageState extends State<GovernancePage> {
   int? _selectedPurchaseId;
   int? _selectedCustomerId;
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    return modulePermissions?.contains(action) ?? false;
+  }
+
+  bool get _canReviewExpenses =>
+      _hasAction('expenses', 'approve') || _hasAction('expenses', 'reject');
+  bool get _canReviewPurchases =>
+      _hasAction('purchases', 'approve') ||
+      _hasAction('purchases', 'reject') ||
+      _hasAction('purchases', 'approve_reverse') ||
+      _hasAction('purchases', 'reject_reverse');
+  bool get _canReviewCreditOverrides =>
+      _hasAction('customers', 'approve_credit_override') ||
+      _hasAction('customers', 'reject_credit_override');
+
   @override
   void initState() {
     super.initState();
@@ -255,6 +272,17 @@ class _GovernancePageState extends State<GovernancePage> {
     return null;
   }
 
+  bool get _canReviewCurrentSection {
+    switch (_section) {
+      case _GovernanceSection.expenses:
+        return _canReviewExpenses;
+      case _GovernanceSection.purchases:
+        return _canReviewPurchases;
+      case _GovernanceSection.creditOverrides:
+        return _canReviewCreditOverrides;
+    }
+  }
+
   String? _emptyToNull(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
@@ -264,6 +292,15 @@ class _GovernancePageState extends State<GovernancePage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    final availableSections = <_GovernanceSection>[
+      if (_canReviewExpenses) _GovernanceSection.expenses,
+      if (_canReviewPurchases) _GovernanceSection.purchases,
+      if (_canReviewCreditOverrides) _GovernanceSection.creditOverrides,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
     }
 
     return RefreshIndicator(
@@ -283,7 +320,7 @@ class _GovernancePageState extends State<GovernancePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Review pending expenses, purchase approvals, reversal requests, and credit overrides.',
+                    'Review approval queues for the parts of governance this role actually controls.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
@@ -313,22 +350,25 @@ class _GovernancePageState extends State<GovernancePage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: SegmentedButton<_GovernanceSection>(
-                          segments: const [
-                            ButtonSegment(
-                              value: _GovernanceSection.expenses,
-                              label: Text('Expenses'),
-                              icon: Icon(Icons.receipt_long_outlined),
-                            ),
-                            ButtonSegment(
-                              value: _GovernanceSection.purchases,
-                              label: Text('Purchases'),
-                              icon: Icon(Icons.inventory_2_outlined),
-                            ),
-                            ButtonSegment(
-                              value: _GovernanceSection.creditOverrides,
-                              label: Text('Credit'),
-                              icon: Icon(Icons.rule_folder_outlined),
-                            ),
+                          segments: [
+                            if (_canReviewExpenses)
+                              const ButtonSegment(
+                                value: _GovernanceSection.expenses,
+                                label: Text('Expenses'),
+                                icon: Icon(Icons.receipt_long_outlined),
+                              ),
+                            if (_canReviewPurchases)
+                              const ButtonSegment(
+                                value: _GovernanceSection.purchases,
+                                label: Text('Purchases'),
+                                icon: Icon(Icons.inventory_2_outlined),
+                              ),
+                            if (_canReviewCreditOverrides)
+                              const ButtonSegment(
+                                value: _GovernanceSection.creditOverrides,
+                                label: Text('Credit'),
+                                icon: Icon(Icons.rule_folder_outlined),
+                              ),
                           ],
                           selected: {_section},
                           onSelectionChanged: (selection) {
@@ -349,6 +389,7 @@ class _GovernancePageState extends State<GovernancePage> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _reasonController,
+                    enabled: _canReviewCurrentSection,
                     decoration: const InputDecoration(
                       labelText: 'Review Reason (optional)',
                     ),
@@ -358,7 +399,7 @@ class _GovernancePageState extends State<GovernancePage> {
                   Row(
                     children: [
                       FilledButton.icon(
-                        onPressed: _isSubmitting
+                        onPressed: !_canReviewCurrentSection || _isSubmitting
                             ? null
                             : () => _handleDecision(true),
                         icon: _isSubmitting
@@ -373,7 +414,7 @@ class _GovernancePageState extends State<GovernancePage> {
                       ),
                       const SizedBox(width: 12),
                       FilledButton.tonalIcon(
-                        onPressed: _isSubmitting
+                        onPressed: !_canReviewCurrentSection || _isSubmitting
                             ? null
                             : () => _handleDecision(false),
                         icon: const Icon(Icons.cancel_outlined),

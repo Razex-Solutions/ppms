@@ -500,6 +500,70 @@ class ApiClient {
     return _send('DELETE', '/users/$userId', accessToken: accessToken);
   }
 
+  Future<List<dynamic>> getEmployeeProfiles(
+    String accessToken, {
+    int? stationId,
+    int? organizationId,
+    String? staffType,
+    bool? isActive,
+  }) async {
+    final params = <String, String>{};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (organizationId != null) {
+      params['organization_id'] = '$organizationId';
+    }
+    if (staffType != null && staffType.isNotEmpty) {
+      params['staff_type'] = staffType;
+    }
+    if (isActive != null) {
+      params['is_active'] = '$isActive';
+    }
+    return _sendList(
+      'GET',
+      '/employee-profiles/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createEmployeeProfile(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/employee-profiles/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateEmployeeProfile(
+    String accessToken, {
+    required int profileId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/employee-profiles/$profileId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteEmployeeProfile(
+    String accessToken, {
+    required int profileId,
+  }) async {
+    return _send(
+      'DELETE',
+      '/employee-profiles/$profileId',
+      accessToken: accessToken,
+    );
+  }
+
   Future<List<dynamic>> getStationModules(
     String accessToken, {
     required int stationId,

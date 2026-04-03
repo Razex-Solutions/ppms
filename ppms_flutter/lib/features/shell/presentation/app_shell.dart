@@ -331,23 +331,32 @@ class _AppShellState extends State<AppShell> {
       _ShellDestination(
         label: 'Dashboard',
         icon: Icons.dashboard_outlined,
-        page: DashboardPage(dashboard: _dashboard, onRefresh: _loadHomeData),
+        page: DashboardPage(
+          dashboard: _dashboard,
+          onRefresh: _loadHomeData,
+          roleName: widget.sessionController.roleName,
+          scopeLevel: widget.sessionController.scopeLevel,
+        ),
       ),
-      if (permissions.containsKey('users') ||
+      if (currentRoleName == 'HeadOffice' ||
+          currentRoleName == 'StationAdmin' ||
+          currentRoleName == 'Admin' ||
+          permissions.containsKey('users') ||
           permissions.containsKey('stations') ||
           permissions.containsKey('roles') ||
           permissions.containsKey('station_modules') ||
-          currentRoleName == 'Admin')
+          permissions.containsKey('employee_profiles'))
         _ShellDestination(
           label: 'Admin',
           icon: Icons.admin_panel_settings_outlined,
           page: AdminPage(sessionController: widget.sessionController),
         ),
-      _ShellDestination(
-        label: 'Sales',
-        icon: Icons.local_gas_station_outlined,
-        page: SalesPage(sessionController: widget.sessionController),
-      ),
+      if (currentRoleName != 'HeadOffice')
+        _ShellDestination(
+          label: 'Sales',
+          icon: Icons.local_gas_station_outlined,
+          page: SalesPage(sessionController: widget.sessionController),
+        ),
       if (enabledModules.contains('shifts') ||
           permissions.containsKey('shifts'))
         _ShellDestination(
@@ -364,7 +373,8 @@ class _AppShellState extends State<AppShell> {
           icon: Icons.storefront_outlined,
           page: PosPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('attendance'))
+      if (enabledModules.contains('attendance') &&
+          currentRoleName != 'HeadOffice')
         _ShellDestination(
           label: 'Attendance',
           icon: Icons.badge_outlined,
@@ -386,19 +396,22 @@ class _AppShellState extends State<AppShell> {
           icon: Icons.groups_outlined,
           page: PartiesPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('tanks') ||
-          enabledModules.contains('dispensers') ||
-          enabledModules.contains('nozzles') ||
-          permissions.containsKey('tanks') ||
-          permissions.containsKey('dispensers') ||
-          permissions.containsKey('nozzles'))
+      if ((enabledModules.contains('tanks') ||
+              enabledModules.contains('dispensers') ||
+              enabledModules.contains('nozzles') ||
+              permissions.containsKey('tanks') ||
+              permissions.containsKey('dispensers') ||
+              permissions.containsKey('nozzles')) &&
+          currentRoleName != 'HeadOffice')
         _ShellDestination(
           label: 'Inventory',
           icon: Icons.inventory_outlined,
           page: InventoryPage(sessionController: widget.sessionController),
         ),
       if (permissions.containsKey('invoice_profiles') ||
-          currentRoleName == 'Admin')
+          currentRoleName == 'Admin' ||
+          currentRoleName == 'StationAdmin' ||
+          currentRoleName == 'HeadOffice')
         _ShellDestination(
           label: 'Setup',
           icon: Icons.build_circle_outlined,
@@ -415,7 +428,7 @@ class _AppShellState extends State<AppShell> {
           icon: Icons.account_balance_outlined,
           page: FinancePage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('payroll'))
+      if (enabledModules.contains('payroll') && currentRoleName != 'Operator')
         _ShellDestination(
           label: 'Payroll',
           icon: Icons.payments_outlined,
@@ -439,25 +452,28 @@ class _AppShellState extends State<AppShell> {
           icon: Icons.notifications_outlined,
           page: NotificationsPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('hardware') ||
-          permissions.containsKey('hardware') ||
-          permissions.containsKey('nozzles'))
+      if ((enabledModules.contains('hardware') ||
+              permissions.containsKey('hardware') ||
+              permissions.containsKey('nozzles')) &&
+          currentRoleName != 'HeadOffice')
         _ShellDestination(
           label: 'Hardware',
           icon: Icons.memory_outlined,
           page: HardwarePage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('tankers') ||
-          permissions.containsKey('tankers'))
+      if ((enabledModules.contains('tankers') ||
+              permissions.containsKey('tankers')) &&
+          currentRoleName != 'Operator')
         _ShellDestination(
           label: 'Tankers',
           icon: Icons.local_shipping_outlined,
           page: TankerPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('expenses') ||
-          permissions.containsKey('expenses') ||
-          permissions.containsKey('purchases') ||
-          permissions.containsKey('customers'))
+      if ((enabledModules.contains('expenses') ||
+              permissions.containsKey('expenses') ||
+              permissions.containsKey('purchases') ||
+              permissions.containsKey('customers')) &&
+          currentRoleName != 'Operator')
         _ShellDestination(
           label: 'Governance',
           icon: Icons.approval_outlined,

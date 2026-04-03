@@ -413,6 +413,50 @@ class SessionController extends ChangeNotifier {
     return _apiClient.deleteUser(await _validAccessToken(), userId: userId);
   }
 
+  Future<List<dynamic>> fetchEmployeeProfiles({
+    int? stationId,
+    int? organizationId,
+    String? staffType,
+    bool? isActive,
+  }) async {
+    return _apiClient.getEmployeeProfiles(
+      await _validAccessToken(),
+      stationId: stationId,
+      organizationId: organizationId,
+      staffType: staffType,
+      isActive: isActive,
+    );
+  }
+
+  Future<Map<String, dynamic>> createEmployeeProfile(
+    Map<String, dynamic> payload,
+  ) async {
+    return _apiClient.createEmployeeProfile(
+      await _validAccessToken(),
+      payload: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateEmployeeProfile({
+    required int profileId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.updateEmployeeProfile(
+      await _validAccessToken(),
+      profileId: profileId,
+      payload: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteEmployeeProfile({
+    required int profileId,
+  }) async {
+    return _apiClient.deleteEmployeeProfile(
+      await _validAccessToken(),
+      profileId: profileId,
+    );
+  }
+
   Future<List<dynamic>> fetchStationModules({required int stationId}) async {
     return _apiClient.getStationModules(
       await _validAccessToken(),
