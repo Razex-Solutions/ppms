@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.access import get_user_organization_id, is_head_office_user, require_admin
@@ -85,7 +86,9 @@ def list_users(
     elif is_head_office_user(current_user):
         require_permission(current_user, "users", "read", detail="You do not have permission to view users")
         user_organization_id = get_user_organization_id(current_user)
-        q = q.filter(User.organization_id == user_organization_id)
+        q = q.outerjoin(Station, Station.id == User.station_id).filter(
+            or_(User.organization_id == user_organization_id, Station.organization_id == user_organization_id)
+        )
         if organization_id is not None and organization_id != user_organization_id:
             raise HTTPException(status_code=403, detail="Not authorized for this organization")
         if station_id is not None:
@@ -117,7 +120,7 @@ def get_user(
         pass
     elif is_head_office_user(current_user):
         require_permission(current_user, "users", "read", detail="You do not have permission to view users")
-        user_organization_id = user.organization_id
+        user_organization_id = user.organization_id or (user.station.organization_id if user.station else None)
         if user_organization_id != get_user_organization_id(current_user):
             raise HTTPException(status_code=403, detail="Not authorized for this user")
     else:

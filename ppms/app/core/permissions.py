@@ -12,9 +12,9 @@ ROLE_CAPABILITY_SUMMARY: dict[str, dict[str, str]] = {
         "operations": "Can inspect and override any tenant configuration or operational module when needed",
     },
     "Admin": {
-        "scope": "Tenant-wide",
-        "governance": "Organization or station administration, configuration, and operational oversight",
-        "operations": "All core operational modules for the assigned scope",
+        "scope": "System-wide",
+        "governance": "Full system control, configuration, security, and maintenance",
+        "operations": "All operational modules",
     },
     "StationAdmin": {
         "scope": "Station-wide",

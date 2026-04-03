@@ -35,7 +35,9 @@ db = SessionLocal()
 
 # Create default roles
 roles_data = [
+    {"name": "MasterAdmin", "description": ROLE_CAPABILITY_SUMMARY["MasterAdmin"]["governance"]},
     {"name": "Admin", "description": ROLE_CAPABILITY_SUMMARY["Admin"]["governance"]},
+    {"name": "StationAdmin", "description": ROLE_CAPABILITY_SUMMARY["StationAdmin"]["governance"]},
     {"name": "HeadOffice", "description": ROLE_CAPABILITY_SUMMARY["HeadOffice"]["governance"]},
     {"name": "Manager", "description": ROLE_CAPABILITY_SUMMARY["Manager"]["governance"]},
     {"name": "Operator", "description": ROLE_CAPABILITY_SUMMARY["Operator"]["governance"]},
@@ -47,6 +49,7 @@ for r in roles_data:
         db.add(Role(**r))
 db.commit()
 
+master_admin_role = db.query(Role).filter(Role.name == "MasterAdmin").first()
 admin_role = db.query(Role).filter(Role.name == "Admin").first()
 
 # Create default station
@@ -56,11 +59,27 @@ if not organization:
         name="Default Organization",
         code="DEFAULT",
         description="Default head-office organization",
+        legal_name="Default Organization Pvt Ltd",
+        brand_name="PPMS Demo",
+        brand_code="DEMO",
+        onboarding_status="active",
+        billing_status="trial",
+        station_target_count=1,
+        inherit_branding_to_stations=True,
         is_active=True,
     )
     db.add(organization)
     db.commit()
     db.refresh(organization)
+else:
+    organization.legal_name = organization.legal_name or "Default Organization Pvt Ltd"
+    organization.brand_name = organization.brand_name or "PPMS Demo"
+    organization.brand_code = organization.brand_code or "DEMO"
+    organization.onboarding_status = organization.onboarding_status or "active"
+    organization.billing_status = organization.billing_status or "trial"
+    organization.station_target_count = organization.station_target_count or 1
+    organization.inherit_branding_to_stations = True
+    db.commit()
 
 station = db.query(Station).filter(Station.code == "HQ").first()
 if not station:
@@ -71,6 +90,14 @@ if not station:
         city="Karachi",
         organization_id=organization.id,
         is_head_office=True,
+        display_name="Main Station",
+        use_organization_branding=True,
+        setup_status="active",
+        has_shops=True,
+        has_pos=True,
+        has_tankers=True,
+        has_hardware=True,
+        allow_meter_adjustments=True,
     )
     db.add(station)
     db.commit()
@@ -79,6 +106,30 @@ elif station.organization_id is None:
     station.organization_id = organization.id
     station.is_head_office = True
     db.commit()
+
+station.display_name = station.display_name or station.name
+station.use_organization_branding = True
+station.setup_status = station.setup_status or "active"
+db.commit()
+
+if not db.query(User).filter(User.username == "masteradmin").first():
+    master_admin = User(
+        full_name="Razex Master Admin",
+        username="masteradmin",
+        email="masteradmin@razexsolutions.com",
+        hashed_password=hash_password("master123"),
+        is_active=True,
+        role_id=master_admin_role.id,
+        organization_id=None,
+        station_id=None,
+        scope_level="platform",
+        is_platform_user=True,
+    )
+    db.add(master_admin)
+    db.commit()
+    print("Master admin created: username=masteradmin  password=master123")
+else:
+    print("Master admin already exists.")
 
 invoice_profile = db.query(InvoiceProfile).filter(InvoiceProfile.station_id == station.id).first()
 if not invoice_profile:
@@ -182,13 +233,22 @@ if not db.query(User).filter(User.username == "admin").first():
         hashed_password=hash_password("admin123"),
         is_active=True,
         role_id=admin_role.id,
+        organization_id=organization.id,
         station_id=station.id,
+        scope_level="station",
+        is_platform_user=False,
     )
     db.add(admin)
     db.commit()
     print("Admin user created: username=admin  password=admin123")
 else:
     print("Admin user already exists.")
+    admin = db.query(User).filter(User.username == "admin").first()
+    admin.organization_id = organization.id
+    admin.station_id = station.id
+    admin.scope_level = admin.scope_level or "station"
+    admin.is_platform_user = False
+    db.commit()
 
 db.close()
 print("Seed complete.")
