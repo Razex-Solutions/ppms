@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.access import is_master_admin
 from app.core.time import utc_now
 from app.models.customer import Customer
 from app.models.fuel_type import FuelType
@@ -38,7 +39,7 @@ def _load_trip(db: Session, trip_id: int) -> TankerTrip | None:
 
 
 def _ensure_trip_access(trip: TankerTrip, current_user: User) -> None:
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return
     if current_user.role.name == "HeadOffice":
         user_organization_id = current_user.station.organization_id if current_user.station else None
@@ -69,7 +70,7 @@ def _recompute_trip_financials(trip: TankerTrip) -> None:
 
 
 def create_tanker(db: Session, data: TankerCreate, current_user: User) -> Tanker:
-    if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     require_station_module_enabled(db, data.station_id, MODULE_NAME)
     existing = db.query(Tanker).filter(Tanker.registration_no == data.registration_no).first()
@@ -100,7 +101,7 @@ def create_trip(db: Session, data: TankerTripCreate, current_user: User) -> Tank
     tanker = db.query(Tanker).filter(Tanker.id == data.tanker_id).first()
     if not tanker:
         raise HTTPException(status_code=404, detail="Tanker not found")
-    if current_user.role.name != "Admin" and current_user.station_id != tanker.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != tanker.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this tanker")
     require_station_module_enabled(db, tanker.station_id, MODULE_NAME)
     if data.trip_type not in {"supplier_to_station", "supplier_to_customer"}:

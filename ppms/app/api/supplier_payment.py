@@ -2,6 +2,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -38,7 +39,7 @@ def list_supplier_payments(
     current_user = Depends(get_current_user)
 ):
     # Multi-tenancy check
-    if current_user.role.name != "Admin":
+    if current_user.role.name != "Admin" and not is_master_admin(current_user):
         station_id = current_user.station_id
 
     q = db.query(SupplierPayment)
@@ -79,7 +80,7 @@ def reverse_supplier_payment(
         raise HTTPException(status_code=404, detail="Supplier payment not found")
 
     require_permission(current_user, "supplier_payments", "reverse", detail="You do not have permission to reverse supplier payments")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return reverse_supplier_payment_service(db, payment, current_user)
     return request_supplier_payment_reversal_service(db, payment, current_user, data.reason if data else None)
 

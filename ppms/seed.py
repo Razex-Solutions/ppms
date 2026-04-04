@@ -8,6 +8,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.core.database import SessionLocal
+from app.models.brand_catalog import BrandCatalog
 from app.models.organization import Organization
 from app.models.organization_module_setting import OrganizationModuleSetting
 from app.models.organization_subscription import OrganizationSubscription
@@ -33,6 +34,72 @@ run_migrations()
 
 db = SessionLocal()
 
+brand_catalog_seed = [
+    {
+        "code": "CUSTOM",
+        "name": "Custom",
+        "logo_url": None,
+        "primary_color": "#0F766E",
+        "sort_order": 0,
+    },
+    {
+        "code": "PSO",
+        "name": "PSO",
+        "logo_url": "https://psopk.com/assets/images/homepage/logo.png",
+        "primary_color": "#00539B",
+        "sort_order": 10,
+    },
+    {
+        "code": "HASCOL",
+        "name": "Hascol",
+        "logo_url": "https://www.hascol.com/wp-content/themes/hascol/img/logo-footer.png",
+        "primary_color": "#D62828",
+        "sort_order": 20,
+    },
+    {
+        "code": "ATTOCK",
+        "name": "Attock",
+        "logo_url": "https://www.apl.com.pk/wp-content/uploads/2024/01/attock-logo-300x300.png",
+        "primary_color": "#1D4ED8",
+        "sort_order": 30,
+    },
+    {
+        "code": "SHELL",
+        "name": "Shell",
+        "logo_url": None,
+        "primary_color": "#F59E0B",
+        "sort_order": 40,
+    },
+    {
+        "code": "CALTEX",
+        "name": "Caltex",
+        "logo_url": None,
+        "primary_color": "#DC2626",
+        "sort_order": 50,
+    },
+    {
+        "code": "TOTAL",
+        "name": "Total",
+        "logo_url": None,
+        "primary_color": "#2563EB",
+        "sort_order": 60,
+    },
+]
+
+for brand in brand_catalog_seed:
+    existing_brand = db.query(BrandCatalog).filter(BrandCatalog.code == brand["code"]).first()
+    if not existing_brand:
+        db.add(BrandCatalog(**brand, is_active=True))
+    else:
+        existing_brand.name = brand["name"]
+        existing_brand.logo_url = brand["logo_url"]
+        existing_brand.primary_color = brand["primary_color"]
+        existing_brand.sort_order = brand["sort_order"]
+        existing_brand.is_active = True
+db.commit()
+
+custom_brand = db.query(BrandCatalog).filter(BrandCatalog.code == "CUSTOM").first()
+
 # Create default roles
 roles_data = [
     {"name": "MasterAdmin", "description": ROLE_CAPABILITY_SUMMARY["MasterAdmin"]["governance"]},
@@ -51,6 +118,11 @@ db.commit()
 
 master_admin_role = db.query(Role).filter(Role.name == "MasterAdmin").first()
 admin_role = db.query(Role).filter(Role.name == "Admin").first()
+station_admin_role = db.query(Role).filter(Role.name == "StationAdmin").first()
+head_office_role = db.query(Role).filter(Role.name == "HeadOffice").first()
+manager_role = db.query(Role).filter(Role.name == "Manager").first()
+operator_role = db.query(Role).filter(Role.name == "Operator").first()
+accountant_role = db.query(Role).filter(Role.name == "Accountant").first()
 
 # Create default station
 organization = db.query(Organization).filter(Organization.code == "DEFAULT").first()
@@ -60,6 +132,7 @@ if not organization:
         code="DEFAULT",
         description="Default head-office organization",
         legal_name="Default Organization Pvt Ltd",
+        brand_catalog_id=custom_brand.id if custom_brand else None,
         brand_name="PPMS Demo",
         brand_code="DEMO",
         onboarding_status="active",
@@ -249,6 +322,96 @@ else:
     admin.scope_level = admin.scope_level or "station"
     admin.is_platform_user = False
     db.commit()
+
+demo_users = [
+    {
+        "username": "headoffice",
+        "password": "office123",
+        "full_name": "Head Office Reviewer",
+        "email": "headoffice@ppms.com",
+        "role": head_office_role,
+        "organization_id": organization.id,
+        "station_id": None,
+        "scope_level": "organization",
+        "is_platform_user": False,
+    },
+    {
+        "username": "stationadmin",
+        "password": "station123",
+        "full_name": "Station Administrator",
+        "email": "stationadmin@ppms.com",
+        "role": station_admin_role,
+        "organization_id": organization.id,
+        "station_id": station.id,
+        "scope_level": "station",
+        "is_platform_user": False,
+    },
+    {
+        "username": "manager",
+        "password": "manager123",
+        "full_name": "Station Manager",
+        "email": "manager@ppms.com",
+        "role": manager_role,
+        "organization_id": organization.id,
+        "station_id": station.id,
+        "scope_level": "station",
+        "is_platform_user": False,
+    },
+    {
+        "username": "operator",
+        "password": "operator123",
+        "full_name": "Forecourt Operator",
+        "email": "operator@ppms.com",
+        "role": operator_role,
+        "organization_id": organization.id,
+        "station_id": station.id,
+        "scope_level": "station",
+        "is_platform_user": False,
+    },
+    {
+        "username": "accountant",
+        "password": "accountant123",
+        "full_name": "Station Accountant",
+        "email": "accountant@ppms.com",
+        "role": accountant_role,
+        "organization_id": organization.id,
+        "station_id": station.id,
+        "scope_level": "station",
+        "is_platform_user": False,
+    },
+]
+
+for demo_user in demo_users:
+    existing_user = db.query(User).filter(User.username == demo_user["username"]).first()
+    if not existing_user:
+        db.add(
+            User(
+                full_name=demo_user["full_name"],
+                username=demo_user["username"],
+                email=demo_user["email"],
+                hashed_password=hash_password(demo_user["password"]),
+                is_active=True,
+                role_id=demo_user["role"].id,
+                organization_id=demo_user["organization_id"],
+                station_id=demo_user["station_id"],
+                scope_level=demo_user["scope_level"],
+                is_platform_user=demo_user["is_platform_user"],
+            )
+        )
+        db.commit()
+        print(
+            f"Demo user created: username={demo_user['username']}  password={demo_user['password']}"
+        )
+    else:
+        existing_user.full_name = demo_user["full_name"]
+        existing_user.email = demo_user["email"]
+        existing_user.role_id = demo_user["role"].id
+        existing_user.organization_id = demo_user["organization_id"]
+        existing_user.station_id = demo_user["station_id"]
+        existing_user.scope_level = demo_user["scope_level"]
+        existing_user.is_platform_user = demo_user["is_platform_user"]
+        existing_user.is_active = True
+        db.commit()
 
 db.close()
 print("Seed complete.")

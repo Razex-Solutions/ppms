@@ -66,6 +66,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _applyQuickLogin({required String username, required String password}) {
+    _usernameController.text = username;
+    _passwordController.text = password;
+    setState(() {
+      _errorMessage = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,6 +98,27 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       'Shared desktop and mobile foundation for the PPMS backend.',
                       style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ActionChip(
+                          label: const Text('Use MasterAdmin'),
+                          onPressed: () => _applyQuickLogin(
+                            username: 'masteradmin',
+                            password: 'master123',
+                          ),
+                        ),
+                        ActionChip(
+                          label: const Text('Use Admin'),
+                          onPressed: () => _applyQuickLogin(
+                            username: 'admin',
+                            password: 'admin123',
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 24),
                     TextFormField(
@@ -140,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                     const SizedBox(height: 8),
                     Text(
-                      'Local default logins: admin / admin123, masteradmin / master123',
+                      'Local default logins: masteradmin / master123 for platform review, admin / admin123 for tenant/station review.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 20),

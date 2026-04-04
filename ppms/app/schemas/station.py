@@ -12,6 +12,8 @@ class StationCreate(BaseModel):
     is_head_office: bool = False
     display_name: str | None = None
     legal_name_override: str | None = None
+    brand_name: str | None = None
+    brand_code: str | None = None
     logo_url: str | None = None
     use_organization_branding: bool = True
     is_active: bool = True
@@ -32,6 +34,8 @@ class StationUpdate(BaseModel):
     is_head_office: bool | None = None
     display_name: str | None = None
     legal_name_override: str | None = None
+    brand_name: str | None = None
+    brand_code: str | None = None
     logo_url: str | None = None
     use_organization_branding: bool | None = None
     is_active: bool | None = None
@@ -54,6 +58,8 @@ class StationResponse(BaseModel):
     is_head_office: bool
     display_name: str | None = None
     legal_name_override: str | None = None
+    brand_name: str | None = None
+    brand_code: str | None = None
     logo_url: str | None = None
     use_organization_branding: bool
     is_active: bool

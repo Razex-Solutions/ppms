@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, require_station_access
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.core.time import utc_now
 from app.models.attendance_record import AttendanceRecord
 from app.models.station import Station
@@ -19,7 +19,7 @@ def ensure_attendance_access(db: Session, station_id: int, current_user: User) -
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         if station.organization_id == get_user_organization_id(current_user):
@@ -73,7 +73,7 @@ def check_in(db: Session, *, current_user: User, station_id: int, notes: str | N
 
 
 def check_out(db: Session, *, record: AttendanceRecord, current_user: User, notes: str | None = None) -> AttendanceRecord:
-    if current_user.role.name != "Admin" and record.user_id != current_user.id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and record.user_id != current_user.id:
         require_station_access(current_user, record.station_id)
     if record.check_out_at is not None:
         raise HTTPException(status_code=400, detail="Attendance is already checked out")

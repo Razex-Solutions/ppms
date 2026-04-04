@@ -35,21 +35,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
   bool _createHeadOfficeAccount = true;
   String? _errorMessage;
   String? _feedbackMessage;
-  String _selectedBrand = 'Custom';
+  int? _selectedBrandId;
+  List<Map<String, dynamic>> _brands = const [];
   int _stationCount = 1;
   List<Map<String, dynamic>> _organizations = const [];
   List<Map<String, dynamic>> _roles = const [];
   late List<_StationDraft> _stationDrafts;
-
-  static const _brands = <String>[
-    'Custom',
-    'Shell',
-    'PSO',
-    'Caltex',
-    'Total',
-    'Attock',
-    'Hascol',
-  ];
 
   @override
   void initState() {
@@ -90,6 +81,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
           (item) => Map<String, dynamic>.from(item as Map),
         ),
       );
+      final brands = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchBrands()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
       final roles = List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchRoles()).map(
           (item) => Map<String, dynamic>.from(item as Map),
@@ -99,6 +95,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
         return;
       }
       setState(() {
+        _brands = brands;
+        _selectedBrandId ??=
+            brands.cast<Map<String, dynamic>?>().firstWhere(
+                  (brand) => brand?['code'] == 'CUSTOM',
+                  orElse: () => brands.isNotEmpty ? brands.first : null,
+                )?['id']
+                as int?;
         _organizations = organizations;
         _roles = roles;
         _isLoading = false;
@@ -160,6 +163,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
 
+    final selectedBrand = _selectedBrandData;
+
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -172,11 +177,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
         'code': _organizationCodeController.text.trim(),
         'description': _emptyToNull(_organizationDescriptionController.text),
         'legal_name': _emptyToNull(_legalNameController.text),
-        'brand_name': _selectedBrand == 'Custom' ? null : _selectedBrand,
-        'brand_code': _selectedBrand == 'Custom'
-            ? 'CUSTOM'
-            : _selectedBrand.toUpperCase(),
-        'logo_url': _emptyToNull(_logoUrlController.text),
+        'brand_catalog_id': _selectedBrandId,
+        'brand_name': _selectedBrandIsCustom
+            ? _organizationNameController.text.trim()
+            : selectedBrand?['name'],
+        'brand_code': _selectedBrandIsCustom
+            ? _organizationCodeController.text.trim().toUpperCase()
+            : selectedBrand?['code'],
+        'logo_url': _selectedBrandIsCustom
+            ? _emptyToNull(_logoUrlController.text)
+            : selectedBrand?['logo_url'] as String?,
         'contact_email': _emptyToNull(_contactEmailController.text),
         'contact_phone': _emptyToNull(_contactPhoneController.text),
         'registration_number': _emptyToNull(_registrationController.text),
@@ -271,7 +281,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
     _headOfficeUsernameController.clear();
     _headOfficeEmailController.clear();
     _headOfficePasswordController.text = 'office123';
-    _selectedBrand = 'Custom';
+    _selectedBrandId =
+        _brands.cast<Map<String, dynamic>?>().firstWhere(
+              (brand) => brand?['code'] == 'CUSTOM',
+              orElse: () => _brands.isNotEmpty ? _brands.first : null,
+            )?['id']
+            as int?;
     _inheritBranding = true;
     _createHeadOfficeAccount = true;
     _syncStationDraftCount(1);
@@ -284,6 +299,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
   }
+
+  Map<String, dynamic>? get _selectedBrandData =>
+      _brands.cast<Map<String, dynamic>?>().firstWhere(
+        (brand) => brand?['id'] == _selectedBrandId,
+        orElse: () => null,
+      );
+
+  bool get _selectedBrandIsCustom =>
+      (_selectedBrandData?['code'] as String? ?? '') == 'CUSTOM';
+
+  String get _selectedBrandName =>
+      _selectedBrandData?['name'] as String? ?? 'Custom';
 
   @override
   Widget build(BuildContext context) {
@@ -359,18 +386,34 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          key: ValueKey<String>('onboarding-brand-$_selectedBrand'),
-          initialValue: _selectedBrand,
+          key: ValueKey<String>(
+            'onboarding-brand-${_selectedBrandId ?? 'none'}',
+          ),
+          initialValue: _selectedBrandId?.toString(),
           decoration: const InputDecoration(labelText: 'Brand'),
           items: [
             for (final brand in _brands)
-              DropdownMenuItem<String>(value: brand, child: Text(brand)),
+              DropdownMenuItem<String>(
+                value: (brand['id'] as int).toString(),
+                child: Text(brand['name'] as String? ?? 'Brand'),
+              ),
           ],
           onChanged: (value) {
             setState(() {
-              _selectedBrand = value ?? 'Custom';
+              _selectedBrandId = int.tryParse(value ?? '');
             });
           },
+        ),
+        const SizedBox(height: 12),
+        _BrandPreviewCard(
+          title: 'Organization Branding',
+          brandName: _selectedBrandIsCustom
+              ? (_organizationNameController.text.trim().isEmpty
+                    ? 'Custom Brand'
+                    : _organizationNameController.text.trim())
+              : _selectedBrandName,
+          logoUrl: _selectedBrandData?['logo_url'] as String?,
+          primaryColor: _selectedBrandData?['primary_color'] as String?,
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -384,11 +427,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
           maxLines: 2,
         ),
         const SizedBox(height: 12),
-        TextFormField(
-          controller: _logoUrlController,
-          decoration: const InputDecoration(labelText: 'Logo URL'),
-        ),
-        const SizedBox(height: 12),
+        if (_selectedBrandIsCustom) ...[
+          TextFormField(
+            controller: _logoUrlController,
+            decoration: const InputDecoration(
+              labelText: 'Custom Logo URL',
+              helperText:
+                  'Only needed for custom brands. Known pump brands auto-apply their branding.',
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextFormField(
           controller: _contactEmailController,
           decoration: const InputDecoration(labelText: 'Contact Email'),
@@ -598,11 +647,6 @@ class _StationDraftCardState extends State<_StationDraftCard> {
               decoration: const InputDecoration(labelText: 'City'),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: draft.logoUrlController,
-              decoration: const InputDecoration(labelText: 'Station Logo URL'),
-            ),
-            const SizedBox(height: 12),
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -672,6 +716,17 @@ class _StationDraftCardState extends State<_StationDraftCard> {
                 ),
               ],
             ),
+            if (!draft.useOrganizationBranding) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: draft.logoUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Station Logo URL',
+                  helperText:
+                      'Only needed when this station should override the organization branding.',
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -727,4 +782,100 @@ class _StationDraft {
     cityController.dispose();
     logoUrlController.dispose();
   }
+}
+
+class _BrandPreviewCard extends StatelessWidget {
+  const _BrandPreviewCard({
+    required this.title,
+    required this.brandName,
+    required this.logoUrl,
+    required this.primaryColor,
+  });
+
+  final String title;
+  final String brandName;
+  final String? logoUrl;
+  final String? primaryColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallbackColor =
+        _colorFromHex(primaryColor) ?? Theme.of(context).colorScheme.primary;
+    return Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+        leading: _BrandAvatar(
+          brandName: brandName,
+          logoUrl: logoUrl,
+          color: fallbackColor,
+        ),
+        title: Text(title),
+        subtitle: Text(brandName),
+      ),
+    );
+  }
+}
+
+class _BrandAvatar extends StatelessWidget {
+  const _BrandAvatar({
+    required this.brandName,
+    required this.logoUrl,
+    required this.color,
+  });
+
+  final String brandName;
+  final String? logoUrl;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = logoUrl?.trim() ?? '';
+    if (trimmed.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          trimmed,
+          width: 52,
+          height: 52,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => _fallbackAvatar(),
+        ),
+      );
+    }
+    return _fallbackAvatar();
+  }
+
+  Widget _fallbackAvatar() {
+    final initials = brandName
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part[0].toUpperCase())
+        .join();
+    return CircleAvatar(
+      radius: 26,
+      backgroundColor: color.withValues(alpha: 0.15),
+      child: Text(
+        initials.isEmpty ? 'BR' : initials,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+Color? _colorFromHex(String? value) {
+  final normalized = value?.trim() ?? '';
+  if (normalized.isEmpty) {
+    return null;
+  }
+  final hex = normalized.replaceFirst('#', '');
+  final full = hex.length == 6 ? 'FF$hex' : hex;
+  final parsed = int.tryParse(full, radix: 16);
+  if (parsed == null) {
+    return null;
+  }
+  return Color(parsed);
 }

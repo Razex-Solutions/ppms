@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.core.time import utc_now
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle import Nozzle
@@ -22,7 +23,7 @@ def adjust_nozzle_meter(
     reason: str,
     current_user: User,
 ) -> MeterAdjustmentEvent:
-    if current_user.role.name != "Admin":
+    if current_user.role.name != "Admin" and not is_master_admin(current_user):
         raise HTTPException(status_code=403, detail="Only admin users can adjust nozzle meter readings")
 
     station_id = nozzle.dispenser.station_id

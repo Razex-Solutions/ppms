@@ -1,4 +1,5 @@
 from app.models.role import Role
+from app.models.brand_catalog import BrandCatalog
 from app.models.organization import Organization
 from app.models.organization_module_setting import OrganizationModuleSetting
 from app.models.organization_subscription import OrganizationSubscription

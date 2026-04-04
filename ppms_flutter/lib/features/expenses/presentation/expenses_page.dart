@@ -160,11 +160,43 @@ class _ExpensesPageState extends State<ExpensesPage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canCreateExpenses => _hasAction('expenses', 'create');
+  bool get _canReadExpenses =>
+      _canCreateExpenses ||
+      _hasAction('expenses', 'update') ||
+      _hasAction('expenses', 'delete') ||
+      _hasAction('expenses', 'approve') ||
+      _hasAction('expenses', 'reject');
+
+  Widget _buildPermissionNotice(BuildContext context, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final canCreateExpenses = _canCreateExpenses;
+    final canReadExpenses = _canReadExpenses;
 
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
@@ -183,10 +215,19 @@ class _ExpensesPageState extends State<ExpensesPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Record station expenses and monitor their review status.',
+                    canCreateExpenses
+                        ? 'Record station expenses and monitor their review status.'
+                        : 'Review station expense history and approval status for the selected station.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
+                  if (!canCreateExpenses) ...[
+                    _buildPermissionNotice(
+                      context,
+                      'This role can review expenses but cannot create them from this workspace.',
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -212,11 +253,14 @@ class _ExpensesPageState extends State<ExpensesPage> {
                                     ),
                                   ),
                               ],
-                              onChanged: _changeStation,
+                              onChanged: canReadExpenses
+                                  ? _changeStation
+                                  : null,
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _titleController,
+                              enabled: canCreateExpenses,
                               decoration: const InputDecoration(
                                 labelText: 'Title',
                               ),
@@ -237,15 +281,18 @@ class _ExpensesPageState extends State<ExpensesPage> {
                                     child: Text(category),
                                   ),
                               ],
-                              onChanged: (value) {
-                                setState(() {
-                                  _category = value ?? 'operations';
-                                });
-                              },
+                              onChanged: canCreateExpenses
+                                  ? (value) {
+                                      setState(() {
+                                        _category = value ?? 'operations';
+                                      });
+                                    }
+                                  : null,
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _amountController,
+                              enabled: canCreateExpenses,
                               decoration: const InputDecoration(
                                 labelText: 'Amount',
                               ),
@@ -257,6 +304,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _notesController,
+                              enabled: canCreateExpenses,
                               decoration: const InputDecoration(
                                 labelText: 'Notes',
                               ),
@@ -264,7 +312,9 @@ class _ExpensesPageState extends State<ExpensesPage> {
                             ),
                             const SizedBox(height: 16),
                             FilledButton.icon(
-                              onPressed: _isSubmitting ? null : _createExpense,
+                              onPressed: _isSubmitting || !canCreateExpenses
+                                  ? null
+                                  : _createExpense,
                               icon: _isSubmitting
                                   ? const SizedBox.square(
                                       dimension: 18,
@@ -326,13 +376,17 @@ class _ExpensesPageState extends State<ExpensesPage> {
                                             child: Text('Rejected'),
                                           ),
                                         ],
-                                        onChanged: _changeStatus,
+                                        onChanged: canReadExpenses
+                                            ? _changeStatus
+                                            : null,
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
-                                if (_expenses.isEmpty)
+                                if (!canReadExpenses)
+                                  const Text('No expense access for this role.')
+                                else if (_expenses.isEmpty)
                                   const Text(
                                     'No expenses found for this filter.',
                                   )

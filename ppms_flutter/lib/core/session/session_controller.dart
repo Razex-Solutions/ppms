@@ -354,6 +354,10 @@ class SessionController extends ChangeNotifier {
     return _apiClient.getOrganizations(await _validAccessToken());
   }
 
+  Future<List<dynamic>> fetchBrands() async {
+    return _apiClient.getBrands(await _validAccessToken());
+  }
+
   Future<Map<String, dynamic>> createOrganization(
     Map<String, dynamic> payload,
   ) async {

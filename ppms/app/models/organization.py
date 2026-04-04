@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base
@@ -12,6 +12,7 @@ class Organization(Base):
     code = Column(String, unique=True, nullable=False, index=True)
     description = Column(String, nullable=True)
     legal_name = Column(String, nullable=True)
+    brand_catalog_id = Column(Integer, ForeignKey("brand_catalog.id"), nullable=True, index=True)
     brand_name = Column(String, nullable=True, index=True)
     brand_code = Column(String, nullable=True, index=True)
     logo_url = Column(String, nullable=True)
@@ -26,3 +27,4 @@ class Organization(Base):
     is_active = Column(Boolean, nullable=False, default=True)
 
     stations = relationship("Station", back_populates="organization")
+    brand_catalog = relationship("BrandCatalog")

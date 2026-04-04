@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.models.invoice_profile import InvoiceProfile
 from app.models.station import Station
 from app.models.user import User
@@ -13,7 +13,7 @@ def ensure_invoice_profile_access(db: Session, station_id: int, current_user: Us
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         if station.organization_id == get_user_organization_id(current_user):

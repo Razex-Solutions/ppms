@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.core.time import utc_now
 from app.models.pos_product import POSProduct
 from app.models.pos_sale import POSSale
@@ -15,7 +16,7 @@ VALID_POS_MODULES = {"mart", "service_station", "tyre_shop", "other"}
 
 
 def ensure_pos_station_access(station_id: int, current_user: User) -> None:
-    if current_user.role.name != "Admin" and current_user.station_id != station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
 
 

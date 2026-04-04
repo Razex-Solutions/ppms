@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.core.time import utc_now
 from app.models.fuel_sale import FuelSale
 from app.models.shift import Shift
@@ -11,7 +12,7 @@ from app.services.audit import log_audit_event
 
 
 def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
-    if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
 
     existing = db.query(Shift).filter(
@@ -93,5 +94,5 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
 
 
 def ensure_shift_access(shift: Shift, current_user: User) -> None:
-    if current_user.role.name != "Admin" and current_user.station_id != shift.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != shift.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this shift")

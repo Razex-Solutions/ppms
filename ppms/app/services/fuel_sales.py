@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.time import utc_now
 from app.models.customer import Customer
 from app.models.fuel_sale import FuelSale
@@ -17,7 +17,7 @@ from app.services.notifications import notify_approval_requested, notify_decisio
 
 
 def ensure_sale_access(sale: FuelSale, current_user: User) -> None:
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         if sale.station and sale.station.organization_id == get_user_organization_id(current_user):
@@ -28,7 +28,7 @@ def ensure_sale_access(sale: FuelSale, current_user: User) -> None:
 
 
 def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User) -> FuelSale:
-    if current_user.role.name != "Admin" and current_user.station_id != sale_data.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != sale_data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
 
     shift_id = sale_data.shift_id
@@ -151,7 +151,7 @@ def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User)
 
 def reverse_fuel_sale(db: Session, sale: FuelSale, current_user: User) -> FuelSale:
     ensure_sale_access(sale, current_user)
-    if sale.reversal_request_status != "approved" and current_user.role.name != "Admin":
+    if sale.reversal_request_status != "approved" and current_user.role.name != "Admin" and not is_master_admin(current_user):
         raise HTTPException(status_code=400, detail="Fuel sale reversal must be approved first")
     if sale.is_reversed:
         raise HTTPException(status_code=400, detail="Fuel sale is already reversed")

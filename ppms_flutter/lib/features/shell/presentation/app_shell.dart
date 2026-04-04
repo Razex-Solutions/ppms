@@ -51,6 +51,13 @@ class _AppShellState extends State<AppShell> {
       _isLoading = true;
       _loadError = null;
     });
+    if (widget.sessionController.isMasterAdmin) {
+      setState(() {
+        _dashboard = null;
+        _isLoading = false;
+      });
+      return;
+    }
     try {
       final dashboard = await widget.sessionController.fetchDashboard();
       if (!mounted) {
@@ -75,6 +82,8 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final user = widget.sessionController.currentUser ?? const {};
     final roleName = widget.sessionController.roleName;
+    final scopeLevel = widget.sessionController.scopeLevel;
+    final isPlatformUser = widget.sessionController.isMasterAdmin;
     final permissions = widget.sessionController.permissions;
     final enabledModules = widget.sessionController.enabledModules;
     final destinations = _buildDestinations(enabledModules, permissions);
@@ -113,7 +122,9 @@ class _AppShellState extends State<AppShell> {
               appBar: AppBar(
                 title: Text(
                   useDrawer
-                      ? 'PPMS • ${selectedDestination.label}'
+                      ? '${isPlatformUser ? 'Platform' : 'PPMS'} • ${selectedDestination.label}'
+                      : isPlatformUser
+                      ? 'PPMS Platform'
                       : 'PPMS Flutter',
                 ),
                 actions: [
@@ -122,8 +133,13 @@ class _AppShellState extends State<AppShell> {
                     child: Center(
                       child: Text(
                         useDrawer
-                            ? roleName.toString()
-                            : '${user['full_name'] ?? ''} • $roleName',
+                            ? _buildContextBadge(
+                                user: user,
+                                roleName: roleName,
+                                scopeLevel: scopeLevel,
+                                isPlatformUser: isPlatformUser,
+                              )
+                            : '${user['full_name'] ?? ''} • ${_buildContextBadge(user: user, roleName: roleName, scopeLevel: scopeLevel, isPlatformUser: isPlatformUser)}',
                       ),
                     ),
                   ),
@@ -205,7 +221,9 @@ class _AppShellState extends State<AppShell> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Operations',
+                                      isPlatformUser
+                                          ? 'Platform'
+                                          : 'Operations',
                                       style: Theme.of(
                                         context,
                                       ).textTheme.titleMedium,
@@ -485,6 +503,24 @@ class _AppShellState extends State<AppShell> {
         page: SettingsPage(sessionController: widget.sessionController),
       ),
     ];
+  }
+
+  String _buildContextBadge({
+    required Map<String, dynamic> user,
+    required String roleName,
+    required String scopeLevel,
+    required bool isPlatformUser,
+  }) {
+    if (isPlatformUser) {
+      return 'Razex • $roleName';
+    }
+    final organizationId = user['organization_id'];
+    final stationId = user['station_id'];
+    return switch (scopeLevel) {
+      'organization' => 'Org $organizationId • $roleName',
+      'station' => 'Station $stationId • $roleName',
+      _ => roleName,
+    };
   }
 }
 

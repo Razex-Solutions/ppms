@@ -1,5 +1,49 @@
 venv/
+.venv/
 __pycache__/
 .idea/
+.vscode/
+.pytest_cache/
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
 *.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.bak
 .env
+
+# Local databases and smoke/reset artifacts
+*.db
+*.db-journal
+
+# OS/editor noise
+desktop.ini
+Thumbs.db
+*.swp
+
+# Python build/cache artifacts
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Flutter / desktop build output
+ppms_flutter/build/
+ppms_flutter/windows/flutter/ephemeral/
+ppms_flutter/windows/runner/Debug/
+ppms_flutter/windows/runner/Release/
+ppms_flutter/windows/runner/x64/
+
+# Desktop prototype build/cache
+desktop_app/__pycache__/
+
+# Runtime output
+backups/
+uvicorn_8012.out.log
+uvicorn_8012.err.log

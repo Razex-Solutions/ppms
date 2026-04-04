@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.models.tank import Tank
 from app.models.tank_dip import TankDip
 from app.models.user import User
@@ -11,7 +12,7 @@ def create_tank_dip(db: Session, data: TankDipCreate, current_user: User) -> Tan
     tank = db.query(Tank).filter(Tank.id == data.tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
-    if current_user.role.name != "Admin" and current_user.station_id != tank.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != tank.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this tank")
 
     system_volume = tank.current_volume
@@ -31,5 +32,5 @@ def create_tank_dip(db: Session, data: TankDipCreate, current_user: User) -> Tan
 
 
 def ensure_tank_dip_access(dip: TankDip, current_user: User) -> None:
-    if current_user.role.name != "Admin" and current_user.station_id != dip.tank.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != dip.tank.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this tank dip")

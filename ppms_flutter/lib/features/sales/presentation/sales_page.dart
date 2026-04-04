@@ -36,6 +36,33 @@ class _SalesPageState extends State<SalesPage> {
   int? _selectedCustomerId;
   String _saleType = 'cash';
 
+  List<Map<String, dynamic>> _dedupeById(List<Map<String, dynamic>> items) {
+    final seen = <Object?>{};
+    final result = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final id = item['id'];
+      if (seen.add(id)) {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
+  int? _validSelection(
+    int? selectedId,
+    List<Map<String, dynamic>> items,
+  ) {
+    if (selectedId == null) {
+      return null;
+    }
+    for (final item in items) {
+      if (item['id'] == selectedId) {
+        return selectedId;
+      }
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -56,37 +83,42 @@ class _SalesPageState extends State<SalesPage> {
       _errorMessage = null;
     });
     try {
-      final stations = List<Map<String, dynamic>>.from(
+      final stations = _dedupeById(
+        List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchStations()).map(
           (item) => Map<String, dynamic>.from(item as Map),
         ),
+      ),
       );
 
-      final preferredStationId =
-          widget.sessionController.currentUser?['station_id'] as int?;
+      final preferredStationId = _validSelection(
+        _selectedStationId ??
+            widget.sessionController.currentUser?['station_id'] as int?,
+        stations,
+      );
       final stationId =
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
       final nozzles = stationId == null
           ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
+          : _dedupeById(List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchNozzles(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
-            );
+            ));
       final customers = stationId == null
           ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
+          : _dedupeById(List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchCustomers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
-            );
-      final fuelTypes = List<Map<String, dynamic>>.from(
+            ));
+      final fuelTypes = _dedupeById(List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchFuelTypes()).map(
           (item) => Map<String, dynamic>.from(item as Map),
         ),
-      );
+      ));
       final recentSales = stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
@@ -99,6 +131,13 @@ class _SalesPageState extends State<SalesPage> {
         return;
       }
 
+      final selectedNozzleId = _validSelection(_selectedNozzleId, nozzles) ??
+          (nozzles.isNotEmpty ? nozzles.first['id'] as int : null);
+      final selectedCustomerId =
+          _saleType == 'credit'
+              ? _validSelection(_selectedCustomerId, customers)
+              : null;
+
       setState(() {
         _stations = stations;
         _selectedStationId = stationId;
@@ -106,10 +145,8 @@ class _SalesPageState extends State<SalesPage> {
         _customers = customers;
         _fuelTypes = fuelTypes;
         _recentSales = recentSales;
-        _selectedNozzleId = nozzles.isNotEmpty
-            ? nozzles.first['id'] as int
-            : null;
-        _selectedCustomerId = null;
+        _selectedNozzleId = selectedNozzleId;
+        _selectedCustomerId = selectedCustomerId;
         _isLoading = false;
       });
     } on ApiException catch (error) {
@@ -133,16 +170,16 @@ class _SalesPageState extends State<SalesPage> {
       _errorMessage = null;
     });
     try {
-      final nozzles = List<Map<String, dynamic>>.from(
+      final nozzles = _dedupeById(List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchNozzles(
           stationId: stationId,
         )).map((item) => Map<String, dynamic>.from(item as Map)),
-      );
-      final customers = List<Map<String, dynamic>>.from(
+      ));
+      final customers = _dedupeById(List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchCustomers(
           stationId: stationId,
         )).map((item) => Map<String, dynamic>.from(item as Map)),
-      );
+      ));
       final recentSales = List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchFuelSales(
           stationId: stationId,
@@ -151,14 +188,19 @@ class _SalesPageState extends State<SalesPage> {
       if (!mounted) {
         return;
       }
+      final selectedNozzleId = _validSelection(_selectedNozzleId, nozzles) ??
+          (nozzles.isNotEmpty ? nozzles.first['id'] as int : null);
+      final selectedCustomerId =
+          _saleType == 'credit'
+              ? _validSelection(_selectedCustomerId, customers)
+              : null;
+
       setState(() {
         _nozzles = nozzles;
         _customers = customers;
         _recentSales = recentSales;
-        _selectedNozzleId = nozzles.isNotEmpty
-            ? nozzles.first['id'] as int
-            : null;
-        _selectedCustomerId = null;
+        _selectedNozzleId = selectedNozzleId;
+        _selectedCustomerId = selectedCustomerId;
         _isLoading = false;
       });
     } on ApiException catch (error) {

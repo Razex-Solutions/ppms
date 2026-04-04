@@ -396,6 +396,45 @@ class _PartiesPageState extends State<PartiesPage> {
     }).toList();
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canReadCustomers =>
+      _hasAction('customers', 'create') ||
+      _hasAction('customers', 'update') ||
+      _hasAction('customers', 'delete') ||
+      _hasAction('customers', 'request_credit_override') ||
+      _hasAction('customers', 'approve_credit_override') ||
+      _hasAction('customers', 'reject_credit_override');
+  bool get _canManageCustomers =>
+      _hasAction('customers', 'create') || _hasAction('customers', 'update');
+  bool get _canDeleteCustomers => _hasAction('customers', 'delete');
+  bool get _canReadSuppliers =>
+      _hasAction('suppliers', 'create') ||
+      _hasAction('suppliers', 'update') ||
+      _hasAction('suppliers', 'delete');
+  bool get _canManageSuppliers =>
+      _hasAction('suppliers', 'create') || _hasAction('suppliers', 'update');
+  bool get _canDeleteSuppliers => _hasAction('suppliers', 'delete');
+
+  Widget _buildPermissionNotice(BuildContext context, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -404,6 +443,14 @@ class _PartiesPageState extends State<PartiesPage> {
 
     if (_errorMessage != null && _stations.isEmpty) {
       return Center(child: Text(_errorMessage!));
+    }
+
+    final availableSections = <_PartySection>[
+      if (_canReadCustomers) _PartySection.customers,
+      if (_canReadSuppliers) _PartySection.suppliers,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
     }
 
     return RefreshIndicator(
@@ -423,10 +470,19 @@ class _PartiesPageState extends State<PartiesPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Manage customers and suppliers that drive fuel sales, purchases, and payment workflows.',
+                    availableSections.isEmpty
+                        ? 'This role does not currently have access to customer or supplier management.'
+                        : 'Manage customers and suppliers that drive fuel sales, purchases, and payment workflows.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
+                  if (availableSections.isEmpty) ...[
+                    _buildPermissionNotice(
+                      context,
+                      'Ask an administrator for customer or supplier permissions if this workspace should be available.',
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final stationField = DropdownButtonFormField<int>(
@@ -444,30 +500,36 @@ class _PartiesPageState extends State<PartiesPage> {
                               ),
                             ),
                         ],
-                        onChanged: _changeStation,
+                        onChanged: availableSections.isEmpty
+                            ? null
+                            : _changeStation,
                       );
-                      final sections = SegmentedButton<_PartySection>(
-                        segments: const [
-                          ButtonSegment(
-                            value: _PartySection.customers,
-                            label: Text('Customers'),
-                            icon: Icon(Icons.groups_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _PartySection.suppliers,
-                            label: Text('Suppliers'),
-                            icon: Icon(Icons.local_shipping_outlined),
-                          ),
-                        ],
-                        selected: {_section},
-                        onSelectionChanged: (selection) {
-                          setState(() {
-                            _section = selection.first;
-                            _errorMessage = null;
-                            _feedbackMessage = null;
-                          });
-                        },
-                      );
+                      final sections = availableSections.isEmpty
+                          ? const SizedBox.shrink()
+                          : SegmentedButton<_PartySection>(
+                              segments: [
+                                if (_canReadCustomers)
+                                  const ButtonSegment(
+                                    value: _PartySection.customers,
+                                    label: Text('Customers'),
+                                    icon: Icon(Icons.groups_outlined),
+                                  ),
+                                if (_canReadSuppliers)
+                                  const ButtonSegment(
+                                    value: _PartySection.suppliers,
+                                    label: Text('Suppliers'),
+                                    icon: Icon(Icons.local_shipping_outlined),
+                                  ),
+                              ],
+                              selected: {_section},
+                              onSelectionChanged: (selection) {
+                                setState(() {
+                                  _section = selection.first;
+                                  _errorMessage = null;
+                                  _feedbackMessage = null;
+                                });
+                              },
+                            );
                       if (constraints.maxWidth < 900) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -488,7 +550,9 @@ class _PartiesPageState extends State<PartiesPage> {
                     },
                   ),
                   const SizedBox(height: 20),
-                  if (_section == _PartySection.customers)
+                  if (availableSections.isEmpty)
+                    const SizedBox.shrink()
+                  else if (_section == _PartySection.customers)
                     _buildCustomers(context)
                   else
                     _buildSuppliers(context),
@@ -518,6 +582,8 @@ class _PartiesPageState extends State<PartiesPage> {
   }
 
   Widget _buildCustomers(BuildContext context) {
+    final canManageCustomers = _canManageCustomers;
+    final canDeleteCustomers = _canDeleteCustomers;
     return ResponsiveSplit(
       breakpoint: 1150,
       primary: Column(
@@ -527,14 +593,23 @@ class _PartiesPageState extends State<PartiesPage> {
             _selectedCustomerId == null ? 'Create Customer' : 'Edit Customer',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          if (!canManageCustomers) ...[
+            const SizedBox(height: 12),
+            _buildPermissionNotice(
+              context,
+              'This role can review customers but cannot create or edit them.',
+            ),
+          ],
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerNameController,
+            enabled: canManageCustomers,
             decoration: const InputDecoration(labelText: 'Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerCodeController,
+            enabled: canManageCustomers,
             decoration: const InputDecoration(labelText: 'Code'),
           ),
           const SizedBox(height: 12),
@@ -547,32 +622,39 @@ class _PartiesPageState extends State<PartiesPage> {
               DropdownMenuItem(value: 'company', child: Text('Company')),
               DropdownMenuItem(value: 'pump', child: Text('Pump')),
             ],
-            onChanged: (value) {
-              setState(() {
-                _customerType = value ?? 'individual';
-              });
-            },
+            onChanged: canManageCustomers
+                ? (value) {
+                    setState(() {
+                      _customerType = value ?? 'individual';
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerPhoneController,
+            enabled: canManageCustomers,
             decoration: const InputDecoration(labelText: 'Phone'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerAddressController,
+            enabled: canManageCustomers,
             decoration: const InputDecoration(labelText: 'Address'),
             maxLines: 2,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _customerCreditLimitController,
+            enabled: canManageCustomers,
             decoration: const InputDecoration(labelText: 'Credit Limit'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _saveCustomer,
+            onPressed: _isSubmitting || !canManageCustomers
+                ? null
+                : _saveCustomer,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -601,7 +683,9 @@ class _PartiesPageState extends State<PartiesPage> {
                   child: const Text('Cancel Edit'),
                 ),
                 OutlinedButton(
-                  onPressed: _isSubmitting ? null : _deleteCustomer,
+                  onPressed: _isSubmitting || !canDeleteCustomers
+                      ? null
+                      : _deleteCustomer,
                   child: const Text('Delete Customer'),
                 ),
               ],
@@ -656,6 +740,8 @@ class _PartiesPageState extends State<PartiesPage> {
   }
 
   Widget _buildSuppliers(BuildContext context) {
+    final canManageSuppliers = _canManageSuppliers;
+    final canDeleteSuppliers = _canDeleteSuppliers;
     return ResponsiveSplit(
       breakpoint: 1150,
       primary: Column(
@@ -665,30 +751,43 @@ class _PartiesPageState extends State<PartiesPage> {
             _selectedSupplierId == null ? 'Create Supplier' : 'Edit Supplier',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          if (!canManageSuppliers) ...[
+            const SizedBox(height: 12),
+            _buildPermissionNotice(
+              context,
+              'This role can review suppliers but cannot create or edit them.',
+            ),
+          ],
           const SizedBox(height: 12),
           TextFormField(
             controller: _supplierNameController,
+            enabled: canManageSuppliers,
             decoration: const InputDecoration(labelText: 'Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _supplierCodeController,
+            enabled: canManageSuppliers,
             decoration: const InputDecoration(labelText: 'Code'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _supplierPhoneController,
+            enabled: canManageSuppliers,
             decoration: const InputDecoration(labelText: 'Phone'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _supplierAddressController,
+            enabled: canManageSuppliers,
             decoration: const InputDecoration(labelText: 'Address'),
             maxLines: 2,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _saveSupplier,
+            onPressed: _isSubmitting || !canManageSuppliers
+                ? null
+                : _saveSupplier,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -717,7 +816,9 @@ class _PartiesPageState extends State<PartiesPage> {
                   child: const Text('Cancel Edit'),
                 ),
                 OutlinedButton(
-                  onPressed: _isSubmitting ? null : _deleteSupplier,
+                  onPressed: _isSubmitting || !canDeleteSuppliers
+                      ? null
+                      : _deleteSupplier,
                   child: const Text('Delete Supplier'),
                 ),
               ],

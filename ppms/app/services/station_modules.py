@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.models.station import Station
 from app.models.station_module_setting import StationModuleSetting
 from app.models.user import User
@@ -23,7 +24,7 @@ def ensure_station_module_access(db: Session, station_id: int, current_user: Use
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return station
     if current_user.role.name == "HeadOffice":
         user_organization_id = current_user.station.organization_id if current_user.station else None

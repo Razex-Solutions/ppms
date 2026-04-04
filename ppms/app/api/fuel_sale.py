@@ -2,6 +2,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -52,7 +53,7 @@ def reverse_fuel_sale(
         raise HTTPException(status_code=404, detail="Fuel sale not found")
 
     require_permission(current_user, "fuel_sales", "reverse", detail="You do not have permission to reverse fuel sales")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return reverse_fuel_sale_service(db, sale, current_user)
     return request_fuel_sale_reversal_service(db, sale, current_user, data.reason if data else None)
 
@@ -105,7 +106,7 @@ def list_fuel_sales(
     q = db.query(FuelSale)
     
     # Multi-tenancy check
-    if current_user.role.name != "Admin":
+    if current_user.role.name != "Admin" and not is_master_admin(current_user):
         station_id = current_user.station_id
         
     if station_id:

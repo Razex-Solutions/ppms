@@ -87,6 +87,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final permissions = Map<String, dynamic>.from(
       user['permissions'] ?? const {},
     );
+    final creatableRoles = widget.sessionController.creatableRoles;
+    final scopeRule = widget.sessionController.roleScopeRule;
+    final isPlatformUser = widget.sessionController.isMasterAdmin;
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -160,6 +163,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       Text('Name: ${user['full_name'] ?? '-'}'),
                       Text('Username: ${user['username'] ?? '-'}'),
                       Text('Role: ${user['role_name'] ?? '-'}'),
+                      Text('Scope Level: ${user['scope_level'] ?? '-'}'),
+                      Text('Platform User: ${isPlatformUser ? 'yes' : 'no'}'),
                       Text('Station: ${user['station_id'] ?? '-'}'),
                       Text('Organization: ${user['organization_id'] ?? '-'}'),
                       const SizedBox(height: 12),
@@ -172,6 +177,31 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hierarchy Context',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  creatableRoles.isEmpty
+                      ? 'This role does not create other login roles directly.'
+                      : 'This role can create: ${creatableRoles.join(', ')}',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Scope rule: ${scopeRule.isEmpty ? 'No extra scope metadata reported.' : scopeRule.toString()}',
+                ),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 16),
         Card(

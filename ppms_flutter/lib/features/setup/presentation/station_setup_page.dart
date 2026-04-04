@@ -71,6 +71,28 @@ class _StationSetupPageState extends State<StationSetupPage> {
   int? _selectedNozzleTankId;
   int? _selectedNozzleDispenserId;
 
+  List<Map<String, dynamic>> _dedupeById(List<Map<String, dynamic>> items) {
+    final seen = <Object?>{};
+    final result = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final id = item['id'];
+      if (seen.add(id)) {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
+  int? _validSelection(int? selectedId, List<Map<String, dynamic>> items) {
+    if (selectedId == null) return null;
+    for (final item in items) {
+      if (item['id'] == selectedId) {
+        return selectedId;
+      }
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -117,57 +139,65 @@ class _StationSetupPageState extends State<StationSetupPage> {
       _errorMessage = null;
     });
     try {
-      final organizations = List<Map<String, dynamic>>.from(
+      final organizations = _dedupeById(
+        List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchOrganizations()).map(
           (item) => Map<String, dynamic>.from(item as Map),
         ),
+      ),
       );
-      final allStations = List<Map<String, dynamic>>.from(
+      final allStations = _dedupeById(
+        List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchStations()).map(
           (item) => Map<String, dynamic>.from(item as Map),
         ),
+      ),
       );
-      final fuelTypes = List<Map<String, dynamic>>.from(
+      final fuelTypes = _dedupeById(
+        List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchFuelTypes()).map(
           (item) => Map<String, dynamic>.from(item as Map),
         ),
+      ),
       );
 
       final organizationId =
-          _selectedOrganizationId ??
+          _validSelection(_selectedOrganizationId, organizations) ??
           (organizations.isNotEmpty ? organizations.first['id'] as int : null);
       final stations = organizationId == null
           ? allStations
-          : allStations
+          : _dedupeById(
+              allStations
                 .where(
                   (station) => station['organization_id'] == organizationId,
                 )
-                .toList();
+                .toList(),
+            );
       final stationId =
-          _selectedStationId ??
+          _validSelection(_selectedStationId, stations) ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
       final tanks = stationId == null
           ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
+          : _dedupeById(List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchTanks(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
-            );
+            ));
       final dispensers = stationId == null
           ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
+          : _dedupeById(List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchDispensers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
-            );
+            ));
       final nozzles = stationId == null
           ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
+          : _dedupeById(List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchNozzles(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
-            );
+            ));
       final selectedStation = stations.cast<Map<String, dynamic>?>().firstWhere(
         (station) => station?['id'] == stationId,
         orElse: () => null,
@@ -183,6 +213,18 @@ class _StationSetupPageState extends State<StationSetupPage> {
       _hydrateStation(selectedStation);
       _hydrateInvoice(invoiceProfile);
 
+      final selectedTankFuelTypeId =
+          _validSelection(_selectedTankFuelTypeId, fuelTypes) ??
+          _firstId(fuelTypes);
+      final selectedNozzleFuelTypeId =
+          _validSelection(_selectedNozzleFuelTypeId, fuelTypes) ??
+          _firstId(fuelTypes);
+      final selectedNozzleTankId =
+          _validSelection(_selectedNozzleTankId, tanks) ?? _firstId(tanks);
+      final selectedNozzleDispenserId =
+          _validSelection(_selectedNozzleDispenserId, dispensers) ??
+          _firstId(dispensers);
+
       setState(() {
         _organizations = organizations;
         _stations = stations;
@@ -194,13 +236,10 @@ class _StationSetupPageState extends State<StationSetupPage> {
         _selectedStationId = stationId;
         _selectedStation = selectedStation;
         _invoiceProfile = invoiceProfile;
-        _selectedTankFuelTypeId =
-            _selectedTankFuelTypeId ?? _firstId(fuelTypes);
-        _selectedNozzleFuelTypeId =
-            _selectedNozzleFuelTypeId ?? _firstId(fuelTypes);
-        _selectedNozzleTankId = _selectedNozzleTankId ?? _firstId(tanks);
-        _selectedNozzleDispenserId =
-            _selectedNozzleDispenserId ?? _firstId(dispensers);
+        _selectedTankFuelTypeId = selectedTankFuelTypeId;
+        _selectedNozzleFuelTypeId = selectedNozzleFuelTypeId;
+        _selectedNozzleTankId = selectedNozzleTankId;
+        _selectedNozzleDispenserId = selectedNozzleDispenserId;
         _isLoading = false;
       });
     } on ApiException catch (error) {
@@ -231,6 +270,12 @@ class _StationSetupPageState extends State<StationSetupPage> {
     _invoicePrefixController.text = invoice?['invoice_prefix'] as String? ?? '';
     _footerTextController.text = invoice?['footer_text'] as String? ?? '';
   }
+
+  Map<String, dynamic>? get _selectedOrganization =>
+      _organizations.cast<Map<String, dynamic>?>().firstWhere(
+        (organization) => organization?['id'] == _selectedOrganizationId,
+        orElse: () => null,
+      );
 
   Future<void> _changeOrganization(int? organizationId) async {
     if (organizationId == null) return;
@@ -720,6 +765,22 @@ class _StationSetupPageState extends State<StationSetupPage> {
             ),
           ),
           const SizedBox(height: 12),
+          _SetupBrandPreviewCard(
+            brandName: _useOrganizationBranding
+                ? (_selectedOrganization?['brand_name'] as String? ??
+                      _selectedOrganization?['name'] as String? ??
+                      'Organization Brand')
+                : (_selectedStation?['brand_name'] as String? ??
+                      _selectedStation?['name'] as String? ??
+                      'Station Brand'),
+            logoUrl: _useOrganizationBranding
+                ? (_selectedOrganization?['logo_url'] as String?)
+                : _logoUrlController.text.trim(),
+            helperText: _useOrganizationBranding
+                ? 'This station is inheriting the organization brand automatically.'
+                : 'This station is using its own custom branding.',
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _logoUrlController,
             enabled: !_useOrganizationBranding,
@@ -801,6 +862,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
               ),
               const SizedBox(height: 12),
               Text('Organization: ${organization?['name'] ?? '-'}'),
+              Text('Brand: ${organization?['brand_name'] ?? '-'}'),
               Text('Station: ${_selectedStation?['name'] ?? '-'}'),
               Text('Code: ${_selectedStation?['code'] ?? '-'}'),
               Text('Setup Status: ${_selectedStation?['setup_status'] ?? '-'}'),
@@ -1280,6 +1342,76 @@ class _StationSetupPageState extends State<StationSetupPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SetupBrandPreviewCard extends StatelessWidget {
+  const _SetupBrandPreviewCard({
+    required this.brandName,
+    required this.logoUrl,
+    required this.helperText,
+  });
+
+  final String brandName;
+  final String? logoUrl;
+  final String helperText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+        leading: _SetupBrandAvatar(brandName: brandName, logoUrl: logoUrl),
+        title: Text(brandName),
+        subtitle: Text(helperText),
+      ),
+    );
+  }
+}
+
+class _SetupBrandAvatar extends StatelessWidget {
+  const _SetupBrandAvatar({required this.brandName, required this.logoUrl});
+
+  final String brandName;
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = logoUrl?.trim() ?? '';
+    if (trimmed.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          trimmed,
+          width: 52,
+          height: 52,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => _fallbackAvatar(context),
+        ),
+      );
+    }
+    return _fallbackAvatar(context);
+  }
+
+  Widget _fallbackAvatar(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    final initials = brandName
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part[0].toUpperCase())
+        .join();
+    return CircleAvatar(
+      radius: 26,
+      backgroundColor: color.withValues(alpha: 0.15),
+      child: Text(
+        initials.isEmpty ? 'BR' : initials,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
       ),
     );
   }

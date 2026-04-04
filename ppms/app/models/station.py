@@ -17,6 +17,8 @@ class Station(Base):
     is_head_office = Column(Boolean, nullable=False, default=False)
     display_name = Column(String, nullable=True)
     legal_name_override = Column(String, nullable=True)
+    brand_name = Column(String, nullable=True)
+    brand_code = Column(String, nullable=True)
     logo_url = Column(String, nullable=True)
     use_organization_branding = Column(Boolean, nullable=False, default=True)
     is_active = Column(Boolean, nullable=False, default=True)

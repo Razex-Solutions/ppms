@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.time import utc_now
 from app.models.expense import Expense
 from app.models.station import Station
@@ -20,7 +20,7 @@ def _get_station(db: Session, station_id: int) -> Station:
 
 def _ensure_expense_read_access(db: Session, expense: Expense, current_user: User) -> None:
     station = _get_station(db, expense.station_id)
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         if station.organization_id != get_user_organization_id(current_user):
@@ -32,7 +32,7 @@ def _ensure_expense_read_access(db: Session, expense: Expense, current_user: Use
 
 def _ensure_expense_approval_access(db: Session, expense: Expense, current_user: User) -> None:
     station = _get_station(db, expense.station_id)
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return
     if is_head_office_user(current_user) and station.organization_id == get_user_organization_id(current_user):
         return
@@ -41,12 +41,12 @@ def _ensure_expense_approval_access(db: Session, expense: Expense, current_user:
 
 def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expense:
     station = _get_station(db, data.station_id)
-    if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
 
-    is_auto_approved = current_user.role.name == "Admin"
+    is_auto_approved = current_user.role.name == "Admin" or is_master_admin(current_user)
     expense = Expense(
         title=data.title,
         category=data.category,

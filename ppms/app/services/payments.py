@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.time import utc_now
 from app.models.customer import Customer
 from app.models.customer_payment import CustomerPayment
@@ -16,7 +16,7 @@ from app.services.notifications import notify_approval_requested, notify_decisio
 
 
 def ensure_customer_payment_access(payment: CustomerPayment, current_user: User) -> None:
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         station = payment.customer.station if hasattr(payment, "customer") and payment.customer else None
@@ -30,7 +30,7 @@ def ensure_customer_payment_access(payment: CustomerPayment, current_user: User)
 
 
 def ensure_supplier_payment_access(payment: SupplierPayment, current_user: User) -> None:
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         station = payment.station
@@ -42,7 +42,7 @@ def ensure_supplier_payment_access(payment: SupplierPayment, current_user: User)
 
 
 def create_customer_payment(db: Session, data: CustomerPaymentCreate, current_user: User) -> CustomerPayment:
-    if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
@@ -88,7 +88,7 @@ def create_customer_payment(db: Session, data: CustomerPaymentCreate, current_us
 
 def reverse_customer_payment(db: Session, payment: CustomerPayment, current_user: User) -> CustomerPayment:
     ensure_customer_payment_access(payment, current_user)
-    if payment.reversal_request_status != "approved" and current_user.role.name != "Admin":
+    if payment.reversal_request_status != "approved" and current_user.role.name != "Admin" and not is_master_admin(current_user):
         raise HTTPException(status_code=400, detail="Customer payment reversal must be approved first")
     if payment.is_reversed:
         raise HTTPException(status_code=400, detail="Customer payment is already reversed")
@@ -227,7 +227,7 @@ def reject_customer_payment_reversal(db: Session, payment: CustomerPayment, curr
 
 
 def create_supplier_payment(db: Session, data: SupplierPaymentCreate, current_user: User) -> SupplierPayment:
-    if current_user.role.name != "Admin" and current_user.station_id != data.station_id:
+    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
@@ -271,7 +271,7 @@ def create_supplier_payment(db: Session, data: SupplierPaymentCreate, current_us
 
 def reverse_supplier_payment(db: Session, payment: SupplierPayment, current_user: User) -> SupplierPayment:
     ensure_supplier_payment_access(payment, current_user)
-    if payment.reversal_request_status != "approved" and current_user.role.name != "Admin":
+    if payment.reversal_request_status != "approved" and current_user.role.name != "Admin" and not is_master_admin(current_user):
         raise HTTPException(status_code=400, detail="Supplier payment reversal must be approved first")
     if payment.is_reversed:
         raise HTTPException(status_code=400, detail="Supplier payment is already reversed")

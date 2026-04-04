@@ -413,6 +413,10 @@ class ApiClient {
     return _sendList('GET', '/organizations/', accessToken: accessToken);
   }
 
+  Future<List<dynamic>> getBrands(String accessToken) async {
+    return _sendList('GET', '/brands/', accessToken: accessToken);
+  }
+
   Future<Map<String, dynamic>> createOrganization(
     String accessToken, {
     required Map<String, dynamic> payload,

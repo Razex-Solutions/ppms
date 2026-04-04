@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -42,7 +43,7 @@ def list_pos_sales(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.name != "Admin":
+    if current_user.role.name != "Admin" and not is_master_admin(current_user):
         station_id = current_user.station_id
 
     q = db.query(POSSale)

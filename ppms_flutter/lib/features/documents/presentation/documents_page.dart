@@ -46,6 +46,30 @@ class _DocumentsPageState extends State<DocumentsPage> {
     _loadDocumentCenter();
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canViewFuelSaleDocs =>
+      _hasAction('fuel_sales', 'create') || _hasAction('fuel_sales', 'reverse');
+  bool get _canViewCustomerPaymentDocs =>
+      _hasAction('customer_payments', 'create') ||
+      _hasAction('customer_payments', 'reverse');
+  bool get _canViewSupplierPaymentDocs =>
+      _hasAction('supplier_payments', 'create') ||
+      _hasAction('supplier_payments', 'reverse');
+  bool get _canViewReportExports => _hasAction('reports', 'read');
+  bool get _canViewAnyDocuments =>
+      _canViewFuelSaleDocs ||
+      _canViewCustomerPaymentDocs ||
+      _canViewSupplierPaymentDocs ||
+      _canViewReportExports;
+
   Future<void> _loadDocumentCenter() async {
     setState(() {
       _isLoading = true;
@@ -54,34 +78,44 @@ class _DocumentsPageState extends State<DocumentsPage> {
     try {
       final stationId =
           widget.sessionController.currentUser?['station_id'] as int?;
-      final fuelSales = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFuelSales(
-          stationId: stationId,
-          limit: 12,
-        )).map((item) => Map<String, dynamic>.from(item as Map)),
-      );
-      final customerPayments = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchCustomerPayments(
-          stationId: stationId,
-          limit: 12,
-        )).map((item) => Map<String, dynamic>.from(item as Map)),
-      );
-      final supplierPayments = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchSupplierPayments(
-          stationId: stationId,
-          limit: 12,
-        )).map((item) => Map<String, dynamic>.from(item as Map)),
-      );
-      final reportExports = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchReportExports()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final dispatches = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFinancialDocumentDispatches()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
+      final fuelSales = _canViewFuelSaleDocs
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelSales(
+                stationId: stationId,
+                limit: 12,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            )
+          : const <Map<String, dynamic>>[];
+      final customerPayments = _canViewCustomerPaymentDocs
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchCustomerPayments(
+                stationId: stationId,
+                limit: 12,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            )
+          : const <Map<String, dynamic>>[];
+      final supplierPayments = _canViewSupplierPaymentDocs
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchSupplierPayments(
+                stationId: stationId,
+                limit: 12,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            )
+          : const <Map<String, dynamic>>[];
+      final reportExports = _canViewReportExports
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchReportExports()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final dispatches = _canViewAnyDocuments
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController
+                      .fetchFinancialDocumentDispatches())
+                  .map((item) => Map<String, dynamic>.from(item as Map)),
+            )
+          : const <Map<String, dynamic>>[];
 
       if (!mounted) {
         return;
@@ -290,6 +324,12 @@ class _DocumentsPageState extends State<DocumentsPage> {
       return Center(child: Text(_errorMessage!));
     }
 
+    final canViewFuelSaleDocs = _canViewFuelSaleDocs;
+    final canViewCustomerPaymentDocs = _canViewCustomerPaymentDocs;
+    final canViewSupplierPaymentDocs = _canViewSupplierPaymentDocs;
+    final canViewReportExports = _canViewReportExports;
+    final canViewAnyDocuments = _canViewAnyDocuments;
+
     return RefreshIndicator(
       onRefresh: _loadDocumentCenter,
       child: ListView(
@@ -309,75 +349,87 @@ class _DocumentsPageState extends State<DocumentsPage> {
             spacing: 16,
             runSpacing: 16,
             children: [
-              _buildListCard(
-                context,
-                title: 'Fuel Sale Invoices',
-                items: _fuelSales,
-                itemBuilder: (sale) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    'Sale #${sale['id']} • ${_formatNumber(sale['total_amount'])}',
+              if (canViewFuelSaleDocs)
+                _buildListCard(
+                  context,
+                  title: 'Fuel Sale Invoices',
+                  items: _fuelSales,
+                  itemBuilder: (sale) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Sale #${sale['id']} • ${_formatNumber(sale['total_amount'])}',
+                    ),
+                    subtitle: Text(
+                      '${_formatNumber(sale['quantity'])}L • ${_displayTimestamp(sale['created_at'])}',
+                    ),
+                    onTap: _isSubmitting
+                        ? null
+                        : () async {
+                            _selectionType = _DocumentSelectionType.fuelSale;
+                            _selectedEntityId = sale['id'] as int;
+                            await _openFuelSaleDocument(sale['id'] as int);
+                          },
                   ),
-                  subtitle: Text(
-                    '${_formatNumber(sale['quantity'])}L • ${_displayTimestamp(sale['created_at'])}',
-                  ),
-                  onTap: _isSubmitting
-                      ? null
-                      : () async {
-                          _selectionType = _DocumentSelectionType.fuelSale;
-                          _selectedEntityId = sale['id'] as int;
-                          await _openFuelSaleDocument(sale['id'] as int);
-                        },
                 ),
-              ),
-              _buildListCard(
-                context,
-                title: 'Customer Payment Receipts',
-                items: _customerPayments,
-                itemBuilder: (payment) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    'Payment #${payment['id']} • ${_formatNumber(payment['amount'])}',
+              if (canViewCustomerPaymentDocs)
+                _buildListCard(
+                  context,
+                  title: 'Customer Payment Receipts',
+                  items: _customerPayments,
+                  itemBuilder: (payment) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Payment #${payment['id']} • ${_formatNumber(payment['amount'])}',
+                    ),
+                    subtitle: Text(
+                      'Customer ${payment['customer_id']} • ${_displayTimestamp(payment['created_at'])}',
+                    ),
+                    onTap: _isSubmitting
+                        ? null
+                        : () async {
+                            _selectionType =
+                                _DocumentSelectionType.customerPayment;
+                            _selectedEntityId = payment['id'] as int;
+                            await _openCustomerPaymentDocument(
+                              payment['id'] as int,
+                            );
+                          },
                   ),
-                  subtitle: Text(
-                    'Customer ${payment['customer_id']} • ${_displayTimestamp(payment['created_at'])}',
-                  ),
-                  onTap: _isSubmitting
-                      ? null
-                      : () async {
-                          _selectionType =
-                              _DocumentSelectionType.customerPayment;
-                          _selectedEntityId = payment['id'] as int;
-                          await _openCustomerPaymentDocument(
-                            payment['id'] as int,
-                          );
-                        },
                 ),
-              ),
-              _buildListCard(
-                context,
-                title: 'Supplier Payment Vouchers',
-                items: _supplierPayments,
-                itemBuilder: (payment) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    'Payment #${payment['id']} • ${_formatNumber(payment['amount'])}',
+              if (canViewSupplierPaymentDocs)
+                _buildListCard(
+                  context,
+                  title: 'Supplier Payment Vouchers',
+                  items: _supplierPayments,
+                  itemBuilder: (payment) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Payment #${payment['id']} • ${_formatNumber(payment['amount'])}',
+                    ),
+                    subtitle: Text(
+                      'Supplier ${payment['supplier_id']} • ${_displayTimestamp(payment['created_at'])}',
+                    ),
+                    onTap: _isSubmitting
+                        ? null
+                        : () async {
+                            _selectionType =
+                                _DocumentSelectionType.supplierPayment;
+                            _selectedEntityId = payment['id'] as int;
+                            await _openSupplierPaymentDocument(
+                              payment['id'] as int,
+                            );
+                          },
                   ),
-                  subtitle: Text(
-                    'Supplier ${payment['supplier_id']} • ${_displayTimestamp(payment['created_at'])}',
-                  ),
-                  onTap: _isSubmitting
-                      ? null
-                      : () async {
-                          _selectionType =
-                              _DocumentSelectionType.supplierPayment;
-                          _selectedEntityId = payment['id'] as int;
-                          await _openSupplierPaymentDocument(
-                            payment['id'] as int,
-                          );
-                        },
                 ),
-              ),
+              if (!canViewAnyDocuments)
+                _buildListCard(
+                  context,
+                  title: 'Documents',
+                  items: const [],
+                  emptyMessage:
+                      'This role does not currently have access to invoices, receipts, vouchers, or export files.',
+                  itemBuilder: (_) => const SizedBox.shrink(),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -395,7 +447,9 @@ class _DocumentsPageState extends State<DocumentsPage> {
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 12),
-                      if (_selectedDocument != null) ...[
+                      if (!canViewAnyDocuments)
+                        const Text('No document preview access for this role.')
+                      else if (_selectedDocument != null) ...[
                         Text('${_selectedDocument!['title']}'),
                         const SizedBox(height: 8),
                         Text(
@@ -496,7 +550,9 @@ class _DocumentsPageState extends State<DocumentsPage> {
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 12),
-                          if (_reportExports.isEmpty)
+                          if (!canViewReportExports)
+                            const Text('No report export access for this role.')
+                          else if (_reportExports.isEmpty)
                             const Text('No report exports available.')
                           else
                             for (final job in _reportExports.take(10))
@@ -533,7 +589,11 @@ class _DocumentsPageState extends State<DocumentsPage> {
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 12),
-                          if (_dispatches.isEmpty)
+                          if (!canViewAnyDocuments)
+                            const Text(
+                              'No dispatch-history access for this role.',
+                            )
+                          else if (_dispatches.isEmpty)
                             const Text(
                               'No financial document dispatches found.',
                             )
@@ -588,6 +648,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
     BuildContext context, {
     required String title,
     required List<Map<String, dynamic>> items,
+    String emptyMessage = 'No items found.',
     required Widget Function(Map<String, dynamic>) itemBuilder,
   }) {
     return SizedBox(
@@ -601,7 +662,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
               Text(title, style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 12),
               if (items.isEmpty)
-                const Text('No items found.')
+                Text(emptyMessage)
               else
                 for (final item in items.take(8)) itemBuilder(item),
             ],

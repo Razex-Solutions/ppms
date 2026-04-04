@@ -6,6 +6,7 @@ class OrganizationCreate(BaseModel):
     code: str
     description: str | None = None
     legal_name: str | None = None
+    brand_catalog_id: int | None = None
     brand_name: str | None = None
     brand_code: str | None = None
     logo_url: str | None = None
@@ -25,6 +26,7 @@ class OrganizationUpdate(BaseModel):
     code: str | None = None
     description: str | None = None
     legal_name: str | None = None
+    brand_catalog_id: int | None = None
     brand_name: str | None = None
     brand_code: str | None = None
     logo_url: str | None = None
@@ -45,6 +47,7 @@ class OrganizationResponse(BaseModel):
     code: str
     description: str | None = None
     legal_name: str | None = None
+    brand_catalog_id: int | None = None
     brand_name: str | None = None
     brand_code: str | None = None
     logo_url: str | None = None

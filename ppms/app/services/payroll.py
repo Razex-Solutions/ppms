@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, require_station_access
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.core.time import utc_now
 from app.models.attendance_record import AttendanceRecord
 from app.models.payroll_line import PayrollLine
@@ -16,7 +16,7 @@ def ensure_payroll_access(db: Session, station_id: int, current_user: User) -> S
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         if station.organization_id == get_user_organization_id(current_user):

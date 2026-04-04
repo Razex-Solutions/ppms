@@ -40,14 +40,25 @@ def upgrade() -> None:
     if "is_head_office" not in station_columns:
         op.add_column("stations", sa.Column("is_head_office", sa.Boolean(), nullable=False, server_default=sa.text("0")))
 
+    organization_columns = {column["name"] for column in inspect(bind).get_columns("organizations")}
+
     default_org = bind.execute(text("SELECT id FROM organizations WHERE code = 'DEFAULT'")).scalar()
     if default_org is None:
-        bind.execute(
-            text(
-                "INSERT INTO organizations (name, code, description, is_active) "
-                "VALUES ('Default Organization', 'DEFAULT', 'Auto-created for existing stations', 1)"
-            )
-        )
+        insert_fields = {
+            "name": "Default Organization",
+            "code": "DEFAULT",
+            "description": "Auto-created for existing stations",
+            "is_active": 1,
+            "onboarding_status": "draft",
+            "billing_status": "trial",
+            "inherit_branding_to_stations": 1,
+        }
+        available_fields = {
+            key: value for key, value in insert_fields.items() if key in organization_columns
+        }
+        columns_sql = ", ".join(available_fields.keys())
+        values_sql = ", ".join(f":{key}" for key in available_fields)
+        bind.execute(text(f"INSERT INTO organizations ({columns_sql}) VALUES ({values_sql})"), available_fields)
         default_org = bind.execute(text("SELECT id FROM organizations WHERE code = 'DEFAULT'")).scalar()
 
     bind.execute(

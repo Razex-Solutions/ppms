@@ -497,6 +497,35 @@ class _TankerPageState extends State<TankerPage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  bool _hasAction(String module, String action) {
+    final modulePermissions =
+        widget.sessionController.permissions[module] as List<dynamic>?;
+    if (modulePermissions == null) {
+      return false;
+    }
+    return modulePermissions.contains(action);
+  }
+
+  bool get _canReadTankers => _hasAction('tankers', 'read');
+  bool get _canManageTankers =>
+      _hasAction('tankers', 'create') || _hasAction('tankers', 'update');
+  bool get _canCreateTrips => _hasAction('tankers', 'trip_create');
+  bool get _canCreateTripDeliveries => _hasAction('tankers', 'delivery_create');
+  bool get _canCreateTripExpenses => _hasAction('tankers', 'expense_create');
+  bool get _canCompleteTrips => _hasAction('tankers', 'complete');
+
+  Widget _buildPermissionNotice(BuildContext context, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message),
+    );
+  }
+
   Map<String, dynamic>? get _selectedTrip {
     return _trips.cast<Map<String, dynamic>?>().firstWhere(
       (trip) => trip?['id'] == _selectedTripId,
@@ -508,6 +537,15 @@ class _TankerPageState extends State<TankerPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    final availableSections = <_TankerSection>[
+      if (_canReadTankers) _TankerSection.tankers,
+      if (_canReadTankers) _TankerSection.trips,
+      if (_canReadTankers) _TankerSection.tripOps,
+    ];
+    if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
+      _section = availableSections.first;
     }
 
     return RefreshIndicator(
@@ -527,10 +565,19 @@ class _TankerPageState extends State<TankerPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Manage tanker vehicles, create trips, post deliveries and expenses, and complete tanker runs.',
+                    availableSections.isEmpty
+                        ? 'This role does not currently have access to tanker operations.'
+                        : 'Manage tanker vehicles, create trips, post deliveries and expenses, and complete tanker runs.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
+                  if (availableSections.isEmpty) ...[
+                    _buildPermissionNotice(
+                      context,
+                      'Ask an administrator for tanker permissions if this workspace should be available.',
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final stationField = DropdownButtonFormField<int>(
@@ -548,35 +595,39 @@ class _TankerPageState extends State<TankerPage> {
                               ),
                             ),
                         ],
-                        onChanged: _changeStation,
+                        onChanged: availableSections.isEmpty
+                            ? null
+                            : _changeStation,
                       );
-                      final sections = SegmentedButton<_TankerSection>(
-                        segments: const [
-                          ButtonSegment(
-                            value: _TankerSection.tankers,
-                            label: Text('Tankers'),
-                            icon: Icon(Icons.local_shipping_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _TankerSection.trips,
-                            label: Text('Trips'),
-                            icon: Icon(Icons.route_outlined),
-                          ),
-                          ButtonSegment(
-                            value: _TankerSection.tripOps,
-                            label: Text('Trip Ops'),
-                            icon: Icon(Icons.fact_check_outlined),
-                          ),
-                        ],
-                        selected: {_section},
-                        onSelectionChanged: (selection) {
-                          setState(() {
-                            _section = selection.first;
-                            _errorMessage = null;
-                            _feedbackMessage = null;
-                          });
-                        },
-                      );
+                      final sections = availableSections.isEmpty
+                          ? const SizedBox.shrink()
+                          : SegmentedButton<_TankerSection>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: _TankerSection.tankers,
+                                  label: Text('Tankers'),
+                                  icon: Icon(Icons.local_shipping_outlined),
+                                ),
+                                ButtonSegment(
+                                  value: _TankerSection.trips,
+                                  label: Text('Trips'),
+                                  icon: Icon(Icons.route_outlined),
+                                ),
+                                ButtonSegment(
+                                  value: _TankerSection.tripOps,
+                                  label: Text('Trip Ops'),
+                                  icon: Icon(Icons.fact_check_outlined),
+                                ),
+                              ],
+                              selected: {_section},
+                              onSelectionChanged: (selection) {
+                                setState(() {
+                                  _section = selection.first;
+                                  _errorMessage = null;
+                                  _feedbackMessage = null;
+                                });
+                              },
+                            );
                       if (constraints.maxWidth < 900) {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -597,7 +648,9 @@ class _TankerPageState extends State<TankerPage> {
                     },
                   ),
                   const SizedBox(height: 20),
-                  if (_section == _TankerSection.tankers)
+                  if (availableSections.isEmpty)
+                    const SizedBox.shrink()
+                  else if (_section == _TankerSection.tankers)
                     _buildTankersSection(context)
                   else if (_section == _TankerSection.trips)
                     _buildTripsSection(context)
@@ -629,6 +682,7 @@ class _TankerPageState extends State<TankerPage> {
   }
 
   Widget _buildTankersSection(BuildContext context) {
+    final canManageTankers = _canManageTankers;
     return ResponsiveSplit(
       breakpoint: 1150,
       primary: Column(
@@ -638,19 +692,29 @@ class _TankerPageState extends State<TankerPage> {
             'Register Tanker',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          if (!canManageTankers) ...[
+            const SizedBox(height: 12),
+            _buildPermissionNotice(
+              context,
+              'This role can review tankers but cannot register or edit them.',
+            ),
+          ],
           const SizedBox(height: 12),
           TextFormField(
             controller: _tankerRegistrationController,
+            enabled: canManageTankers,
             decoration: const InputDecoration(labelText: 'Registration Number'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _tankerNameController,
+            enabled: canManageTankers,
             decoration: const InputDecoration(labelText: 'Tanker Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _tankerCapacityController,
+            enabled: canManageTankers,
             decoration: const InputDecoration(labelText: 'Capacity'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
@@ -667,11 +731,13 @@ class _TankerPageState extends State<TankerPage> {
               ),
               DropdownMenuItem(value: 'leased', child: Text('Leased')),
             ],
-            onChanged: (value) {
-              setState(() {
-                _tankerOwnershipType = value ?? 'owned';
-              });
-            },
+            onChanged: canManageTankers
+                ? (value) {
+                    setState(() {
+                      _tankerOwnershipType = value ?? 'owned';
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
@@ -687,15 +753,18 @@ class _TankerPageState extends State<TankerPage> {
                   child: Text(fuelType['name'] as String? ?? 'Fuel'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedFuelTypeId = value;
-              });
-            },
+            onChanged: canManageTankers
+                ? (value) {
+                    setState(() {
+                      _selectedFuelTypeId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _tankerOwnerNameController,
+            enabled: canManageTankers,
             decoration: const InputDecoration(
               labelText: 'Owner Name (optional)',
             ),
@@ -703,6 +772,7 @@ class _TankerPageState extends State<TankerPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _tankerDriverNameController,
+            enabled: canManageTankers,
             decoration: const InputDecoration(
               labelText: 'Driver Name (optional)',
             ),
@@ -710,13 +780,16 @@ class _TankerPageState extends State<TankerPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _tankerDriverPhoneController,
+            enabled: canManageTankers,
             decoration: const InputDecoration(
               labelText: 'Driver Phone (optional)',
             ),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _createTanker,
+            onPressed: _isSubmitting || !canManageTankers
+                ? null
+                : _createTanker,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -763,12 +836,20 @@ class _TankerPageState extends State<TankerPage> {
   }
 
   Widget _buildTripsSection(BuildContext context) {
+    final canCreateTrips = _canCreateTrips;
     return ResponsiveSplit(
       breakpoint: 1150,
       primary: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Create Trip', style: Theme.of(context).textTheme.titleLarge),
+          if (!canCreateTrips) ...[
+            const SizedBox(height: 12),
+            _buildPermissionNotice(
+              context,
+              'This role can review trips but cannot create new tanker trips.',
+            ),
+          ],
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             key: ValueKey<String>('trip-tanker-${_selectedTankerId ?? 'none'}'),
@@ -783,18 +864,20 @@ class _TankerPageState extends State<TankerPage> {
                   ),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedTankerId = value;
-                final selected = _tankers
-                    .cast<Map<String, dynamic>?>()
-                    .firstWhere(
-                      (tanker) => tanker?['id'] == value,
-                      orElse: () => null,
-                    );
-                _selectedFuelTypeId = selected?['fuel_type_id'] as int?;
-              });
-            },
+            onChanged: canCreateTrips
+                ? (value) {
+                    setState(() {
+                      _selectedTankerId = value;
+                      final selected = _tankers
+                          .cast<Map<String, dynamic>?>()
+                          .firstWhere(
+                            (tanker) => tanker?['id'] == value,
+                            orElse: () => null,
+                          );
+                      _selectedFuelTypeId = selected?['fuel_type_id'] as int?;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -811,11 +894,13 @@ class _TankerPageState extends State<TankerPage> {
                 child: Text('Supplier to Customer'),
               ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _tripType = value ?? 'supplier_to_station';
-              });
-            },
+            onChanged: canCreateTrips
+                ? (value) {
+                    setState(() {
+                      _tripType = value ?? 'supplier_to_station';
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
@@ -831,11 +916,13 @@ class _TankerPageState extends State<TankerPage> {
                   child: Text('${supplier['code']} - ${supplier['name']}'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedSupplierId = value;
-              });
-            },
+            onChanged: canCreateTrips
+                ? (value) {
+                    setState(() {
+                      _selectedSupplierId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
@@ -849,11 +936,13 @@ class _TankerPageState extends State<TankerPage> {
                   child: Text(fuelType['name'] as String? ?? 'Fuel'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedFuelTypeId = value;
-              });
-            },
+            onChanged: canCreateTrips
+                ? (value) {
+                    setState(() {
+                      _selectedFuelTypeId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           if (_tripType == 'supplier_to_station')
@@ -870,26 +959,30 @@ class _TankerPageState extends State<TankerPage> {
                     child: Text('${tank['code']} - ${tank['name']}'),
                   ),
               ],
-              onChanged: (value) {
-                setState(() {
-                  _selectedLinkedTankId = value;
-                });
-              },
+              onChanged: canCreateTrips
+                  ? (value) {
+                      setState(() {
+                        _selectedLinkedTankId = value;
+                      });
+                    }
+                  : null,
             ),
           if (_tripType == 'supplier_to_customer')
             TextFormField(
               controller: _tripDestinationController,
+              enabled: canCreateTrips,
               decoration: const InputDecoration(labelText: 'Destination Name'),
             ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _tripNotesController,
+            enabled: canCreateTrips,
             decoration: const InputDecoration(labelText: 'Notes'),
             maxLines: 2,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _createTrip,
+            onPressed: _isSubmitting || !canCreateTrips ? null : _createTrip,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -931,7 +1024,7 @@ class _TankerPageState extends State<TankerPage> {
                           child: Text('Completed'),
                         ),
                       ],
-                      onChanged: _changeTripStatus,
+                      onChanged: _canReadTankers ? _changeTripStatus : null,
                     ),
                   ),
                 ],
@@ -965,6 +1058,9 @@ class _TankerPageState extends State<TankerPage> {
 
   Widget _buildTripOpsSection(BuildContext context) {
     final selectedTrip = _selectedTrip;
+    final canCreateTripDeliveries = _canCreateTripDeliveries;
+    final canCreateTripExpenses = _canCreateTripExpenses;
+    final canCompleteTrips = _canCompleteTrips;
     return ResponsiveSplit(
       breakpoint: 1150,
       primary: Column(
@@ -974,6 +1070,15 @@ class _TankerPageState extends State<TankerPage> {
             'Trip Operations',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          if (!canCreateTripDeliveries &&
+              !canCreateTripExpenses &&
+              !canCompleteTrips) ...[
+            const SizedBox(height: 12),
+            _buildPermissionNotice(
+              context,
+              'This role can review trip summaries but cannot post deliveries, expenses, or trip completion.',
+            ),
+          ],
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             key: ValueKey<String>('trip-ops-${_selectedTripId ?? 'none'}'),
@@ -988,11 +1093,13 @@ class _TankerPageState extends State<TankerPage> {
                   ),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedTripId = value;
-              });
-            },
+            onChanged: _canReadTankers
+                ? (value) {
+                    setState(() {
+                      _selectedTripId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 20),
           Text('Add Delivery', style: Theme.of(context).textTheme.titleMedium),
@@ -1014,15 +1121,18 @@ class _TankerPageState extends State<TankerPage> {
                   child: Text('${customer['code']} - ${customer['name']}'),
                 ),
             ],
-            onChanged: (value) {
-              setState(() {
-                _selectedDeliveryCustomerId = value;
-              });
-            },
+            onChanged: canCreateTripDeliveries
+                ? (value) {
+                    setState(() {
+                      _selectedDeliveryCustomerId = value;
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _deliveryDestinationController,
+            enabled: canCreateTripDeliveries,
             decoration: const InputDecoration(
               labelText: 'Delivery Destination',
             ),
@@ -1030,18 +1140,21 @@ class _TankerPageState extends State<TankerPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _deliveryQuantityController,
+            enabled: canCreateTripDeliveries,
             decoration: const InputDecoration(labelText: 'Quantity'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _deliveryFuelRateController,
+            enabled: canCreateTripDeliveries,
             decoration: const InputDecoration(labelText: 'Fuel Rate'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _deliveryChargeController,
+            enabled: canCreateTripDeliveries,
             decoration: const InputDecoration(labelText: 'Delivery Charge'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
@@ -1054,21 +1167,26 @@ class _TankerPageState extends State<TankerPage> {
               DropdownMenuItem(value: 'cash', child: Text('Cash')),
               DropdownMenuItem(value: 'credit', child: Text('Credit')),
             ],
-            onChanged: (value) {
-              setState(() {
-                _deliverySaleType = value ?? 'cash';
-              });
-            },
+            onChanged: canCreateTripDeliveries
+                ? (value) {
+                    setState(() {
+                      _deliverySaleType = value ?? 'cash';
+                    });
+                  }
+                : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _deliveryPaidAmountController,
+            enabled: canCreateTripDeliveries,
             decoration: const InputDecoration(labelText: 'Paid Amount'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
           FilledButton.tonalIcon(
-            onPressed: _isSubmitting ? null : _addDelivery,
+            onPressed: _isSubmitting || !canCreateTripDeliveries
+                ? null
+                : _addDelivery,
             icon: const Icon(Icons.add_road_outlined),
             label: const Text('Add Delivery'),
           ),
@@ -1077,23 +1195,28 @@ class _TankerPageState extends State<TankerPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _expenseTypeController,
+            enabled: canCreateTripExpenses,
             decoration: const InputDecoration(labelText: 'Expense Type'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _expenseAmountController,
+            enabled: canCreateTripExpenses,
             decoration: const InputDecoration(labelText: 'Amount'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _expenseNotesController,
+            enabled: canCreateTripExpenses,
             decoration: const InputDecoration(labelText: 'Notes'),
             maxLines: 2,
           ),
           const SizedBox(height: 12),
           FilledButton.tonalIcon(
-            onPressed: _isSubmitting ? null : _addExpense,
+            onPressed: _isSubmitting || !canCreateTripExpenses
+                ? null
+                : _addExpense,
             icon: const Icon(Icons.money_off_csred_outlined),
             label: const Text('Add Expense'),
           ),
@@ -1102,6 +1225,7 @@ class _TankerPageState extends State<TankerPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _completeReasonController,
+            enabled: canCompleteTrips,
             decoration: const InputDecoration(
               labelText: 'Completion Reason (optional)',
             ),
@@ -1109,7 +1233,9 @@ class _TankerPageState extends State<TankerPage> {
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: _isSubmitting ? null : _completeTrip,
+            onPressed: _isSubmitting || !canCompleteTrips
+                ? null
+                : _completeTrip,
             icon: _isSubmitting
                 ? const SizedBox.square(
                     dimension: 18,

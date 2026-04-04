@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.access import is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -74,7 +75,7 @@ def list_attendance(
 ):
     require_permission(current_user, "attendance", "read", detail="You do not have permission to view attendance")
     query = db.query(AttendanceRecord)
-    if current_user.role.name == "Admin":
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
         pass
     elif current_user.role.name == "HeadOffice":
         organization_id = current_user.station.organization_id if current_user.station else None

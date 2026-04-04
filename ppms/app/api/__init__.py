@@ -2,6 +2,7 @@ from app.api.accounting import router as accounting_router
 from app.api.audit import router as audit_router
 from app.api.attendance import router as attendance_router
 from app.api.auth import router as auth_router
+from app.api.brand_catalog import router as brand_catalog_router
 from app.api.customer import router as customer_router
 from app.api.customer_payment import router as customer_payment_router
 from app.api.dashboard import router as dashboard_router
@@ -42,6 +43,7 @@ from app.api.user import router as user_router
 
 ROUTER_REGISTRY = [
     {"name": "auth", "router": auth_router, "protected": False},
+    {"name": "brands", "router": brand_catalog_router, "protected": True},
     {"name": "audit_logs", "router": audit_router, "protected": True},
     {"name": "attendance", "router": attendance_router, "protected": True},
     {"name": "roles", "router": role_router, "protected": True},

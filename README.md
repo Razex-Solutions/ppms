@@ -106,8 +106,20 @@ The Petrol Pump Management System (PPMS) provides a robust RESTful API to stream
     cd ppms
     python seed.py
     ```
+- Default Platform Username: `masteradmin`
+- Default Platform Password: `master123`
 - Default Admin Username: `admin`
 - Default Admin Password: `admin123`
+- Demo HeadOffice Username: `headoffice`
+- Demo HeadOffice Password: `office123`
+- Demo StationAdmin Username: `stationadmin`
+- Demo StationAdmin Password: `station123`
+- Demo Manager Username: `manager`
+- Demo Manager Password: `manager123`
+- Demo Operator Username: `operator`
+- Demo Operator Password: `operator123`
+- Demo Accountant Username: `accountant`
+- Demo Accountant Password: `accountant123`
 
 ## Running the Application
 
