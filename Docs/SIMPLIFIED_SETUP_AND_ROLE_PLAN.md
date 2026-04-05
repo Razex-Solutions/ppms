@@ -10,6 +10,7 @@ This document defines the new preferred direction for:
 - role creation logic
 - single-station vs multi-station hierarchy
 - question-based Flutter onboarding/setup flow
+- operational system setup for shifts, meters, cash, and tank volume
 
 This plan should be treated as the next major setup/configuration redesign layer on top of the current PPMS foundation.
 
@@ -36,6 +37,8 @@ Examples:
 - choose number of tanks
 - choose number of dispensers
 - choose nozzle counts and mappings
+- choose shift model
+- choose fuel types
 
 The UI should feel like a guided setup wizard, not a raw admin panel.
 
@@ -307,7 +310,658 @@ This is correct for real forecourt behavior.
 
 ---
 
-## 10. Role Logic Redesign
+## 10. Fuel Type Setup
+
+### Questions
+- which fuel types are available?
+
+Suggested defaults:
+- Petrol
+- Diesel
+- Hi-Octane
+- Custom
+
+If `Custom`:
+- ask custom fuel name
+
+### Preferred fuel type table
+`fuel_types`
+- `id`
+- `name`
+- `is_active`
+- `created_at`
+
+### Rules
+1. fuel types should be selected once during setup
+2. fuel types should then be reused in tanks, nozzles, purchases, and reports
+
+---
+
+## 11. Shift System Setup
+
+This is a core system choice and should be question-based during setup.
+
+### First question
+- shift type?
+
+Options:
+- Daily Shift
+- Hourly Shift
+- Custom Shift
+
+### If Daily Shift
+- one shift per day
+- do not force hour entry
+
+### If Hourly Shift
+- ask hours per shift
+- system calculates shift count using 24 / hours
+- system auto-generates shift windows
+
+Example:
+- 8 hours
+- 3 shifts
+- 12 AM - 8 AM
+- 8 AM - 4 PM
+- 4 PM - 12 AM
+
+### If Custom Shift
+- ask number of shifts
+- ask each shift name
+- ask each shift start time
+- ask each shift end time
+
+### Preferred setup table
+`station_shift_templates`
+- `id`
+- `station_id`
+- `name`
+- `start_time`
+- `end_time`
+- `is_active`
+- `created_at`
+
+### Important note
+- the current runtime `shifts` table should continue to exist for actual daily shift records
+- the setup side should use a shift-template/config model instead of replacing runtime shift records directly
+
+---
+
+## 12. Meter-Based Sales
+
+### Preferred rule
+- no direct manual fuel sale quantity entry
+- fuel sales should come from meter movement
+
+Formula:
+- `closing_reading - opening_reading = sales_quantity`
+
+### Preferred runtime table
+`meter_readings`
+- `id`
+- `nozzle_id`
+- `shift_id`
+- `opening_reading`
+- `closing_reading`
+- `sales_quantity`
+- `created_at`
+
+### Important note
+- this is a stronger operational model than pure manual sale entry
+- it will likely require reshaping the current fuel-sale workflow because the current system still supports direct sale creation
+
+---
+
+## 13. Cash Management Per Shift
+
+Shift cash should be tracked separately from the shift record itself.
+
+### Questions
+- opening cash at shift start
+- cash submitted at shift end
+- notes optional
+
+### Preferred table
+`shift_cash`
+- `id`
+- `station_id`
+- `shift_id`
+- `manager_id`
+- `opening_cash`
+- `cash_sales`
+- `expected_cash`
+- `cash_submitted`
+- `closing_cash`
+- `difference`
+- `notes`
+- `created_at`
+
+Default rule:
+- this should be operational bookkeeping, not an approval workflow
+- once cash is submitted, it should be recorded as done
+
+---
+
+## 14. Multiple Cash Deposits
+
+Managers may deposit more than once during the same shift.
+
+### Preferred table
+`cash_submissions`
+- `id`
+- `shift_cash_id`
+- `amount`
+- `submitted_by`
+- `submitted_at`
+- `notes`
+
+### Rule
+- total submitted cash should roll up into shift cash
+
+---
+
+## 15. Meter Adjustment System
+
+Admin-only or elevated-role action.
+
+### Questions
+- old reading
+- new reading
+- reason
+
+### Preferred table
+`meter_adjustments`
+- `id`
+- `nozzle_id`
+- `old_reading`
+- `new_reading`
+- `reason`
+- `adjusted_by`
+- `adjusted_at`
+
+### Important note
+- the current project already has meter adjustment events
+- this plan mostly confirms the business model and may only need naming or flow refinement rather than a brand-new concept
+
+---
+
+## 16. Meter Segments
+
+Needed to handle meter reset or replacement during the same shift.
+
+Example:
+- first segment: 12000 -> 12800 = 800
+- second segment: 6000 -> 6700 = 700
+- total = 1500
+
+### Preferred table
+`meter_segments`
+- `id`
+- `nozzle_id`
+- `shift_id`
+- `start_reading`
+- `end_reading`
+- `created_at`
+
+### Rule
+- shift sales should sum all valid segments
+
+### Important note
+- this should work together with current segment-start fields on nozzles and the meter adjustment model
+
+---
+
+## 17. Tank Volume Logic
+
+### Preferred automatic rule
+- opening volume
+- plus purchase quantity
+- minus sales quantity
+
+Tank volume should not rely only on manual editing.
+
+The current `tanks` table already fits most of this:
+`tanks`
+- `id`
+- `station_id`
+- `tank_number`
+- `fuel_type_id`
+- `capacity`
+- `current_volume`
+- `low_stock_threshold`
+- `created_at`
+
+---
+
+## 18. Purchase System
+
+### Questions
+- fuel type
+- tank
+- quantity
+- rate
+- supplier
+
+### Preferred purchase structure
+`purchases`
+- `id`
+- `station_id`
+- `tank_id`
+- `fuel_type_id`
+- `quantity`
+- `rate`
+- `total_amount`
+- `created_at`
+
+Default rule:
+- purchases should post as operational records
+- approval should be optional policy later, not the default core flow
+
+---
+
+## 19. Supplier Table
+
+### Preferred minimal supplier structure
+`suppliers`
+- `id`
+- `name`
+- `phone`
+- `address`
+- `created_at`
+
+Preferred refinement later:
+- extend existing supplier model instead of creating a separate parallel supplier concept
+
+---
+
+## 19A. Employees And Payroll (Pakistan-Based)
+
+Payroll should stay simple and monthly-first.
+
+### Questions
+- employee name
+- father name optional
+- CNIC number
+- date of birth
+- phone number
+- address
+- role or employee type
+- joining date
+- monthly salary
+- is active optional
+
+### Preferred employee structure
+`employees`
+- `id`
+- `station_id`
+- `name`
+- `father_name`
+- `cnic`
+- `dob`
+- `phone`
+- `address`
+- `role_id` or `employee_type`
+- `joining_date`
+- `salary`
+- `is_active`
+- `created_at`
+
+Important note:
+- do not keep free-text role as the long-term model
+- use a role reference or employee type reference instead
+
+### Salary adjustments
+Common local cases:
+- bonus
+- loan
+- deduction
+
+Preferred table:
+`salary_adjustments`
+- `id`
+- `employee_id`
+- `type`
+- `amount`
+- `reason`
+- `created_by`
+- `created_at`
+
+### Payroll structure
+Preferred design:
+- `payroll_runs`
+- `payroll_lines`
+
+Why:
+- monthly payroll is usually processed as a batch
+- this is stronger than one flat payroll row table
+
+Example:
+`payroll_runs`
+- `id`
+- `station_id`
+- `month`
+- `year`
+- `status`
+- `created_at`
+
+`payroll_lines`
+- `id`
+- `run_id`
+- `employee_id`
+- `base_salary`
+- `bonus`
+- `loan`
+- `deduction`
+- `net_salary`
+- `created_at`
+
+---
+
+## 19B. Credit Customers
+
+These include:
+- pump customers
+- companies
+- transporters
+- regular buyers
+
+### Questions
+- customer name
+- pump name optional
+- phone number
+- address
+- credit limit optional
+
+### Preferred direction
+Do not create a totally separate customer universe if the main customer model already exists.
+
+Better target:
+- extend the main customer model with:
+  - customer code
+  - pump name optional
+  - credit limit
+  - customer type
+
+### Customer code rule
+Customer code should be auto-generated.
+
+Examples:
+- `ALI001`
+- `AHMED002`
+- `PSO003`
+
+This helps dropdown selection and daily usability.
+
+### Customer ledger
+Track:
+- sales
+- payments
+- balance
+
+Preferred table:
+`customer_ledger`
+- `id`
+- `customer_id`
+- `reference_type`
+- `reference_id`
+- `debit`
+- `credit`
+- `balance`
+- `created_at`
+
+Reference types:
+- sale
+- payment
+- adjustment
+
+Important note:
+- balance can be stored for convenience, but ledger entries should remain the main source of truth
+
+---
+
+## 19C. Supplier Ledger
+
+Suppliers should also have ledger support.
+
+### Supplier questions
+- supplier name
+- phone number
+- address
+- company name optional
+
+Preferred supplier refinement:
+`suppliers`
+- `id`
+- `name`
+- `phone`
+- `address`
+- `company_name`
+- `created_at`
+
+Preferred supplier ledger:
+`supplier_ledger`
+- `id`
+- `supplier_id`
+- `reference_type`
+- `reference_id`
+- `debit`
+- `credit`
+- `balance`
+- `created_at`
+
+---
+
+## 19D. Fuel Price Tracking
+
+Fuel prices should be tracked historically because:
+- buying price changes
+- selling price changes
+
+Preferred table:
+`fuel_prices`
+- `id`
+- `fuel_type_id`
+- `purchase_price`
+- `sale_price`
+- `effective_date`
+- `created_at`
+
+Important design question:
+- station-specific pricing
+or
+- organization-wide pricing
+
+This must be finalized before implementation.
+
+---
+
+## 20. Tanker Module (Manager-Based)
+
+This tanker model should stay manager-friendly and summary-driven.
+
+### First question
+- does organization own tankers?
+
+Options:
+- Yes
+- No
+
+If `Yes`:
+- ask how many tankers
+
+For each tanker ask:
+- vehicle number
+- tanker name optional
+- number of compartments
+
+For each compartment ask:
+- capacity
+
+### Preferred tanker table
+`tankers`
+- `id`
+- `organization_id`
+- `name`
+- `vehicle_number`
+- `is_active`
+- `created_at`
+
+### Preferred tanker compartments table
+`tanker_compartments`
+- `id`
+- `tanker_id`
+- `compartment_number`
+- `capacity`
+- `created_at`
+
+### Rules
+1. compartments have fixed capacity
+2. fuel type is not fixed
+3. driver is not fixed
+4. ownership should later support:
+   - own tanker
+   - supplier tanker
+   - hired tanker
+
+Preferred tanker ownership refinement:
+`tankers`
+- `ownership_type`
+- `supplier_id` optional
+
+---
+
+## 21. Tanker Trip Entry
+
+Managers usually enter summary data rather than live telematics.
+
+### Questions
+- select tanker
+- trip date
+- driver name optional
+- notes optional
+
+### Preferred tanker trip table
+`tanker_trips`
+- `id`
+- `tanker_id`
+- `driver_name`
+- `trip_date`
+- `notes`
+- `created_by`
+- `created_at`
+
+---
+
+## 22. Fuel Purchase Entry (Manager Summary)
+
+Managers usually record purchases as summary entries.
+
+### Questions
+- supplier name
+- fuel type
+- quantity
+- rate
+
+### Preferred table
+`fuel_purchases`
+- `id`
+- `trip_id`
+- `supplier_name`
+- `fuel_type_id`
+- `quantity`
+- `rate`
+- `total_amount`
+- `created_by`
+- `created_at`
+
+Note:
+- if later needed, this can evolve toward optional supplier linkage instead of supplier name only
+
+Preferred refinement:
+- do not create a second competing purchase system if the main purchase model can be extended cleanly
+- purchase/tanker linking should be supported through supplier and tanker references
+
+---
+
+## 23. Automatic Tanker Compartment Mapping
+
+System should automatically assign purchased fuel to tanker compartments based on:
+- compartment capacity
+- quantity entered
+
+### Preferred table
+`tanker_trip_loads`
+- `id`
+- `trip_id`
+- `compartment_id`
+- `fuel_type_id`
+- `quantity`
+- `rate`
+- `created_at`
+
+### Rule
+- automatic mapping should reduce manual data entry
+- compartment fuel remains flexible per trip
+
+---
+
+## 24. Tanker Sales (Manager Summary)
+
+This is separate from forecourt meter-based sales.
+
+Managers enter trip/customer summary sales.
+
+### Questions
+- customer name
+- fuel type
+- quantity
+- rate
+- amount received
+
+### Preferred table
+`fuel_sales_manual`
+- `id`
+- `trip_id`
+- `customer_name`
+- `fuel_type_id`
+- `quantity`
+- `rate`
+- `total_amount`
+- `amount_received`
+- `receivable_amount`
+- `created_by`
+- `created_at`
+
+### Rule
+- this must remain clearly separate from station forecourt fuel sales
+
+---
+
+## 25. Leftover Fuel Transfer
+
+Managers can dump leftover trip fuel into station tanks.
+
+### Questions
+- fuel type
+- quantity
+- select tank
+
+### Preferred table
+`fuel_transfers`
+- `id`
+- `trip_id`
+- `fuel_type_id`
+- `quantity`
+- `tank_id`
+- `created_by`
+- `created_at`
+
+### Rule
+- this should affect tank stock, not just create a note
+
+---
+
+## 26. Role Logic Redesign
 
 The current hierarchy should be simplified based on organization shape.
 
@@ -323,7 +977,7 @@ Role creation should depend on single-station vs multi-station setup.
 
 ---
 
-## 11. Single-Station Role Logic
+## 27. Single-Station Role Logic
 
 If organization has only 1 station:
 - do not create unnecessary layered admin roles
@@ -355,7 +1009,7 @@ If `station_count == 1`
 
 ---
 
-## 12. Multi-Station Role Logic
+## 28. Multi-Station Role Logic
 
 If organization has more than 1 station:
 - broader hierarchy becomes useful
@@ -383,7 +1037,7 @@ If `station_count > 1`
 
 ---
 
-## 13. Role Creation Rules
+## 29. Role Creation Rules
 
 ### MasterAdmin
 Can:
@@ -406,7 +1060,7 @@ Then `Admin` creates:
 MasterAdmin creates:
 - `HeadOffice` or `OrgAdmin`
 
-Then `HeadOffice` / `OrgAdmin` creates:
+Then `HeadOffice` or `OrgAdmin` creates:
 - `StationAdmin`
 - optionally `Manager`, `Accountant`, `Operator`
 
@@ -419,7 +1073,114 @@ Then `StationAdmin` creates:
 
 ---
 
-## 14. Flutter Setup Flow Direction
+## 30. Hardware
+
+Keep simple for now:
+`hardware_devices`
+- `id`
+- `station_id`
+- `device_type`
+- `name`
+- `created_at`
+
+The current backend already has a richer hardware model.
+This simplified plan means:
+- keep the business setup simple
+- expose advanced vendor/device fields only when needed
+
+---
+
+## 31. Core Operating Architecture
+
+Target operating chain:
+
+Organization  
+?  
+Station  
+?  
+Brand  
+
+Fuel Type  
+?  
+Tank  
+?  
+Dispenser  
+?  
+Nozzle  
+
+Shift  
+?  
+Meter Readings  
+?  
+Sales  
+
+Cash Management  
+
+Purchase  
+?  
+Supplier  
+
+Tankers  
+?  
+Tanker Compartments  
+?  
+Tanker Trips  
+?  
+Trip Loads  
+?  
+Manual Trip Sales  
+?  
+Leftover Fuel Transfers  
+
+Users  
+?  
+Roles
+
+---
+
+## 32. Important Operating Rules
+
+1. no manual sale entry for fuel quantity
+2. sales = closing - opening
+3. cash handled per shift
+4. meter adjustments allowed only for elevated/admin roles
+5. meter reset handled using segments
+6. multiple cash deposits allowed
+7. tank volume calculated automatically
+8. normal operational entries should be automated/post-fact, not approval-heavy by default
+9. tanker trip sales stay separate from forecourt meter sales
+10. leftover tanker fuel transfer should update tank stock
+
+---
+
+## 33. Approval Position
+
+Approval is no longer considered a core default requirement for most day-to-day station operations.
+
+Preferred default:
+- if something has already happened operationally, record it directly
+- do not block normal fuel, purchase, cash, expense, or internal-fuel recording behind heavy approval flows
+
+Examples:
+- if fuel was already purchased, record purchase
+- if expense was already spent, record expense
+- if cash was submitted, record submission
+- if tanker delivered fuel, record delivery
+
+Approvals should become:
+- optional
+- policy-based
+- used only for exceptional controls where a company specifically wants them
+
+Good examples of optional approvals later:
+- reversal actions
+- unusual credit overrides
+- sensitive admin corrections
+- exceptional write-offs
+
+---
+
+## 34. Flutter Setup Flow Direction
 
 The Flutter setup experience should become question-based.
 
@@ -433,28 +1194,32 @@ The Flutter setup experience should become question-based.
 - provide summary/review before saving
 
 ### Example flow
-1. Choose brand
-2. Enter organization details
-3. Decide legal name behavior
-4. Choose station count
-5. If 1 station:
-   - inherit organization details?
-6. If multiple:
+1. choose brand
+2. enter organization details
+3. decide legal name behavior
+4. choose station count
+5. if 1 station:
+   - inherit organization details
+6. if multiple:
    - configure each station
-7. Choose tank count
-8. Configure tanks
-9. Choose dispenser count
-10. Configure dispensers
-11. Choose nozzle counts
-12. Configure nozzle mappings
-13. Configure invoice identity
-14. Review and finish
+7. choose fuel types
+8. choose shift model
+9. choose tank count
+10. configure tanks
+11. choose dispenser count
+12. configure dispensers
+13. choose nozzle counts
+14. configure nozzle mappings
+15. ask if organization owns tankers
+16. if yes, configure tanker count and compartments
+17. configure invoice identity
+18. review and finish
 
 This is much better than large forms.
 
 ---
 
-## 15. Why This Approach Is Better
+## 35. Why This Approach Is Better
 
 This approach is better because it is:
 - cleaner
@@ -463,18 +1228,51 @@ This approach is better because it is:
 - more real-world accurate
 - easier to validate
 - easier to scale
-- better for franchise/multi-station setups
+- better for franchise and multi-station setups
 - better for single-station simplicity
+- much more operationally realistic
 
 It also reduces:
 - form fatigue
 - duplicate entry
 - confusing role hierarchy
 - unnecessary setup complexity
+- fake/manual fuel-sale entry
 
 ---
 
-## 16. Backend Impact
+## 36. Approach Assessment
+
+This is a strong approach.
+
+### Why it is good
+- it ties setup and operations together properly
+- it makes station behavior easier to audit
+- it links shifts, cash, meters, tank volume, and tanker flow correctly
+- it gives a cleaner question-based onboarding path
+- it simplifies single-station businesses without blocking multi-station scale
+- it gives a practical tanker model without forcing full logistics complexity
+
+### What will need more editing
+- backend sales flow
+- shift runtime structure
+- meter-reading workflow
+- cash-management workflow
+- reporting logic derived from meter and shift data
+- Flutter station setup and shift/sales UI
+- tanker summary entry and stock transfer flow
+- payroll run and salary-adjustment modeling
+- customer and supplier ledger modeling
+- fuel-price history integration
+
+### Size of change
+- moderate to large
+- not a total rewrite
+- strongest impact will be in operations logic, not only simple master data
+
+---
+
+## 37. Backend Impact
 
 This is not a total rewrite, but it does require meaningful reshaping.
 
@@ -488,6 +1286,16 @@ This is not a total rewrite, but it does require meaningful reshaping.
 - onboarding APIs
 - station setup APIs
 - permission/scope logic for single vs multi-station
+- shift template/setup logic
+- meter-based sales flow
+- shift cash flow
+- meter segment handling
+- tank-volume calculation flow
+- simplified tanker-trip, compartment, manual-sale, and transfer flow
+- employee/payroll simplification and run-based payroll flow
+- customer code and ledger support
+- supplier ledger support
+- fuel price history support
 
 ### Likely file areas
 - [ppms/app/models](/C:/Fuel%20Management%20System/ppms/app/models)
@@ -495,12 +1303,19 @@ This is not a total rewrite, but it does require meaningful reshaping.
 - [ppms/app/api/organization.py](/C:/Fuel%20Management%20System/ppms/app/api/organization.py)
 - [ppms/app/api/station.py](/C:/Fuel%20Management%20System/ppms/app/api/station.py)
 - [ppms/app/api/user.py](/C:/Fuel%20Management%20System/ppms/app/api/user.py)
+- [ppms/app/api/shift.py](/C:/Fuel%20Management%20System/ppms/app/api/shift.py)
+- [ppms/app/api/fuel_sale.py](/C:/Fuel%20Management%20System/ppms/app/api/fuel_sale.py)
+- [ppms/app/api/tanker.py](/C:/Fuel%20Management%20System/ppms/app/api/tanker.py)
+- [ppms/app/api/payroll.py](/C:/Fuel%20Management%20System/ppms/app/api/payroll.py)
+- [ppms/app/api/customer.py](/C:/Fuel%20Management%20System/ppms/app/api/customer.py)
+- [ppms/app/api/supplier.py](/C:/Fuel%20Management%20System/ppms/app/api/supplier.py)
 - [ppms/app/core/permissions.py](/C:/Fuel%20Management%20System/ppms/app/core/permissions.py)
 - [ppms/app/core/access.py](/C:/Fuel%20Management%20System/ppms/app/core/access.py)
+- [ppms/app/services](/C:/Fuel%20Management%20System/ppms/app/services)
 
 ---
 
-## 17. Flutter Impact
+## 38. Flutter Impact
 
 This will require medium-to-large Flutter changes in setup flows, but not a full rebuild of the app.
 
@@ -510,6 +1325,12 @@ This will require medium-to-large Flutter changes in setup flows, but not a full
 - [ppms_flutter/lib/features/admin/presentation/admin_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/admin/presentation/admin_page.dart)
 - [ppms_flutter/lib/features/dashboard/presentation/platform_dashboard_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/dashboard/presentation/platform_dashboard_page.dart)
 - [ppms_flutter/lib/features/dashboard/presentation/dashboard_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/dashboard/presentation/dashboard_page.dart)
+- [ppms_flutter/lib/features/sales/presentation/sales_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/sales/presentation/sales_page.dart)
+- [ppms_flutter/lib/features/shifts/presentation/shift_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/shifts/presentation/shift_page.dart)
+- [ppms_flutter/lib/features/payroll/presentation/payroll_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/payroll/presentation/payroll_page.dart)
+- [ppms_flutter/lib/features/parties/presentation/parties_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/parties/presentation/parties_page.dart)
+- [ppms_flutter/lib/features/finance/presentation/finance_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/finance/presentation/finance_page.dart)
+- [ppms_flutter/lib/features/tankers/presentation/tanker_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/tankers/presentation/tanker_page.dart)
 - [ppms_flutter/lib/core/session/session_capabilities.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/core/session/session_capabilities.dart)
 - [ppms_flutter/lib/core/session/session_controller.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/core/session/session_controller.dart)
 
@@ -519,10 +1340,12 @@ This will require medium-to-large Flutter changes in setup flows, but not a full
 - clearer inheritance choices
 - auto-generated slots for tanks/dispensers/nozzles
 - review summary before final save
+- guided operating-setup questions for shifts and fuel model
+- guided tanker ownership and compartment setup
 
 ---
 
-## 18. Phase-Wise Implementation Plan
+## 39. Phase-Wise Implementation Plan
 
 ### Phase 1 — Lock The Data Model
 1. finalize brands model
@@ -537,45 +1360,79 @@ This will require medium-to-large Flutter changes in setup flows, but not a full
 3. define creator hierarchy
 4. define which roles are login roles vs profile-only
 
-### Phase 3 — Backend Refactor
+### Phase 3 — Lock Operating Model
+1. finalize fuel type setup logic
+2. finalize shift template logic
+3. finalize meter-based sales logic
+4. finalize shift cash logic
+5. finalize cash submission logic
+6. finalize meter adjustment and segment logic
+7. finalize tank-volume auto-calculation rules
+8. define where approval remains optional vs removed from default flow
+9. finalize simplified tanker module rules
+10. finalize payroll-adjustment and ledger model direction
+
+### Phase 4 — Backend Refactor
 1. update models
 2. update schemas
 3. update migrations
 4. update onboarding/setup services
 5. update role creation rules
 6. update permission scope rules
+7. update shift, sales, cash, and meter services
+8. update payroll, ledger, pricing, and purchase/tanker linkage structures
 
-### Phase 4 — Flutter Onboarding Refactor
+### Phase 5 — Flutter Onboarding Refactor
 1. rebuild brand step
 2. rebuild organization step
 3. rebuild station-count step
 4. rebuild inheritance step
 5. rebuild station details step
 
-### Phase 5 — Flutter Forecourt Setup Refactor
-1. tank count question
-2. tank setup step
-3. dispenser count question
-4. dispenser setup step
-5. nozzle count and mapping step
-6. invoice setup step
-7. review summary step
+### Phase 6 — Flutter Forecourt Setup Refactor
+1. fuel type question step
+2. shift model question step
+3. tank count question
+4. tank setup step
+5. dispenser count question
+6. dispenser setup step
+7. nozzle count and mapping step
+8. tanker ownership question step
+9. tanker count and compartment step
+10. invoice setup step
+11. review summary step
 
-### Phase 6 — Role/Dashboard Cleanup
+### Phase 7 — Flutter Operations Refactor
+1. shift setup wizard
+2. meter-reading sales workflow
+3. shift cash workflow
+4. multiple cash submission flow
+5. meter adjustment flow
+6. meter segment handling UI
+7. tanker trip summary workflow
+8. tanker purchase and automatic compartment mapping
+9. tanker manual sales and leftover transfer UI
+10. payroll adjustment and monthly payroll UI cleanup
+11. customer and supplier ledger visibility
+12. fuel-price-aware purchase and sale flows
+
+### Phase 8 — Role/Dashboard Cleanup
 1. simplify single-station admin hierarchy
 2. keep multi-station hierarchy available only when needed
 3. update dashboards and menus accordingly
 
-### Phase 7 — Review And Stabilization
+### Phase 9 — Review And Stabilization
 1. test single-station onboarding
 2. test multi-station onboarding
 3. test role creation rules
 4. test dashboard/menu visibility
-5. fix edge cases
+5. test shift/meter/cash model
+6. test tanker summary model
+7. fix edge cases
 
 ---
 
-## 19. Current Recommendation
+## 40. Current Recommendation
 
 This plan is good and should be treated as the preferred setup redesign direction.
 
@@ -585,10 +1442,13 @@ Main implementation principles:
 - simpler single-station logic
 - richer multi-station logic only when needed
 - backend model cleaned before UI patching
+- operations model defined before rewriting sales/shift UX
+- approval-heavy workflow avoided unless explicitly needed
+- simplified tanker operations first, deeper fleet logic later
 
 ---
 
-## 20. Related Documents
+## 41. Related Documents
 
 - [Docs/NEXT_PHASE_IMPLEMENTATION_PLAN.md](/C:/Fuel%20Management%20System/Docs/NEXT_PHASE_IMPLEMENTATION_PLAN.md)
 - [Docs/ROLE_HIERARCHY_AND_ACCESS_MODEL.md](/C:/Fuel%20Management%20System/Docs/ROLE_HIERARCHY_AND_ACCESS_MODEL.md)

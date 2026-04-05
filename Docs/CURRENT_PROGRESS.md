@@ -38,6 +38,10 @@ The FastAPI backend is already broad and feature-rich. It covers:
 - attendance and payroll
 - audit logs
 
+Important note:
+- the current backend still includes approval-oriented structures in some finance and governance areas
+- the newer planning direction is to keep approvals optional and exception-based, not mandatory for normal operational facts
+
 ### Flutter
 The Flutter app is now beyond simple placeholders. It includes real workspaces for:
 - login
@@ -561,6 +565,11 @@ If a module is off:
 
 If read-only:
 - visible only in read-only form
+
+### Current planning adjustment
+- approval-heavy day-to-day flows are no longer the preferred target
+- future refactors should keep reversals, unusual overrides, and sensitive corrections as controlled actions
+- but normal expenses, purchases, cash submissions, and operational records should move toward direct recording
 
 ## 9. Tests
 

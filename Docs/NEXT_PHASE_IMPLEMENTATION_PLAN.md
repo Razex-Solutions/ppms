@@ -5,10 +5,11 @@
 This document defines the next implementation phase for PPMS after the current backend and Flutter foundation work. The goal is to stop working in an ad hoc way and move into a structured delivery plan that:
 
 1. finishes the product properly on the local development machine first
-2. stabilizes roles, permissions, dashboards, and workflows
-3. improves the UX from form-heavy CRUD into an operational product
-4. adds a dedicated support-facing Master Admin web console in Node.js
-5. prepares the codebase for a later automated online deployment flow
+2. simplifies and restructures setup around question-based onboarding and configuration
+3. stabilizes roles, permissions, dashboards, and workflows
+4. improves the UX from form-heavy CRUD into an operational product
+5. adds a dedicated support-facing Master Admin web console in Node.js
+6. prepares the codebase for a later automated online deployment flow
 
 This plan is intentionally local-first for now. Online hosting, automation, and production deployment are part of the later phases, not the current execution focus.
 
@@ -40,6 +41,15 @@ Later deployment target:
 - source code on GitHub
 - automated delivery after local completion and stabilization
 
+This plan must now also follow the newer simplification rules from:
+- [Docs/SIMPLIFIED_SETUP_AND_ROLE_PLAN.md](/C:/Fuel%20Management%20System/Docs/SIMPLIFIED_SETUP_AND_ROLE_PLAN.md)
+
+That means:
+- setup becomes question-based
+- single-station organizations must stay simpler than multi-station organizations
+- unnecessary tenant admin layers should be avoided when only one station exists
+- fuel, shifts, meters, cash, and tank volume should be treated as one connected operating model
+
 ---
 
 ## Core Working Principle
@@ -48,11 +58,50 @@ We will not try to finish all roles, dashboards, API reshaping, drag-and-drop ma
 
 The correct order is:
 
-1. stabilize architecture and role behavior
-2. complete role experiences one by one
-3. improve visuals and dashboard quality
-4. add the Master Admin support web frontend
-5. only then move to cloud deployment and automation
+1. lock the simplified setup and operating model
+2. stabilize architecture and role behavior
+3. complete role experiences one by one
+4. improve visuals and dashboard quality
+5. add the Master Admin support web frontend
+6. only then move to cloud deployment and automation
+
+---
+
+## Simplified Setup And Operations Rule
+
+This is now a core planning rule, not an optional refinement.
+
+The setup/configuration side must move toward:
+- brand -> organization -> station -> invoice -> tank -> dispenser -> nozzle
+- guided questions instead of large forms
+- inheritance-first data entry
+- simpler role trees for single-station organizations
+- richer role trees only when multi-station complexity actually exists
+
+The operating model must also move toward:
+- fuel-type setup
+- shift-template setup
+- meter-based sales
+- shift cash tracking
+- multiple cash submissions
+- meter adjustment handling
+- meter segment handling
+- automatic tank-volume movement from purchases and sales
+- monthly payroll with adjustments
+- customer and supplier ledger tracking
+- fuel price history
+
+This means the next phase is not only “dashboard polish.”
+It is also a setup and operations redesign phase.
+
+For tankers, the first target should be:
+- a simplified manager-based tanker module
+- summary trip entry
+- automatic compartment mapping
+- manual trip sales separate from forecourt meter sales
+- leftover fuel transfer into station tanks
+
+It should not start as a full telematics-heavy fleet system.
 
 ---
 
@@ -101,6 +150,29 @@ This also means we should reduce hardcoded frontend assumptions like:
 - “menu is static and only the inner page changes”
 
 Instead, the product should behave as a dynamic capability-driven application.
+
+---
+
+## Default Automation Rule
+
+The next phase should assume that most station operations are recorded directly once they happen.
+
+Default product stance:
+- operational events should be automated and post-fact
+- approval should not be the normal path for everyday station work
+
+This applies especially to:
+- expenses that are already spent
+- purchases that already happened
+- cash submissions already received
+- tanker deliveries already unloaded
+- normal operating records
+
+Approval should be treated as optional and limited to exceptional controls such as:
+- reversals
+- unusual credit overrides
+- sensitive support/admin corrections
+- exceptional write-offs
 
 ---
 
@@ -172,6 +244,34 @@ For the next major phase:
 - EC2 and Vercel are deferred until the local product is stable enough
 
 Deployment planning is included in this document, but deployment execution comes later.
+
+---
+
+## Phase 0. Lock The Simplified Setup And Operating Model
+
+Goal:
+- finalize the new simplified setup direction before more UI patching spreads old assumptions further
+
+Tasks:
+1. lock brand, organization, station, invoice inheritance rules
+2. lock single-station vs multi-station role behavior
+3. lock question-based setup flow
+4. lock fuel-type setup behavior
+5. lock shift setup behavior
+6. lock meter-based sales behavior
+7. lock shift cash and multiple cash submissions behavior
+8. lock meter adjustment and meter segment behavior
+9. lock automatic tank-volume logic
+
+Expected output:
+- one stable business/architecture model for setup and operations
+- fewer conflicting assumptions between backend and Flutter
+
+Backend impact:
+- high, because this phase decides what later APIs and schema reshaping must support
+
+Priority:
+- immediate
 
 ---
 
@@ -262,25 +362,33 @@ MasterAdmin must support:
    - outstanding support signals
 
 2. onboarding flow
-   - create organization
+   - create organization through question-based setup
    - pick brand
    - create first stations
-   - create first head office/admin user
+   - simplify admin creation for single-station organizations
+   - create first org-level admin path for multi-station organizations
 
 3. station setup flow
    - station flags
    - fuel types
-   - tank/dispenser/nozzle mapping
-   - invoice basics
+   - shift model
+   - tank/dispenser/nozzle setup
+   - invoice identity basics
    - module toggles
 
-4. organization inspection
+4. operating model setup
+   - meter-based sales configuration
+   - shift cash model visibility
+   - cash submission behavior
+   - meter adjustment behavior
+
+5. organization inspection
    - open company profile
    - inspect stations
    - inspect users
    - inspect setup completeness
 
-5. support tools
+6. support tools
    - controlled fixes
    - value correction
    - support note flows later
@@ -584,11 +692,21 @@ Likely backend API improvements needed:
 2. organization summary endpoint
 3. station setup completeness endpoint
 4. forecourt mapping summary endpoint
-5. support/admin override endpoints
-6. better search/filter endpoints
-7. more compact list payloads
-8. richer detail payloads for selected-item side panels
-9. explicit module/capability payloads for dynamic menu and dashboard composition
+5. question-based setup payloads for organization/station creation
+6. shift-template setup endpoints
+7. meter-based sales and shift cash endpoints
+8. support/admin override endpoints
+9. better search/filter endpoints
+10. more compact list payloads
+11. richer detail payloads for selected-item side panels
+12. explicit module/capability payloads for dynamic menu and dashboard composition
+13. payroll-adjustment and ledger summary endpoints
+14. fuel-price history endpoints
+
+API direction should also prefer:
+- direct operational posting endpoints for real-world facts
+- optional policy checks instead of mandatory approval queues
+- lighter approval usage only for exceptional controls
 
 Expected output:
 - less frontend data stitching
@@ -653,20 +771,22 @@ Important:
 
 This is the practical order we should follow next:
 
-1. Flutter stabilization pass
-2. MasterAdmin completion in Flutter
-3. HeadOffice completion
-4. StationAdmin completion
-5. Manager completion
-6. Accountant completion
-7. Operator completion
-8. staff-profile flow refinement
-9. dashboard/chart redesign
-10. Node.js Master Admin support frontend
-11. backend API refinement where UI needs it
-12. full local review pass
-13. deployment preparation
-14. online automation
+1. lock simplified setup and operating rules
+2. backend data-model and API reshaping for setup/operations
+3. Flutter stabilization pass
+4. MasterAdmin completion in Flutter
+5. HeadOffice completion
+6. StationAdmin completion
+7. Manager completion
+8. Accountant completion
+9. Operator completion
+10. staff-profile flow refinement
+11. dashboard/chart redesign
+12. Node.js Master Admin support frontend
+13. backend API refinement where UI needs it
+14. full local review pass
+15. deployment preparation
+16. online automation
 
 ---
 
@@ -674,12 +794,14 @@ This is the practical order we should follow next:
 
 The next actions after this plan are:
 
-1. finish the current Flutter crash/stability fixes
-2. create a centralized module/permission visibility map for Flutter
-3. create a role-by-role implementation checklist for Flutter
-4. begin with MasterAdmin and complete it fully before moving lower
-5. note every backend API gap discovered during each role pass
-6. implement backend adjustments only when justified by the UI flow
+1. compare the simplified setup and operating plan against the current backend schema
+2. list exact model/API mismatches before editing
+3. finish the current Flutter crash/stability fixes
+4. create a centralized module/permission visibility map for Flutter
+5. create a role-by-role implementation checklist for Flutter
+6. begin with MasterAdmin and complete it fully before moving lower
+7. note every backend API gap discovered during each role pass
+8. implement backend adjustments only when justified by the UI flow
 
 ---
 
