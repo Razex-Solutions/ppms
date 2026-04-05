@@ -6,6 +6,7 @@ import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/utils/document_file_actions.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _DocumentSelectionType {
   fuelSale,
@@ -367,12 +368,87 @@ class _DocumentsPageState extends State<DocumentsPage> {
     final canViewSupplierPaymentDocs = _canViewSupplierPaymentDocs;
     final canViewReportExports = _canViewReportExports;
     final canViewAnyDocuments = _canViewAnyDocuments;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return RefreshIndicator(
       onRefresh: _loadDocumentCenter,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Document Center',
+            title: 'Documents and exports',
+            subtitle:
+                'Review invoices, receipts, vouchers, exports, and dispatch history from one support-friendly workspace.',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Visible streams',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    [
+                      if (canViewFuelSaleDocs) 'Invoices',
+                      if (canViewCustomerPaymentDocs) 'Receipts',
+                      if (canViewSupplierPaymentDocs) 'Vouchers',
+                      if (canViewReportExports) 'Exports',
+                    ].length.toString(),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                if (canViewFuelSaleDocs)
+                  DashboardMetricTile(
+                    label: 'Fuel sale invoices',
+                    value: _fuelSales.length.toString(),
+                    caption: 'Recent invoice-capable fuel sales',
+                    icon: Icons.receipt_long_outlined,
+                    tint: colorScheme.primary,
+                  ),
+                if (canViewCustomerPaymentDocs)
+                  DashboardMetricTile(
+                    label: 'Customer receipts',
+                    value: _customerPayments.length.toString(),
+                    caption: 'Receipt-ready customer payments',
+                    icon: Icons.account_balance_wallet_outlined,
+                    tint: colorScheme.tertiary,
+                  ),
+                if (canViewSupplierPaymentDocs)
+                  DashboardMetricTile(
+                    label: 'Supplier vouchers',
+                    value: _supplierPayments.length.toString(),
+                    caption: 'Voucher-ready supplier payments',
+                    icon: Icons.payments_outlined,
+                    tint: colorScheme.error,
+                  ),
+                if (canViewReportExports)
+                  DashboardMetricTile(
+                    label: 'Report exports',
+                    value: _reportExports.length.toString(),
+                    caption: 'Generated export jobs',
+                    icon: Icons.table_chart_outlined,
+                    tint: colorScheme.secondary,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           if (_errorMessage != null)
             Text(
               _errorMessage!,
@@ -474,105 +550,88 @@ class _DocumentsPageState extends State<DocumentsPage> {
           LayoutBuilder(
             builder: (context, constraints) {
               final useColumn = constraints.maxWidth < 1000;
-              final previewCard = Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Preview',
-                        style: Theme.of(context).textTheme.headlineSmall,
+              final previewCard = DashboardSectionCard(
+                icon: Icons.preview_outlined,
+                title: 'Preview',
+                subtitle:
+                    'Open a document stream on the left to inspect and save it here.',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!canViewAnyDocuments)
+                      const Text('No document preview access for this role.')
+                    else if (_selectedDocument != null) ...[
+                      _buildDocumentSummaryChips(_selectedDocument!),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => _saveOrOpenCurrentDocument(
+                                    openAfterSave: false,
+                                  ),
+                            icon: const Icon(Icons.download_outlined),
+                            label: const Text('Save'),
+                          ),
+                          FilledButton.icon(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => _saveOrOpenCurrentDocument(
+                                    openAfterSave: true,
+                                  ),
+                            icon: const Icon(Icons.open_in_new_outlined),
+                            label: const Text('Open PDF'),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
-                      if (!canViewAnyDocuments)
-                        const Text('No document preview access for this role.')
-                      else if (_selectedDocument != null) ...[
-                        Text('${_selectedDocument!['title']}'),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Document #: ${_selectedDocument!['document_number']}',
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Recipient: ${_selectedDocument!['recipient_name']}',
-                        ),
-                        const SizedBox(height: 8),
-                        if (_selectedDocument!['total_amount'] != null)
-                          Text(
-                            'Total: ${_formatNumber(_selectedDocument!['total_amount'])}',
+                      SelectableText(
+                        (_selectedDocument!['rendered_html'] as String? ?? '')
+                            .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                            .replaceAll('&nbsp;', ' ')
+                            .replaceAll(RegExp(r'\s+'), ' ')
+                            .trim(),
+                      ),
+                    ] else if (_selectedExportPreview != null) ...[
+                      Text(
+                        'Export Preview',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => _saveOrOpenCurrentDocument(
+                                    openAfterSave: false,
+                                  ),
+                            icon: const Icon(Icons.download_outlined),
+                            label: const Text('Save CSV'),
                           ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _isSubmitting
-                                  ? null
-                                  : () => _saveOrOpenCurrentDocument(
-                                      openAfterSave: false,
-                                    ),
-                              icon: const Icon(Icons.download_outlined),
-                              label: const Text('Save'),
-                            ),
-                            FilledButton.icon(
-                              onPressed: _isSubmitting
-                                  ? null
-                                  : () => _saveOrOpenCurrentDocument(
-                                      openAfterSave: true,
-                                    ),
-                              icon: const Icon(Icons.open_in_new_outlined),
-                              label: const Text('Open PDF'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        SelectableText(
-                          (_selectedDocument!['rendered_html'] as String? ?? '')
-                              .replaceAll(RegExp(r'<[^>]*>'), ' ')
-                              .replaceAll('&nbsp;', ' ')
-                              .replaceAll(RegExp(r'\s+'), ' ')
-                              .trim(),
-                        ),
-                      ] else if (_selectedExportPreview != null) ...[
-                        Text(
-                          'Export Preview',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _isSubmitting
-                                  ? null
-                                  : () => _saveOrOpenCurrentDocument(
-                                      openAfterSave: false,
-                                    ),
-                              icon: const Icon(Icons.download_outlined),
-                              label: const Text('Save CSV'),
-                            ),
-                            FilledButton.icon(
-                              onPressed: _isSubmitting
-                                  ? null
-                                  : () => _saveOrOpenCurrentDocument(
-                                      openAfterSave: true,
-                                    ),
-                              icon: const Icon(Icons.open_in_new_outlined),
-                              label: const Text('Open File'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        SelectableText(_selectedExportPreview!),
-                      ] else
-                        const Text(
-                          'Select an invoice, receipt, voucher, or export job to preview it here.',
-                        ),
-                    ],
-                  ),
+                          FilledButton.icon(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => _saveOrOpenCurrentDocument(
+                                    openAfterSave: true,
+                                  ),
+                            icon: const Icon(Icons.open_in_new_outlined),
+                            label: const Text('Open File'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SelectableText(_selectedExportPreview!),
+                    ] else
+                      const Text(
+                        'Select an invoice, receipt, voucher, or export job to preview it here.',
+                      ),
+                  ],
                 ),
               );
               final sideColumn = Column(
@@ -706,6 +765,54 @@ class _DocumentsPageState extends State<DocumentsPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDocumentSummaryChips(Map<String, dynamic> document) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        _buildInfoChip(
+          'Title',
+          document['title']?.toString() ?? 'Document',
+        ),
+        _buildInfoChip(
+          'Document #',
+          document['document_number']?.toString() ?? '-',
+        ),
+        _buildInfoChip(
+          'Recipient',
+          document['recipient_name']?.toString() ?? '-',
+        ),
+        if (document['total_amount'] != null)
+          _buildInfoChip(
+            'Total',
+            _formatNumber(document['total_amount']),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 150),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.35,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height: 6),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
+        ],
       ),
     );
   }

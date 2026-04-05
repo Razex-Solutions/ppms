@@ -5,6 +5,7 @@ import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/utils/document_file_actions.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 class SalesPage extends StatefulWidget {
   const SalesPage({super.key, required this.sessionController});
@@ -52,10 +53,7 @@ class _SalesPageState extends State<SalesPage> {
     return result;
   }
 
-  int? _validSelection(
-    int? selectedId,
-    List<Map<String, dynamic>> items,
-  ) {
+  int? _validSelection(int? selectedId, List<Map<String, dynamic>> items) {
     if (selectedId == null) {
       return null;
     }
@@ -106,18 +104,22 @@ class _SalesPageState extends State<SalesPage> {
 
       final nozzles = !_showSalesWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
-          : _dedupeById(List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchNozzles(
-                stationId: stationId,
-              )).map((item) => Map<String, dynamic>.from(item as Map)),
-            ));
+          : _dedupeById(
+              List<Map<String, dynamic>>.from(
+                (await widget.sessionController.fetchNozzles(
+                  stationId: stationId,
+                )).map((item) => Map<String, dynamic>.from(item as Map)),
+              ),
+            );
       final customers = !_showSalesWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
-          : _dedupeById(List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchCustomers(
-                stationId: stationId,
-              )).map((item) => Map<String, dynamic>.from(item as Map)),
-            ));
+          : _dedupeById(
+              List<Map<String, dynamic>>.from(
+                (await widget.sessionController.fetchCustomers(
+                  stationId: stationId,
+                )).map((item) => Map<String, dynamic>.from(item as Map)),
+              ),
+            );
       final fuelTypes = _showSalesWorkspace
           ? _dedupeById(
               List<Map<String, dynamic>>.from(
@@ -139,12 +141,12 @@ class _SalesPageState extends State<SalesPage> {
         return;
       }
 
-      final selectedNozzleId = _validSelection(_selectedNozzleId, nozzles) ??
+      final selectedNozzleId =
+          _validSelection(_selectedNozzleId, nozzles) ??
           (nozzles.isNotEmpty ? nozzles.first['id'] as int : null);
-      final selectedCustomerId =
-          _saleType == 'credit'
-              ? _validSelection(_selectedCustomerId, customers)
-              : null;
+      final selectedCustomerId = _saleType == 'credit'
+          ? _validSelection(_selectedCustomerId, customers)
+          : null;
 
       setState(() {
         _stations = stations;
@@ -192,16 +194,20 @@ class _SalesPageState extends State<SalesPage> {
         });
         return;
       }
-      final nozzles = _dedupeById(List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchNozzles(
-          stationId: stationId,
-        )).map((item) => Map<String, dynamic>.from(item as Map)),
-      ));
-      final customers = _dedupeById(List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchCustomers(
-          stationId: stationId,
-        )).map((item) => Map<String, dynamic>.from(item as Map)),
-      ));
+      final nozzles = _dedupeById(
+        List<Map<String, dynamic>>.from(
+          (await widget.sessionController.fetchNozzles(
+            stationId: stationId,
+          )).map((item) => Map<String, dynamic>.from(item as Map)),
+        ),
+      );
+      final customers = _dedupeById(
+        List<Map<String, dynamic>>.from(
+          (await widget.sessionController.fetchCustomers(
+            stationId: stationId,
+          )).map((item) => Map<String, dynamic>.from(item as Map)),
+        ),
+      );
       final recentSales = List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchFuelSales(
           stationId: stationId,
@@ -210,12 +216,12 @@ class _SalesPageState extends State<SalesPage> {
       if (!mounted) {
         return;
       }
-      final selectedNozzleId = _validSelection(_selectedNozzleId, nozzles) ??
+      final selectedNozzleId =
+          _validSelection(_selectedNozzleId, nozzles) ??
           (nozzles.isNotEmpty ? nozzles.first['id'] as int : null);
-      final selectedCustomerId =
-          _saleType == 'credit'
-              ? _validSelection(_selectedCustomerId, customers)
-              : null;
+      final selectedCustomerId = _saleType == 'credit'
+          ? _validSelection(_selectedCustomerId, customers)
+          : null;
 
       setState(() {
         _nozzles = nozzles;
@@ -531,6 +537,42 @@ class _SalesPageState extends State<SalesPage> {
     hideWhenModulesOff: true,
   );
 
+  Map<String, String> _workspaceMeta({
+    required bool canCreateSales,
+    required bool canReadSales,
+  }) {
+    if (canCreateSales) {
+      return const {
+        'title': 'Forecourt Workspace',
+        'subtitle':
+            'Post live nozzle sales, review the latest invoices, and keep the station sales flow moving from one place.',
+      };
+    }
+    if (canReadSales) {
+      return const {
+        'title': 'Sales Review',
+        'subtitle':
+            'Review station sales, invoice activity, and recent forecourt history without posting new transactions.',
+      };
+    }
+    return const {
+      'title': 'Sales Access',
+      'subtitle':
+          'This role does not currently have active fuel sales permissions for the selected scope.',
+    };
+  }
+
+  double _sumOf(List<Map<String, dynamic>> items, String key) {
+    var total = 0.0;
+    for (final item in items) {
+      final value = item[key];
+      if (value is num) {
+        total += value.toDouble();
+      }
+    }
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -557,12 +599,96 @@ class _SalesPageState extends State<SalesPage> {
     final isCreditSale = _saleType == 'credit';
     final canCreateSales = _canCreateSales;
     final canReadSales = _canReadSales;
+    final workspaceMeta = _workspaceMeta(
+      canCreateSales: canCreateSales,
+      canReadSales: canReadSales,
+    );
+    final todaySalesCount = _recentSales.length;
+    final todayVolume = _sumOf(_recentSales, 'quantity');
+    final todayValue = _sumOf(_recentSales, 'total_amount');
+    final creditCount = _recentSales
+        .where((sale) => sale['sale_type'] == 'credit')
+        .length;
 
     return RefreshIndicator(
       onRefresh: _loadInitialData,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Live Operations',
+            title: canCreateSales
+                ? 'Forecourt Control Board'
+                : 'Forecourt Review',
+            subtitle: workspaceMeta['subtitle']!,
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                DashboardMetricTile(
+                  label: 'Recent Sales',
+                  value: '$todaySalesCount',
+                  caption: 'Current station list',
+                  icon: Icons.local_gas_station_outlined,
+                ),
+                DashboardMetricTile(
+                  label: 'Volume',
+                  value: '${_formatNumber(todayVolume)}L',
+                  caption: 'Latest loaded activity',
+                  icon: Icons.water_drop_outlined,
+                ),
+                DashboardMetricTile(
+                  label: 'Sales Value',
+                  value: _formatNumber(todayValue),
+                  caption: 'Recent total amount',
+                  icon: Icons.payments_outlined,
+                ),
+                DashboardMetricTile(
+                  label: 'Credit Count',
+                  value: '$creditCount',
+                  caption: 'Recent credit sales',
+                  icon: Icons.credit_score_outlined,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: workspaceMeta['title']!,
+            subtitle:
+                'Station selection, nozzle activity, and invoice actions stay here so the team can work quickly without digging through multiple screens.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildInfoChip(
+                  context,
+                  icon: Icons.store_outlined,
+                  label: _selectedStationId == null
+                      ? 'No station selected'
+                      : 'Station #$_selectedStationId',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.local_gas_station_outlined,
+                  label: '${_nozzles.length} nozzles loaded',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.groups_outlined,
+                  label: '${_customers.length} customers available',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.description_outlined,
+                  label: canCreateSales
+                      ? 'Invoice actions enabled'
+                      : 'Review-only access',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           ResponsiveSplit(
             breakpoint: 1150,
             primary: Card(
@@ -923,6 +1049,26 @@ class _SalesPageState extends State<SalesPage> {
           const SizedBox(height: 6),
           Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
         ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
       ),
     );
   }

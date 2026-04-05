@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _PartySection { customers, suppliers }
 
@@ -453,27 +454,93 @@ class _PartiesPageState extends State<PartiesPage> {
       _section = availableSections.first;
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final sectionMeta = _sectionMeta();
+
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Parties Workspace',
+            title: sectionMeta.$1,
+            subtitle: sectionMeta.$2,
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Visible section',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    sectionMeta.$1,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                if (_canReadCustomers)
+                  DashboardMetricTile(
+                    label: 'Customers',
+                    value: _customers.length.toString(),
+                    caption: 'Customers visible in the selected station scope',
+                    icon: Icons.groups_outlined,
+                    tint: colorScheme.primary,
+                  ),
+                if (_canReadSuppliers)
+                  DashboardMetricTile(
+                    label: 'Suppliers',
+                    value: _suppliers.length.toString(),
+                    caption: 'Suppliers available to finance and purchase flows',
+                    icon: Icons.local_shipping_outlined,
+                    tint: colorScheme.tertiary,
+                  ),
+                if (_canReadCustomers)
+                  DashboardMetricTile(
+                    label: 'Customer exposure',
+                    value: _formatNumber(_sumOf(_customers, 'outstanding_balance')),
+                    caption: 'Visible outstanding customer balance',
+                    icon: Icons.account_balance_wallet_outlined,
+                    tint: colorScheme.error,
+                  ),
+                if (_canReadSuppliers)
+                  DashboardMetricTile(
+                    label: 'Supplier payable',
+                    value: _formatNumber(_sumOf(_suppliers, 'payable_balance')),
+                    caption: 'Visible supplier payable balance',
+                    icon: Icons.payments_outlined,
+                    tint: colorScheme.secondary,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Parties Workspace',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    availableSections.isEmpty
-                        ? 'This role does not currently have access to customer or supplier management.'
-                        : 'Manage customers and suppliers that drive fuel sales, purchases, and payment workflows.',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  DashboardSectionCard(
+                    icon: sectionMeta.$3,
+                    title: sectionMeta.$1,
+                    subtitle: sectionMeta.$2,
+                    child: const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 16),
                   if (availableSections.isEmpty) ...[
@@ -579,6 +646,38 @@ class _PartiesPageState extends State<PartiesPage> {
         ],
       ),
     );
+  }
+
+  (String, String, IconData) _sectionMeta() {
+    switch (_section) {
+      case _PartySection.customers:
+        return (
+          'Customer control',
+          _canReadCustomers
+              ? 'Review and manage customers who drive credit exposure, fuel sales, and collection follow-up.'
+              : 'This role does not currently have access to customer management.',
+          Icons.groups_outlined,
+        );
+      case _PartySection.suppliers:
+        return (
+          'Supplier control',
+          _canReadSuppliers
+              ? 'Review and manage suppliers who drive purchase and payment workflows.'
+              : 'This role does not currently have access to supplier management.',
+          Icons.local_shipping_outlined,
+        );
+    }
+  }
+
+  double _sumOf(List<Map<String, dynamic>> items, String key) {
+    var total = 0.0;
+    for (final item in items) {
+      final value = item[key];
+      if (value is num) {
+        total += value.toDouble();
+      }
+    }
+    return total;
   }
 
   Widget _buildCustomers(BuildContext context) {

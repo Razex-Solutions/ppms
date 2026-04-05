@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 class ShiftPage extends StatefulWidget {
   const ShiftPage({super.key, required this.sessionController});
@@ -285,6 +286,24 @@ class _ShiftPageState extends State<ShiftPage> {
     hideWhenModulesOff: true,
   );
 
+  Map<String, String> _sectionMeta({
+    required bool canOpenShifts,
+    required bool canCloseShifts,
+  }) {
+    if (canOpenShifts || canCloseShifts) {
+      return const {
+        'title': 'Shift Operations',
+        'subtitle':
+            'Run shift openings, cash expectations, and closeouts from a single console built for station operations.',
+      };
+    }
+    return const {
+      'title': 'Shift Review',
+      'subtitle':
+          'Inspect shift performance and cash expectations without changing operational state.',
+    };
+  }
+
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
       width: double.infinity,
@@ -325,12 +344,106 @@ class _ShiftPageState extends State<ShiftPage> {
     final canOpenShifts = _canOpenShifts;
     final canCloseShifts = _canCloseShifts;
     final canReadShifts = _canReadShifts;
+    final sectionMeta = _sectionMeta(
+      canOpenShifts: canOpenShifts,
+      canCloseShifts: canCloseShifts,
+    );
+    final openCount = _shifts
+        .where((shift) => shift['status'] == 'open')
+        .length;
+    final closedCount = _shifts
+        .where((shift) => shift['status'] == 'closed')
+        .length;
+    final expectedCash = _shifts.fold<double>(0, (total, shift) {
+      final value = shift['expected_cash'];
+      return total + (value is num ? value.toDouble() : 0);
+    });
+    final cashSales = _shifts.fold<double>(0, (total, shift) {
+      final value = shift['total_sales_cash'];
+      return total + (value is num ? value.toDouble() : 0);
+    });
 
     return RefreshIndicator(
       onRefresh: _loadShiftWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Daily Control',
+            title: canOpenShifts || canCloseShifts
+                ? 'Shift Command Center'
+                : 'Shift Review Board',
+            subtitle: sectionMeta['subtitle']!,
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                DashboardMetricTile(
+                  label: 'Open Shifts',
+                  value: '$openCount',
+                  caption: 'Current selection',
+                  icon: Icons.schedule_outlined,
+                ),
+                DashboardMetricTile(
+                  label: 'Closed Shifts',
+                  value: '$closedCount',
+                  caption: 'Loaded history',
+                  icon: Icons.task_alt_outlined,
+                ),
+                DashboardMetricTile(
+                  label: 'Expected Cash',
+                  value: _formatNumber(expectedCash),
+                  caption: 'Across loaded shifts',
+                  icon: Icons.account_balance_wallet_outlined,
+                ),
+                DashboardMetricTile(
+                  label: 'Cash Sales',
+                  value: _formatNumber(cashSales),
+                  caption: 'Loaded shift totals',
+                  icon: Icons.point_of_sale_outlined,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: sectionMeta['title']!,
+            subtitle:
+                'Use this console to hand over cash cleanly, monitor live shift state, and review station-level activity without leaving the workflow.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildStatusChip(
+                  context,
+                  Icons.store_outlined,
+                  _selectedStationId == null
+                      ? 'No station selected'
+                      : 'Station #$_selectedStationId',
+                ),
+                _buildStatusChip(
+                  context,
+                  Icons.lock_open_outlined,
+                  openShift == null
+                      ? 'No open shift for this user'
+                      : 'Open shift #${openShift['id']}',
+                ),
+                _buildStatusChip(
+                  context,
+                  Icons.visibility_outlined,
+                  canReadShifts ? 'History visible' : 'No history access',
+                ),
+                _buildStatusChip(
+                  context,
+                  Icons.manage_accounts_outlined,
+                  canOpenShifts || canCloseShifts
+                      ? 'Operational controls enabled'
+                      : 'Review mode only',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -697,6 +810,22 @@ class _ShiftPageState extends State<ShiftPage> {
             'Expected cash ${_formatNumber(shift['expected_cash'])}',
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(BuildContext context, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
       ),
     );
   }

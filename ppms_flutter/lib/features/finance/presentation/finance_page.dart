@@ -5,6 +5,7 @@ import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/utils/document_file_actions.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _FinanceSection { purchases, customerPayments, supplierPayments }
 
@@ -745,25 +746,88 @@ class _FinancePageState extends State<FinancePage> {
       _section = availableSections.first;
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final sectionMeta = _sectionMeta();
+    final purchaseTotal = _sumOf(_purchases, 'total_amount');
+    final customerPaymentTotal = _sumOf(_customerPayments, 'amount');
+    final supplierPaymentTotal = _sumOf(_supplierPayments, 'amount');
+
     return RefreshIndicator(
       onRefresh: _loadFinanceWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Finance Workspace',
+            title: sectionMeta.$1,
+            subtitle: sectionMeta.$2,
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Active section',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    sectionMeta.$1,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                if (_showPurchases && _canReadPurchases)
+                  DashboardMetricTile(
+                    label: 'Purchases',
+                    value: _purchases.length.toString(),
+                    caption: _formatNumber(purchaseTotal),
+                    icon: Icons.inventory_2_outlined,
+                    tint: colorScheme.primary,
+                  ),
+                if (_showCustomerPayments && _canReadCustomerPayments)
+                  DashboardMetricTile(
+                    label: 'Customer receipts',
+                    value: _customerPayments.length.toString(),
+                    caption: _formatNumber(customerPaymentTotal),
+                    icon: Icons.account_balance_wallet_outlined,
+                    tint: colorScheme.tertiary,
+                  ),
+                if (_showSupplierPayments && _canReadSupplierPayments)
+                  DashboardMetricTile(
+                    label: 'Supplier payments',
+                    value: _supplierPayments.length.toString(),
+                    caption: _formatNumber(supplierPaymentTotal),
+                    icon: Icons.payments_outlined,
+                    tint: colorScheme.error,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Finance Workspace',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _roleSummary(),
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  DashboardSectionCard(
+                    icon: sectionMeta.$3,
+                    title: sectionMeta.$1,
+                    subtitle: sectionMeta.$2,
+                    child: const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 16),
                   LayoutBuilder(
@@ -1574,17 +1638,38 @@ class _FinancePageState extends State<FinancePage> {
     return Wrap(spacing: 12, runSpacing: 12, children: children);
   }
 
-  String _roleSummary() {
-    switch (widget.sessionController.roleName) {
-      case 'HeadOffice':
-        return 'Review organization-wide finance records and document history without posting day-to-day station transactions.';
-      case 'Accountant':
-        return 'Manage collections, supplier payments, purchase review, and financial document actions.';
-      case 'Manager':
-        return 'Handle station purchases and payment activity with operational finance visibility.';
-      default:
-        return 'Manage fuel purchases, customer receipts, and supplier payments from one shared station workspace.';
+  (String, String, IconData) _sectionMeta() {
+    switch (_section) {
+      case _FinanceSection.purchases:
+        return (
+          'Purchase control',
+          'Review fuel purchases, stock-linked inflow, and reversal activity from one station-aware workspace.',
+          Icons.inventory_2_outlined,
+        );
+      case _FinanceSection.customerPayments:
+        return (
+          'Customer collection control',
+          'Track customer receipts, references, and reversal history with a review-first layout.',
+          Icons.account_balance_wallet_outlined,
+        );
+      case _FinanceSection.supplierPayments:
+        return (
+          'Supplier settlement control',
+          'Manage supplier payouts, voucher actions, and reversal follow-up in one place.',
+          Icons.payments_outlined,
+        );
     }
+  }
+
+  double _sumOf(List<Map<String, dynamic>> items, String key) {
+    var total = 0.0;
+    for (final item in items) {
+      final value = item[key];
+      if (value is num) {
+        total += value.toDouble();
+      }
+    }
+    return total;
   }
 
   Widget _buildPermissionNotice(String message) {

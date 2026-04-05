@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _GovernanceSection { expenses, purchases, creditOverrides }
 
@@ -326,25 +327,85 @@ class _GovernancePageState extends State<GovernancePage> {
       _section = availableSections.first;
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final sectionMeta = _sectionMeta();
+
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Governance Workspace',
+            title: sectionMeta.$1,
+            subtitle: sectionMeta.$2,
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Pending queue',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _queueCountForSection().toString(),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                if (_canReviewExpenses)
+                  DashboardMetricTile(
+                    label: 'Expense approvals',
+                    value: _expenses.length.toString(),
+                    caption: 'Pending expense items in scope',
+                    icon: Icons.receipt_long_outlined,
+                    tint: colorScheme.primary,
+                  ),
+                if (_canReviewPurchases)
+                  DashboardMetricTile(
+                    label: 'Purchase reviews',
+                    value: _purchases.length.toString(),
+                    caption: 'Pending purchase or reversal decisions',
+                    icon: Icons.inventory_2_outlined,
+                    tint: colorScheme.tertiary,
+                  ),
+                if (_canReviewCreditOverrides)
+                  DashboardMetricTile(
+                    label: 'Credit overrides',
+                    value: _customers.length.toString(),
+                    caption: 'Customers waiting for override review',
+                    icon: Icons.rule_folder_outlined,
+                    tint: colorScheme.error,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Governance Workspace',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Review approval queues for the parts of governance this role actually controls.',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  DashboardSectionCard(
+                    icon: sectionMeta.$3,
+                    title: sectionMeta.$1,
+                    subtitle: sectionMeta.$2,
+                    child: const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -468,6 +529,40 @@ class _GovernancePageState extends State<GovernancePage> {
         ],
       ),
     );
+  }
+
+  (String, String, IconData) _sectionMeta() {
+    switch (_section) {
+      case _GovernanceSection.expenses:
+        return (
+          'Expense approvals',
+          'Review expense requests with enough context to approve or reject them confidently.',
+          Icons.receipt_long_outlined,
+        );
+      case _GovernanceSection.purchases:
+        return (
+          'Purchase governance',
+          'Review purchase requests and reversal actions without losing the operational context.',
+          Icons.inventory_2_outlined,
+        );
+      case _GovernanceSection.creditOverrides:
+        return (
+          'Credit override governance',
+          'Control customer credit exceptions with a clearer view of exposure and requested override amounts.',
+          Icons.rule_folder_outlined,
+        );
+    }
+  }
+
+  int _queueCountForSection() {
+    switch (_section) {
+      case _GovernanceSection.expenses:
+        return _expenses.length;
+      case _GovernanceSection.purchases:
+        return _purchases.length;
+      case _GovernanceSection.creditOverrides:
+        return _customers.length;
+    }
   }
 
   Widget _buildCurrentQueue(BuildContext context) {
