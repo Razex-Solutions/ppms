@@ -13,6 +13,13 @@ This document defines the next implementation phase for PPMS after the current b
 
 This plan is intentionally local-first for now. Online hosting, automation, and production deployment are part of the later phases, not the current execution focus.
 
+End-state goal:
+- Master Admin should be able to sign in through the frontend using the platform account
+- open any organization account
+- inspect and edit what the organization needs corrected
+- provide customer support directly from the support-facing frontend
+- while the backend remains FastAPI-based and PostgreSQL-compatible for later cloud deployment
+
 ---
 
 ## Current Direction
@@ -34,12 +41,14 @@ The product is now split into three future-facing layers:
    - Node.js frontend, to be created next
    - specifically for Razex Solutions platform support / Master Admin work
    - used to inspect, fix, override, and support customer organizations and stations
+   - Master Admin logs in with platform credentials and can open tenant accounts to support-edit values when needed
 
 Later deployment target:
 - backend on Amazon EC2
 - web frontend on Vercel
 - source code on GitHub
 - automated delivery after local completion and stabilization
+- notification providers such as WhatsApp/SMS/Email connected with real credentials later
 
 This plan must now also follow the newer simplification rules from:
 - [Docs/SIMPLIFIED_SETUP_AND_ROLE_PLAN.md](/C:/Fuel%20Management%20System/Docs/SIMPLIFIED_SETUP_AND_ROLE_PLAN.md)
@@ -90,6 +99,10 @@ The operating model must also move toward:
 - monthly payroll with adjustments
 - customer and supplier ledger tracking
 - fuel price history
+- notification templates and channel settings
+- PDF/document registry and attachments
+- reporting and profit-summary architecture
+- reusable master-data selection flows with create-new-in-context behavior
 
 This means the next phase is not only “dashboard polish.”
 It is also a setup and operations redesign phase.
@@ -102,6 +115,11 @@ For tankers, the first target should be:
 - leftover fuel transfer into station tanks
 
 It should not start as a full telematics-heavy fleet system.
+
+Another core UX rule:
+- users should select existing master records where possible
+- and only create new customers, suppliers, tankers, employees, or similar masters when needed
+- those records should then carry forward for later selection instead of being re-entered repeatedly
 
 ---
 
@@ -667,6 +685,13 @@ Core features:
 6. support-side edits and overrides
 7. global issue dashboard
 8. customer service tooling
+9. role-aware dashboards, reports, and notification controls for support operations
+
+Additional expected support capabilities:
+- open a tenant account from the support console
+- inspect customer/supplier/employee/tanker/ledger state
+- correct values the organization requests corrected
+- review documents, notifications, and reporting health
 
 Expected output:
 - support console separate from tenant app
@@ -702,6 +727,10 @@ Likely backend API improvements needed:
 12. explicit module/capability payloads for dynamic menu and dashboard composition
 13. payroll-adjustment and ledger summary endpoints
 14. fuel-price history endpoints
+15. notification template and send-log endpoints
+16. document registry / attachment endpoints
+17. report-definition and profit-summary endpoints
+18. search-select-create-new endpoints/patterns for reusable master data
 
 API direction should also prefer:
 - direct operational posting endpoints for real-world facts
@@ -761,6 +790,8 @@ Steps:
 5. GitHub Actions deployment workflow
 6. Vercel hookup for web frontend
 7. later Flutter CI/CD for desktop/mobile builds
+8. real notification-provider integration such as WhatsApp API, SMS, and email credentials
+9. full automated pipeline from GitHub to EC2/Vercel where appropriate
 
 Important:
 - deployment is a later phase, not current main work

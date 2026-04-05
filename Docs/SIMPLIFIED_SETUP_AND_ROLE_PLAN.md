@@ -775,6 +775,237 @@ This must be finalized before implementation.
 
 ---
 
+## 19D-1. Master Data Reuse Rule
+
+The system should avoid forcing repeated re-entry of the same entities.
+
+Preferred UX rule:
+- if a customer, supplier, tanker, employee, fuel type, or similar master record already exists, select it from a dropdown/search
+- if it does not exist, provide a `Create New` option inside the same flow
+- once created, it should be available for reuse everywhere relevant
+
+Examples:
+- customer sale screen:
+  - select existing customer
+  - or create new customer
+- supplier purchase screen:
+  - select existing supplier
+  - or create new supplier
+- tanker trip screen:
+  - select existing tanker
+  - or create new tanker
+
+Ledger impact:
+- when a customer or supplier is created, their ledger identity carries forward automatically
+- users should not retype the same party repeatedly
+
+This is a core usability rule for the product.
+
+---
+
+## 19E. Notification System
+
+Supported channels should include:
+- WhatsApp
+- SMS
+- Email
+
+### Notification setup question
+- which notification channels are enabled?
+
+### Preferred settings table
+`notification_settings`
+- `id`
+- `organization_id`
+- `whatsapp_enabled`
+- `sms_enabled`
+- `email_enabled`
+- `created_at`
+
+Important design note:
+- the current backend already has notification preferences and delivery tracking
+- preferred direction is to extend the existing system, not create a second parallel notification subsystem
+
+---
+
+## 19F. Message Templates
+
+Templates should be stored.
+
+Example template types:
+- Customer Ledger
+- Supplier Ledger
+- Payment Reminder
+- Balance Confirmation
+- Payslip
+
+### Preferred table
+`message_templates`
+- `id`
+- `name`
+- `type`
+- `template`
+- `created_at`
+
+This is a strong candidate for a real new table if the current template system does not already cover messaging well.
+
+---
+
+## 19G. Notification Logs
+
+Sent notifications should be tracked.
+
+### Preferred table
+`notification_logs`
+- `id`
+- `recipient`
+- `type`
+- `message`
+- `status`
+- `created_at`
+
+Important design note:
+- current notification delivery logging already exists
+- preferred direction is to reuse/extend it instead of duplicating the same concept
+
+---
+
+## 19H. Document / PDF System
+
+Target documents include:
+- ledger
+- payslip
+- customer statement
+- supplier statement
+- tanker trips
+- sales reports
+
+### Preferred table
+`documents`
+- `id`
+- `reference_type`
+- `reference_id`
+- `file_path`
+- `created_at`
+
+Reference examples:
+- customer ledger
+- supplier ledger
+- payslip
+- trip report
+- sales report
+
+Important design note:
+- current backend already has financial documents, exports, and dispatch records
+- preferred direction is a unified document registry or extension of the current system, not a duplicate document universe
+
+---
+
+## 19I. Attachments
+
+Optional photos and file attachments should be supported.
+
+Examples:
+- receipt
+- tanker photo
+- bill
+- repair image
+
+### Preferred table
+`attachments`
+- `id`
+- `reference_type`
+- `reference_id`
+- `file_path`
+- `created_at`
+
+---
+
+## 19J. Reports Engine
+
+The system should support:
+- single report
+- combined report
+- filtered report
+
+### Preferred reports definition table
+`reports`
+- `id`
+- `name`
+- `type`
+- `filters`
+- `created_at`
+
+Important design note:
+- this should likely represent saved report definitions/configurations
+- generated report outputs should remain tied to export jobs or document outputs instead of overloading one table
+
+### Common report filters
+- date range
+- station
+- fuel type
+- tanker
+- driver
+- customer
+- supplier
+- shift
+- employee
+
+### Example reports
+- tanker trip report
+- driver trip report
+- customer report
+- supplier report
+- station report
+- employee report
+
+---
+
+## 19K. Profit Calculation
+
+Profit should be available by:
+- fuel type
+- product
+- tanker
+- station
+- overall
+
+### Formula
+sales
+- purchases
+- expenses
+- internal fuel cost
+= profit
+
+### Optional cache table
+`profit_reports`
+- `id`
+- `station_id`
+- `fuel_type_id`
+- `profit`
+- `date`
+- `created_at`
+
+Important note:
+- profit should usually be computed from source transactions
+- cache tables are optional optimization, not the source of truth
+
+### Related reporting directions
+- multi-station reports
+- product profit
+- tanker profit
+- driver performance/profit
+- dashboard summaries:
+  - total sales
+  - total purchases
+  - profit
+  - expenses
+  - receivables
+  - payables
+  - tank levels
+
+---
+
 ## 20. Tanker Module (Manager-Based)
 
 This tanker model should stay manager-friendly and summary-driven.
@@ -965,8 +1196,17 @@ Managers can dump leftover trip fuel into station tanks.
 
 The current hierarchy should be simplified based on organization shape.
 
+### Final preferred role set
+- `Master Admin`
+- `Organization Admin`
+- `Station Admin`
+- `Shift Manager`
+- `Accountant` optional
+
+This is the preferred business-facing role language for the new model.
+
 ### Top platform role
-- `MasterAdmin`
+- `Master Admin`
   - Razex Solutions platform owner
   - can create organizations
   - can manage subscriptions
@@ -977,6 +1217,110 @@ Role creation should depend on single-station vs multi-station setup.
 
 ---
 
+## 26A. Master Admin Permissions (SaaS + System Level)
+
+Master Admin controls the SaaS platform itself.
+
+### Core SaaS permissions
+Master Admin can:
+- create organizations
+- set subscription fee
+- set packages
+- activate or deactivate organizations
+- activate or deactivate modules
+- control service activation
+- control trials
+- control billing
+- set package limits
+- log in through the support-facing frontend
+- open organization accounts
+- inspect and edit values the organization wants corrected
+- review dashboards, reports, notifications, and support data across tenants
+
+### Package example direction
+Basic:
+- stations = 1
+- users = limited
+- modules = basic only
+
+Professional:
+- stations = unlimited
+- users = unlimited
+- modules = all
+
+### Preferred SaaS tables
+`packages`
+- `id`
+- `name`
+- `price`
+- `billing_cycle`
+- `created_at`
+
+`package_modules`
+- `id`
+- `package_id`
+- `module_name`
+- `is_enabled`
+
+`organization_subscriptions`
+- `id`
+- `organization_id`
+- `package_id`
+- `start_date`
+- `end_date`
+- `status`
+
+---
+
+## 26B. Dynamic Module System
+
+Modules should be dynamic and optional.
+
+### Core module examples
+- Fuel Management
+- Tankers
+- Sales
+- Purchases
+- Customers
+- Suppliers
+- Employees
+- Payroll
+- Reports
+- Notifications
+
+### Optional module examples
+- Shop
+- Restaurant
+- Service Station
+- Rental
+
+### Preferred tables
+`modules`
+- `id`
+- `name`
+- `description`
+- `is_active`
+- `created_at`
+
+`organization_modules`
+- `id`
+- `organization_id`
+- `module_id`
+- `is_enabled`
+- `created_at`
+
+### Rental example
+`rentals`
+- `id`
+- `station_id`
+- `tenant_name`
+- `rent_amount`
+- `start_date`
+- `end_date`
+- `created_at`
+
+---
+
 ## 27. Single-Station Role Logic
 
 If organization has only 1 station:
@@ -984,27 +1328,26 @@ If organization has only 1 station:
 - avoid separate organization admin and station admin unless truly needed
 
 ### Preferred simplified structure
-- `MasterAdmin`
-- `Admin`
-- `Manager`
+- `Master Admin`
+- `Organization Admin`
+- `Shift Manager`
 - `Accountant`
-- `Operator`
 - `Profile-only staff`
 
 ### Why
 If there is only one station:
 - organization admin
 - station admin
-- duplicate admin layers
+- duplicate top station-control layers
 
 become mostly redundant.
 
-In that case, one tenant admin role is enough beneath MasterAdmin.
+In that case, organization admin and station admin should merge.
 
 ### Single-station rule
 If `station_count == 1`
-- create a single tenant admin role path
-- hide unnecessary higher tenant layers
+- merge `Organization Admin` and `Station Admin`
+- keep one main tenant admin path under Master Admin
 - simplify dashboards and permission setup
 
 ---
@@ -1015,12 +1358,11 @@ If organization has more than 1 station:
 - broader hierarchy becomes useful
 
 ### Preferred structure
-- `MasterAdmin`
-- `HeadOffice` or `OrgAdmin`
+- `Master Admin`
+- `Organization Admin`
 - `StationAdmin`
-- `Manager`
+- `Shift Manager`
 - `Accountant`
-- `Operator`
 - `Profile-only staff`
 
 ### Why
@@ -1031,8 +1373,8 @@ Multi-station businesses benefit from:
 
 ### Multi-station rule
 If `station_count > 1`
-- enable org-level admin role
-- enable station admin role
+- enable separate organization admin role
+- enable separate station admin role
 - allow scoped station assignment
 
 ---
@@ -1047,29 +1389,203 @@ Can:
 - create top tenant admin
 
 ### If single station
-MasterAdmin creates:
-- `Admin`
+Master Admin creates:
+- `Organization Admin`
 
-Then `Admin` creates:
-- `Manager`
+Then merged tenant admin creates:
+- `Shift Manager`
 - `Accountant`
-- `Operator`
 - profile-only staff
 
 ### If multiple stations
-MasterAdmin creates:
-- `HeadOffice` or `OrgAdmin`
+Master Admin creates:
+- `Organization Admin`
 
-Then `HeadOffice` or `OrgAdmin` creates:
-- `StationAdmin`
-- optionally `Manager`, `Accountant`, `Operator`
+Then `Organization Admin` creates:
+- `Station Admin`
+- optionally `Shift Manager`, `Accountant`
 
-Then `StationAdmin` creates:
+Then `Station Admin` creates:
 - station staff
-- manager
-- operator
+- shift manager
 - accountant
 - profile-only staff
+
+---
+
+## 29A. Organization Admin Permissions
+
+Organization Admin should control:
+- all stations
+- station admin assignment
+- shift manager assignment
+- accountant assignment
+- tankers
+- purchases
+- sales visibility
+- customers
+- suppliers
+- employees
+- payroll
+- reports
+- notifications
+- dip-chart setup one time
+- calibration permission approval
+
+---
+
+## 29B. Station Admin Permissions
+
+Station Admin should control:
+- station tanker operations
+- purchases
+- manual sales where applicable
+- fuel incoming
+- internal fuel usage
+- fuel transfers
+- credit customers
+- suppliers
+- recoveries
+- expenses
+- payroll
+- employees
+- reports
+- notifications
+- tank dips
+- meter readings
+- meter reverse
+- view shift records
+
+---
+
+## 29C. Shift Manager Permissions
+
+Shift Manager should control:
+- submit cash
+- closing meter readings
+- fuel incoming
+- internal fuel usage
+- fuel transfers
+- lubricant sales
+- expenses
+- credit recovery
+- tank dips
+- shift notes
+
+System should handle automatically:
+- opening cash
+- opening meter
+- shift creation
+- carry forward
+
+---
+
+## 29D. Accountant Permissions
+
+Accountant should control:
+- payroll
+- salary
+- bonus
+- loans
+- deductions
+- customer ledger
+- supplier ledger
+- payments
+- financial reports
+- profit reports
+
+---
+
+## 29E. Dip Chart Permission
+
+Dip-chart setup:
+- organization admin one time
+
+Calibration later:
+- station admin requests
+- organization admin approves
+
+Preferred tables:
+`tank_charts`
+- `id`
+- `tank_id`
+- `created_by`
+- `created_at`
+
+`tank_chart_details`
+- `id`
+- `tank_id`
+- `dip_mm`
+- `volume`
+
+---
+
+## 29F. Setup Questions For Roles And Permissions
+
+### Master Admin setup
+- create package?
+- set fee?
+- enable modules?
+- set trial period?
+
+### Organization setup
+- how many stations?
+- enable optional modules?
+- enable accountant?
+
+### Station setup
+- assign station admin?
+- assign shift manager?
+- enable 24-hour shift?
+
+---
+
+## 29G. Final Role Hierarchy
+
+Master Admin  
+↓  
+Organization Admin  
+↓  
+Station Admin  
+↓  
+Shift Manager  
+↓  
+Accountant optional
+
+---
+
+## 29H. Final Modules Architecture
+
+### Core modules
+- Fuel Management
+- Tankers
+- Sales
+- Purchases
+- Customers
+- Suppliers
+- Employees
+- Payroll
+- Reports
+- Notifications
+
+### Optional modules
+- Shop
+- Restaurant
+- Service Station
+- Rental
+
+This means the final system picture includes:
+- SaaS system
+- permissions
+- multi-station
+- shift system
+- fuel management
+- financial system
+- modules system
+- reports
+- notifications
+- audit
+- backup
 
 ---
 
@@ -1264,6 +1780,8 @@ This is a strong approach.
 - payroll run and salary-adjustment modeling
 - customer and supplier ledger modeling
 - fuel-price history integration
+- notification/template/document/report integration
+- profit and dashboard summary calculation design
 
 ### Size of change
 - moderate to large
@@ -1296,6 +1814,9 @@ This is not a total rewrite, but it does require meaningful reshaping.
 - customer code and ledger support
 - supplier ledger support
 - fuel price history support
+- notification settings and template support
+- document registry / attachment support
+- report-definition and profit-summary support
 
 ### Likely file areas
 - [ppms/app/models](/C:/Fuel%20Management%20System/ppms/app/models)
@@ -1331,6 +1852,9 @@ This will require medium-to-large Flutter changes in setup flows, but not a full
 - [ppms_flutter/lib/features/parties/presentation/parties_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/parties/presentation/parties_page.dart)
 - [ppms_flutter/lib/features/finance/presentation/finance_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/finance/presentation/finance_page.dart)
 - [ppms_flutter/lib/features/tankers/presentation/tanker_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/tankers/presentation/tanker_page.dart)
+- [ppms_flutter/lib/features/notifications/presentation/notifications_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/notifications/presentation/notifications_page.dart)
+- [ppms_flutter/lib/features/documents/presentation/documents_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/documents/presentation/documents_page.dart)
+- [ppms_flutter/lib/features/reports/presentation/reports_page.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/features/reports/presentation/reports_page.dart)
 - [ppms_flutter/lib/core/session/session_capabilities.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/core/session/session_capabilities.dart)
 - [ppms_flutter/lib/core/session/session_controller.dart](/C:/Fuel%20Management%20System/ppms_flutter/lib/core/session/session_controller.dart)
 
@@ -1371,6 +1895,7 @@ This will require medium-to-large Flutter changes in setup flows, but not a full
 8. define where approval remains optional vs removed from default flow
 9. finalize simplified tanker module rules
 10. finalize payroll-adjustment and ledger model direction
+11. finalize notification, document, report, and profit model direction
 
 ### Phase 4 — Backend Refactor
 1. update models
@@ -1381,6 +1906,7 @@ This will require medium-to-large Flutter changes in setup flows, but not a full
 6. update permission scope rules
 7. update shift, sales, cash, and meter services
 8. update payroll, ledger, pricing, and purchase/tanker linkage structures
+9. update notification, template, document, attachment, and report structures
 
 ### Phase 5 — Flutter Onboarding Refactor
 1. rebuild brand step
@@ -1415,6 +1941,8 @@ This will require medium-to-large Flutter changes in setup flows, but not a full
 10. payroll adjustment and monthly payroll UI cleanup
 11. customer and supplier ledger visibility
 12. fuel-price-aware purchase and sale flows
+13. notification templates and send-log visibility
+14. document, attachment, and reporting summary flows
 
 ### Phase 8 — Role/Dashboard Cleanup
 1. simplify single-station admin hierarchy
@@ -1454,3 +1982,23 @@ Main implementation principles:
 - [Docs/ROLE_HIERARCHY_AND_ACCESS_MODEL.md](/C:/Fuel%20Management%20System/Docs/ROLE_HIERARCHY_AND_ACCESS_MODEL.md)
 - [Docs/MASTER_ADMIN_ORGANIZATION_AND_PERMISSION_MODEL.md](/C:/Fuel%20Management%20System/Docs/MASTER_ADMIN_ORGANIZATION_AND_PERMISSION_MODEL.md)
 - [Docs/CURRENT_PROGRESS.md](/C:/Fuel%20Management%20System/Docs/CURRENT_PROGRESS.md)
+
+---
+
+## 42. End-State Delivery Goal
+
+The intended end-state is:
+- backend built in FastAPI
+- backend kept PostgreSQL-compatible
+- full product completed and verified locally first
+- source code managed through GitHub
+- support/frontend web surface deployed through Vercel
+- backend deployed on Amazon EC2
+- database moved to PostgreSQL-compatible cloud deployment
+- deployments automated through GitHub workflows
+- real provider integrations connected later for:
+  - WhatsApp API
+  - SMS
+  - email
+
+The local machine remains the primary completion environment until the product is stable enough to move online.
