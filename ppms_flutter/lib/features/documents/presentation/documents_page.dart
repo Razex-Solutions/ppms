@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/utils/document_file_actions.dart';
 
@@ -40,6 +41,9 @@ class _DocumentsPageState extends State<DocumentsPage> {
   int? _selectedEntityId;
   String? _lastSavedPath;
 
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
+
   @override
   void initState() {
     super.initState();
@@ -56,14 +60,35 @@ class _DocumentsPageState extends State<DocumentsPage> {
   }
 
   bool get _canViewFuelSaleDocs =>
-      _hasAction('fuel_sales', 'create') || _hasAction('fuel_sales', 'reverse');
+      _showFuelSaleDocs &&
+      (_hasAction('fuel_sales', 'create') || _hasAction('fuel_sales', 'reverse'));
   bool get _canViewCustomerPaymentDocs =>
+      _showCustomerPaymentDocs &&
       _hasAction('customer_payments', 'create') ||
       _hasAction('customer_payments', 'reverse');
   bool get _canViewSupplierPaymentDocs =>
+      _showSupplierPaymentDocs &&
       _hasAction('supplier_payments', 'create') ||
       _hasAction('supplier_payments', 'reverse');
   bool get _canViewReportExports => _hasAction('reports', 'read');
+  bool get _showFuelSaleDocs => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['fuel_sales'],
+    permissionModules: const ['fuel_sales'],
+    hideWhenModulesOff: true,
+  );
+  bool get _showCustomerPaymentDocs => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['customer_payments'],
+    permissionModules: const ['customer_payments'],
+    hideWhenModulesOff: true,
+  );
+  bool get _showSupplierPaymentDocs => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['supplier_payments'],
+    permissionModules: const ['supplier_payments'],
+    hideWhenModulesOff: true,
+  );
   bool get _canViewAnyDocuments =>
       _canViewFuelSaleDocs ||
       _canViewCustomerPaymentDocs ||
@@ -311,6 +336,19 @@ class _DocumentsPageState extends State<DocumentsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_canViewAnyDocuments) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'There are no document modules enabled for this role and scope right now.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     if (_isLoading &&
         _fuelSales.isEmpty &&
         _customerPayments.isEmpty &&

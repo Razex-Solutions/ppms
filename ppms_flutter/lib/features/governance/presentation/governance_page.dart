@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 
 enum _GovernanceSection { expenses, purchases, creditOverrides }
@@ -32,6 +33,9 @@ class _GovernancePageState extends State<GovernancePage> {
   int? _selectedPurchaseId;
   int? _selectedCustomerId;
 
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
+
   bool _hasAction(String module, String action) {
     final modulePermissions =
         widget.sessionController.permissions[module] as List<dynamic>?;
@@ -48,6 +52,12 @@ class _GovernancePageState extends State<GovernancePage> {
   bool get _canReviewCreditOverrides =>
       _hasAction('customers', 'approve_credit_override') ||
       _hasAction('customers', 'reject_credit_override');
+  bool get _showGovernanceWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['expenses', 'purchases', 'customers'],
+    permissionModules: const ['expenses', 'purchases', 'customers'],
+    hideWhenModulesOff: true,
+  );
 
   @override
   void initState() {
@@ -81,7 +91,7 @@ class _GovernancePageState extends State<GovernancePage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final expenses = stationId == null
+      final expenses = !_showGovernanceWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchExpenses(
@@ -89,14 +99,14 @@ class _GovernancePageState extends State<GovernancePage> {
                 status: 'pending',
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final purchases = stationId == null
+      final purchases = !_showGovernanceWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchPurchases(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final customers = stationId == null
+      final customers = !_showGovernanceWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchCustomers(
@@ -290,6 +300,19 @@ class _GovernancePageState extends State<GovernancePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_showGovernanceWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Governance queues are turned off for this scope, so approval workflows stay hidden.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }

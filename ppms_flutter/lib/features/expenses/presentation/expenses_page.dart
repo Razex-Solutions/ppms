@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 
 class ExpensesPage extends StatefulWidget {
@@ -26,6 +27,9 @@ class _ExpensesPageState extends State<ExpensesPage> {
   int? _selectedStationId;
   String _category = 'operations';
   String _statusFilter = 'all';
+
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
 
   static const _categories = <String>[
     'operations',
@@ -69,7 +73,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final expenses = stationId == null
+      final expenses = !_showExpensesWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchExpenses(
@@ -176,6 +180,12 @@ class _ExpensesPageState extends State<ExpensesPage> {
       _hasAction('expenses', 'delete') ||
       _hasAction('expenses', 'approve') ||
       _hasAction('expenses', 'reject');
+  bool get _showExpensesWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['expenses'],
+    permissionModules: const ['expenses'],
+    hideWhenModulesOff: true,
+  );
 
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
@@ -191,6 +201,19 @@ class _ExpensesPageState extends State<ExpensesPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_showExpensesWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Expenses are turned off for this scope, so this workspace stays hidden.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }

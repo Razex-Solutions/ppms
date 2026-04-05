@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 
 class NotificationsPage extends StatefulWidget {
@@ -23,6 +24,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
   List<Map<String, dynamic>> _preferences = const [];
   List<Map<String, dynamic>> _deliveries = const [];
 
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
+
   @override
   void initState() {
     super.initState();
@@ -35,24 +39,33 @@ class _NotificationsPageState extends State<NotificationsPage> {
       _errorMessage = null;
     });
     try {
-      final summary = await widget.sessionController.fetchNotificationSummary();
-      final diagnostics = await widget.sessionController
-          .fetchNotificationDeliveryDiagnostics();
-      final notifications = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchNotifications()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final preferences = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchNotificationPreferences()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final deliveries = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchNotificationDeliveries()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
+      final summary = _showNotificationsWorkspace
+          ? await widget.sessionController.fetchNotificationSummary()
+          : <String, dynamic>{};
+      final diagnostics = _showNotificationsWorkspace
+          ? await widget.sessionController.fetchNotificationDeliveryDiagnostics()
+          : <String, dynamic>{};
+      final notifications = _showNotificationsWorkspace
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchNotifications()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final preferences = _showNotificationsWorkspace
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchNotificationPreferences()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final deliveries = _showNotificationsWorkspace
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchNotificationDeliveries()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
 
       if (!mounted) {
         return;
@@ -143,8 +156,28 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
+  bool get _showNotificationsWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['notifications'],
+    permissionModules: const ['notifications'],
+    hideWhenModulesOff: true,
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (!_showNotificationsWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Notifications are turned off for this scope, so the inbox stays hidden.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     if (_isLoading && _summary == null) {
       return const Center(child: CircularProgressIndicator());
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/utils/document_file_actions.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
@@ -35,6 +36,9 @@ class _SalesPageState extends State<SalesPage> {
   int? _selectedNozzleId;
   int? _selectedCustomerId;
   String _saleType = 'cash';
+
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
 
   List<Map<String, dynamic>> _dedupeById(List<Map<String, dynamic>> items) {
     final seen = <Object?>{};
@@ -85,10 +89,10 @@ class _SalesPageState extends State<SalesPage> {
     try {
       final stations = _dedupeById(
         List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchStations()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
+          (await widget.sessionController.fetchStations()).map(
+            (item) => Map<String, dynamic>.from(item as Map),
+          ),
         ),
-      ),
       );
 
       final preferredStationId = _validSelection(
@@ -100,26 +104,30 @@ class _SalesPageState extends State<SalesPage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final nozzles = stationId == null
+      final nozzles = !_showSalesWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : _dedupeById(List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchNozzles(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             ));
-      final customers = stationId == null
+      final customers = !_showSalesWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : _dedupeById(List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchCustomers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             ));
-      final fuelTypes = _dedupeById(List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFuelTypes()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      ));
-      final recentSales = stationId == null
+      final fuelTypes = _showSalesWorkspace
+          ? _dedupeById(
+              List<Map<String, dynamic>>.from(
+                (await widget.sessionController.fetchFuelTypes()).map(
+                  (item) => Map<String, dynamic>.from(item as Map),
+                ),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final recentSales = !_showSalesWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchFuelSales(
@@ -170,6 +178,20 @@ class _SalesPageState extends State<SalesPage> {
       _errorMessage = null;
     });
     try {
+      if (!_showSalesWorkspace) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _nozzles = const [];
+          _customers = const [];
+          _recentSales = const [];
+          _selectedNozzleId = null;
+          _selectedCustomerId = null;
+          _isLoading = false;
+        });
+        return;
+      }
       final nozzles = _dedupeById(List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchNozzles(
           stationId: stationId,
@@ -502,11 +524,30 @@ class _SalesPageState extends State<SalesPage> {
   bool get _canCreateSales => _hasAction('fuel_sales', 'create');
   bool get _canReadSales =>
       _canCreateSales || _hasAction('fuel_sales', 'reverse');
+  bool get _showSalesWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['fuel_sales'],
+    permissionModules: const ['fuel_sales'],
+    hideWhenModulesOff: true,
+  );
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (!_showSalesWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Fuel sales are turned off for this scope, so the forecourt workspace is hidden here.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
     }
     if (_errorMessage != null && _stations.isEmpty) {
       return Center(child: Text(_errorMessage!));

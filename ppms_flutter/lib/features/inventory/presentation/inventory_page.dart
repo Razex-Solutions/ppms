@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
 
@@ -49,6 +50,9 @@ class _InventoryPageState extends State<InventoryPage> {
   int? _selectedNozzleTankId;
   int? _selectedNozzleDispenserId;
 
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
+
   @override
   void initState() {
     super.initState();
@@ -92,26 +96,28 @@ class _InventoryPageState extends State<InventoryPage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final fuelTypes = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFuelTypes()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final tanks = stationId == null
+      final fuelTypes = _showInventoryWorkspace
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelTypes()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final tanks = !_showInventoryWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchTanks(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final dispensers = stationId == null
+      final dispensers = !_showInventoryWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchDispensers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final nozzles = stationId == null
+      final nozzles = !_showInventoryWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchNozzles(
@@ -602,6 +608,12 @@ class _InventoryPageState extends State<InventoryPage> {
   bool get _canManageNozzles =>
       _hasAction('nozzles', 'create') || _hasAction('nozzles', 'update');
   bool get _canDeleteNozzles => _hasAction('nozzles', 'delete');
+  bool get _showInventoryWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['tanks', 'dispensers', 'nozzles'],
+    permissionModules: const ['tanks', 'dispensers', 'nozzles'],
+    hideWhenModulesOff: true,
+  );
 
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
@@ -617,6 +629,19 @@ class _InventoryPageState extends State<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_showInventoryWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Inventory controls are turned off for this scope, so tanks, dispensers, and nozzles stay hidden.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     final stationItems = _stations
         .map(
           (station) => DropdownMenuItem<int>(

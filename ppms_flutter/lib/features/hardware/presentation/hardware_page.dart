@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 
 enum _HardwareSection { devices, events, meterOps }
@@ -44,6 +45,9 @@ class _HardwarePageState extends State<HardwarePage> {
   int? _selectedNozzleId;
   String _deviceType = 'dispenser_controller';
 
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
+
   @override
   void initState() {
     super.initState();
@@ -82,35 +86,35 @@ class _HardwarePageState extends State<HardwarePage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final dispensers = stationId == null
+      final dispensers = !_showHardwareWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchDispensers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final tanks = stationId == null
+      final tanks = !_showHardwareWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchTanks(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final nozzles = stationId == null
+      final nozzles = !_showHardwareWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchNozzles(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final devices = stationId == null
+      final devices = !_showHardwareWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchHardwareDevices(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final events = stationId == null
+      final events = !_showHardwareWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchHardwareEvents(
@@ -119,7 +123,7 @@ class _HardwarePageState extends State<HardwarePage> {
             );
 
       final nozzleId = _selectedNozzleId ?? _firstId(nozzles);
-      final adjustments = nozzleId == null
+      final adjustments = !_showHardwareWorkspace || nozzleId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchNozzleAdjustments(
@@ -392,6 +396,12 @@ class _HardwarePageState extends State<HardwarePage> {
   bool get _canAdjustMeters => _hasAction('nozzles', 'adjust_meter');
   bool get _canReadMeterHistory =>
       _hasAction('nozzles', 'read_meter_history') || _canAdjustMeters;
+  bool get _showHardwareWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['hardware'],
+    permissionModules: const ['hardware', 'nozzles'],
+    hideWhenModulesOff: true,
+  );
 
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
@@ -407,6 +417,19 @@ class _HardwarePageState extends State<HardwarePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_showHardwareWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Hardware and meter operations are turned off for this scope, so this workspace stays hidden.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }

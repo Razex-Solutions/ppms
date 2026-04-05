@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _AdminSection { users, employeeProfiles, stations, roles, modules }
 
@@ -63,10 +65,11 @@ class _AdminPageState extends State<AdminPage> {
   String _selectedStaffType = 'attendant';
 
   bool _hasAction(String module, String action) {
-    final modulePermissions =
-        widget.sessionController.permissions[module] as List<dynamic>?;
-    return modulePermissions?.contains(action) ?? false;
+    return _capabilities.hasPermission(module, action);
   }
+
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
 
   bool get _canReadUsers =>
       _hasAction('users', 'read') || _hasAction('users', 'create');
@@ -134,23 +137,39 @@ class _AdminPageState extends State<AdminPage> {
     });
 
     try {
-      final stations = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchStations()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final organizations = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchOrganizations()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final roles = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchRoles()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final permissionCatalog = await widget.sessionController
-          .fetchPermissionCatalog();
+      final shouldLoadStations =
+          _canReadStations ||
+          _canReadUsers ||
+          _canReadEmployeeProfiles ||
+          _canReadModules;
+      final shouldLoadOrganizations = _canReadStations;
+      final shouldLoadRoles = _canReadRoles || _canManageUsers;
+      final shouldLoadPermissionCatalog = _canReadRoles || _canManageUsers;
+
+      final stations = shouldLoadStations
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchStations()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final organizations = shouldLoadOrganizations
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchOrganizations()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final roles = shouldLoadRoles
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchRoles()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final permissionCatalog = shouldLoadPermissionCatalog
+          ? await widget.sessionController.fetchPermissionCatalog()
+          : null;
 
       final preferredStationId =
           widget.sessionController.currentUser?['station_id'] as int?;
@@ -159,18 +178,22 @@ class _AdminPageState extends State<AdminPage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final users = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchUsers(
-          stationId: stationId,
-        )).map((item) => Map<String, dynamic>.from(item as Map)),
-      );
-      final employeeProfiles = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchEmployeeProfiles(
-          stationId: stationId,
-          organizationId: _selectedOrganizationId,
-        )).map((item) => Map<String, dynamic>.from(item as Map)),
-      );
-      final stationModules = stationId == null
+      final users = _canReadUsers
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchUsers(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            )
+          : const <Map<String, dynamic>>[];
+      final employeeProfiles = _canReadEmployeeProfiles
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchEmployeeProfiles(
+                stationId: stationId,
+                organizationId: _selectedOrganizationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            )
+          : const <Map<String, dynamic>>[];
+      final stationModules = !_canReadModules || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchStationModules(
@@ -753,6 +776,8 @@ class _AdminPageState extends State<AdminPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     final availableSections = <_AdminSection>[
       if (_canReadUsers) _AdminSection.users,
       if (_canReadEmployeeProfiles) _AdminSection.employeeProfiles,
@@ -764,25 +789,92 @@ class _AdminPageState extends State<AdminPage> {
       _section = availableSections.first;
     }
 
+    final sectionMeta = _sectionMeta(_section);
+
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Admin Workspace',
+            title: sectionMeta.$1,
+            subtitle: sectionMeta.$2,
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Active section',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    sectionMeta.$1,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                if (_canReadUsers)
+                  DashboardMetricTile(
+                    label: 'Users',
+                    value: _users.length.toString(),
+                    caption: 'Accounts visible in the current scope',
+                    icon: Icons.group_outlined,
+                    tint: colorScheme.primary,
+                  ),
+                if (_canReadEmployeeProfiles)
+                  DashboardMetricTile(
+                    label: 'Staff profiles',
+                    value: _employeeProfiles.length.toString(),
+                    caption: 'Profile-only or login-linked staff records',
+                    icon: Icons.badge_outlined,
+                    tint: colorScheme.secondary,
+                  ),
+                if (_canReadStations)
+                  DashboardMetricTile(
+                    label: 'Stations',
+                    value: _stations.length.toString(),
+                    caption: 'Stations available to this admin scope',
+                    icon: Icons.store_outlined,
+                    tint: colorScheme.tertiary,
+                  ),
+                if (_canReadRoles)
+                  DashboardMetricTile(
+                    label: 'Roles',
+                    value: _roles.length.toString(),
+                    caption: 'Visible role definitions in the workspace',
+                    icon: Icons.admin_panel_settings_outlined,
+                    tint: colorScheme.error,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Admin Workspace',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Manage people, station setup, role visibility, and station-level module toggles.',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  DashboardSectionCard(
+                    icon: sectionMeta.$3,
+                    title: sectionMeta.$1,
+                    subtitle: sectionMeta.$2,
+                    child: const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 16),
                   LayoutBuilder(
@@ -1745,6 +1837,41 @@ class _AdminPageState extends State<AdminPage> {
         ),
       ),
     );
+  }
+
+  (String, String, IconData) _sectionMeta(_AdminSection section) {
+    switch (section) {
+      case _AdminSection.users:
+        return (
+          'User access control',
+          'Create and review login users based on hierarchy, station scope, and allowed roles.',
+          Icons.group_outlined,
+        );
+      case _AdminSection.employeeProfiles:
+        return (
+          'Staff profile control',
+          'Manage profile-only staff records, payroll state, and operational personnel details without forcing logins.',
+          Icons.badge_outlined,
+        );
+      case _AdminSection.stations:
+        return (
+          'Station management',
+          'Review and maintain station definitions, ownership, and structural placement inside the organization.',
+          Icons.store_outlined,
+        );
+      case _AdminSection.roles:
+        return (
+          'Role governance',
+          'Inspect role definitions, protected core roles, and visibility rules for controlled delegation.',
+          Icons.admin_panel_settings_outlined,
+        );
+      case _AdminSection.modules:
+        return (
+          'Module switches',
+          'Turn station services on or off so users only see what the business actually uses.',
+          Icons.toggle_on_outlined,
+        );
+    }
   }
 
   String _formatNumber(dynamic value) {

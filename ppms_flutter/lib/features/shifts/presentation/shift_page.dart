@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 
 class ShiftPage extends StatefulWidget {
@@ -30,6 +31,9 @@ class _ShiftPageState extends State<ShiftPage> {
   int? _selectedStationId;
   String _statusFilter = 'all';
   int? _selectedShiftId;
+
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
 
   @override
   void initState() {
@@ -65,7 +69,7 @@ class _ShiftPageState extends State<ShiftPage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final shifts = stationId == null
+      final shifts = !_showShiftWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchShifts(
@@ -274,6 +278,12 @@ class _ShiftPageState extends State<ShiftPage> {
   bool get _canOpenShifts => _hasAction('shifts', 'open');
   bool get _canCloseShifts => _hasAction('shifts', 'close');
   bool get _canReadShifts => _canOpenShifts || _canCloseShifts;
+  bool get _showShiftWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['shifts'],
+    permissionModules: const ['shifts'],
+    hideWhenModulesOff: true,
+  );
 
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
@@ -289,6 +299,19 @@ class _ShiftPageState extends State<ShiftPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_showShiftWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Shifts are turned off for this scope, so the shift console stays hidden.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
 
@@ -52,10 +53,11 @@ class _SetupPageState extends State<SetupPage> {
   bool _enforceTaxRegistration = false;
 
   bool _hasAction(String module, String action) {
-    final modulePermissions =
-        widget.sessionController.permissions[module] as List<dynamic>?;
-    return modulePermissions?.contains(action) ?? false;
+    return _capabilities.hasPermission(module, action);
   }
+
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
 
   bool get _canManageFuelTypes =>
       _hasAction('fuel_types', 'create') ||
@@ -106,16 +108,20 @@ class _SetupPageState extends State<SetupPage> {
           (item) => Map<String, dynamic>.from(item as Map),
         ),
       );
-      final fuelTypes = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFuelTypes()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final presets = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchCompliancePresets()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
+      final fuelTypes = _canReadFuelTypes
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelTypes()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final presets = _canReadInvoiceProfile
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchCompliancePresets()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
 
       final preferredStationId =
           widget.sessionController.currentUser?['station_id'] as int?;
@@ -125,7 +131,7 @@ class _SetupPageState extends State<SetupPage> {
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
       Map<String, dynamic>? invoiceProfile;
-      if (stationId != null) {
+      if (stationId != null && _canReadInvoiceProfile) {
         invoiceProfile = await widget.sessionController.fetchInvoiceProfile(
           stationId: stationId,
         );
@@ -645,6 +651,7 @@ class _SetupPageState extends State<SetupPage> {
   }
 
   Widget _buildInvoiceProfileSection(BuildContext context) {
+    final canApplyPreset = _canManageInvoiceProfile && _compliancePresets.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -878,7 +885,7 @@ class _SetupPageState extends State<SetupPage> {
                       ),
                       const SizedBox(width: 12),
                       FilledButton.tonalIcon(
-                        onPressed: !_canManageInvoiceProfile || _isSubmitting
+                        onPressed: !canApplyPreset || _isSubmitting
                             ? null
                             : _applyPreset,
                         icon: const Icon(Icons.rule_folder_outlined),

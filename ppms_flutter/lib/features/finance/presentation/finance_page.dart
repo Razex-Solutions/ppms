@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/utils/document_file_actions.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
@@ -56,10 +57,11 @@ class _FinancePageState extends State<FinancePage> {
   String _supplierPaymentMethod = 'cash';
 
   bool _hasAction(String module, String action) {
-    final modulePermissions =
-        widget.sessionController.permissions[module] as List<dynamic>?;
-    return modulePermissions?.contains(action) ?? false;
+    return _capabilities.hasPermission(module, action);
   }
+
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
 
   bool get _canCreatePurchases => _hasAction('purchases', 'create');
   bool get _canReversePurchases => _hasAction('purchases', 'reverse');
@@ -77,6 +79,27 @@ class _FinancePageState extends State<FinancePage> {
       _canCreateCustomerPayments || _canReverseCustomerPayments;
   bool get _canReadSupplierPayments =>
       _canCreateSupplierPayments || _canReverseSupplierPayments;
+  bool get _showPurchases =>
+      _capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['purchases'],
+        permissionModules: const ['purchases'],
+        hideWhenModulesOff: true,
+      );
+  bool get _showCustomerPayments =>
+      _capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['customer_payments'],
+        permissionModules: const ['customer_payments'],
+        hideWhenModulesOff: true,
+      );
+  bool get _showSupplierPayments =>
+      _capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['supplier_payments'],
+        permissionModules: const ['supplier_payments'],
+        hideWhenModulesOff: true,
+      );
 
   @override
   void initState() {
@@ -118,45 +141,49 @@ class _FinancePageState extends State<FinancePage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final suppliers = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchSuppliers()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final customers = stationId == null
+      final suppliers = (_showPurchases || _showSupplierPayments)
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchSuppliers()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final customers = !_showCustomerPayments || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchCustomers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final tanks = stationId == null
+      final tanks = !_showPurchases || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchTanks(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final fuelTypes = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFuelTypes()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final purchases = stationId == null
+      final fuelTypes = _showPurchases
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelTypes()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final purchases = !_showPurchases || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchPurchases(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final customerPayments = stationId == null
+      final customerPayments = !_showCustomerPayments || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchCustomerPayments(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final supplierPayments = stationId == null
+      final supplierPayments = !_showSupplierPayments || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchSupplierPayments(
@@ -708,9 +735,11 @@ class _FinancePageState extends State<FinancePage> {
     }
 
     final availableSections = <_FinanceSection>[
-      if (_canReadPurchases) _FinanceSection.purchases,
-      if (_canReadCustomerPayments) _FinanceSection.customerPayments,
-      if (_canReadSupplierPayments) _FinanceSection.supplierPayments,
+      if (_showPurchases && _canReadPurchases) _FinanceSection.purchases,
+      if (_showCustomerPayments && _canReadCustomerPayments)
+        _FinanceSection.customerPayments,
+      if (_showSupplierPayments && _canReadSupplierPayments)
+        _FinanceSection.supplierPayments,
     ];
     if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
       _section = availableSections.first;
@@ -758,19 +787,19 @@ class _FinancePageState extends State<FinancePage> {
                       );
                       final sections = SegmentedButton<_FinanceSection>(
                         segments: [
-                          if (_canReadPurchases)
+                          if (_showPurchases && _canReadPurchases)
                             const ButtonSegment(
                               value: _FinanceSection.purchases,
                               label: Text('Purchases'),
                               icon: Icon(Icons.inventory_2_outlined),
                             ),
-                          if (_canReadCustomerPayments)
+                          if (_showCustomerPayments && _canReadCustomerPayments)
                             const ButtonSegment(
                               value: _FinanceSection.customerPayments,
                               label: Text('Customer'),
                               icon: Icon(Icons.account_balance_wallet_outlined),
                             ),
-                          if (_canReadSupplierPayments)
+                          if (_showSupplierPayments && _canReadSupplierPayments)
                             const ButtonSegment(
                               value: _FinanceSection.supplierPayments,
                               label: Text('Supplier'),

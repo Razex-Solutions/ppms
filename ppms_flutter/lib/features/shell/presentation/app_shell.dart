@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/features/admin/presentation/admin_page.dart';
 import 'package:ppms_flutter/features/attendance/presentation/attendance_page.dart';
@@ -295,9 +296,8 @@ class _AppShellState extends State<AppShell> {
     List<String> enabledModules,
     Map<String, dynamic> permissions,
   ) {
-    final currentRoleName = widget.sessionController.roleName;
-    final isPlatformUser = widget.sessionController.isMasterAdmin;
-    if (isPlatformUser) {
+    final capabilities = SessionCapabilities(widget.sessionController);
+    if (capabilities.isPlatformUser) {
       return [
         _ShellDestination(
           label: 'Platform',
@@ -306,33 +306,43 @@ class _AppShellState extends State<AppShell> {
             sessionController: widget.sessionController,
           ),
         ),
-        if (permissions.containsKey('organizations') ||
-            permissions.containsKey('users'))
+        if (capabilities.featureVisible(
+          platformFeature: true,
+          permissionModules: const ['organizations', 'users'],
+        ))
           _ShellDestination(
             label: 'Onboarding',
             icon: Icons.playlist_add_check_circle_outlined,
             page: OnboardingPage(sessionController: widget.sessionController),
           ),
-        if (permissions.containsKey('stations') ||
-            permissions.containsKey('tanks') ||
-            permissions.containsKey('dispensers') ||
-            permissions.containsKey('nozzles') ||
-            permissions.containsKey('invoice_profiles'))
+        if (capabilities.featureVisible(
+          platformFeature: true,
+          permissionModules: const [
+            'stations',
+            'tanks',
+            'dispensers',
+            'nozzles',
+            'invoice_profiles',
+          ],
+        ))
           _ShellDestination(
             label: 'Station Setup',
             icon: Icons.architecture_outlined,
             page: StationSetupPage(sessionController: widget.sessionController),
           ),
-        if (permissions.containsKey('organizations') ||
-            permissions.containsKey('users') ||
-            permissions.containsKey('roles') ||
-            permissions.containsKey('saas'))
+        if (capabilities.featureVisible(
+          platformFeature: true,
+          permissionModules: const ['organizations', 'users', 'roles', 'saas'],
+        ))
           _ShellDestination(
             label: 'Admin',
             icon: Icons.admin_panel_settings_outlined,
             page: AdminPage(sessionController: widget.sessionController),
           ),
-        if (permissions.containsKey('reports'))
+        if (capabilities.featureVisible(
+          platformFeature: true,
+          permissionModules: const ['reports'],
+        ))
           _ShellDestination(
             label: 'Reports',
             icon: Icons.assessment_outlined,
@@ -350,148 +360,201 @@ class _AppShellState extends State<AppShell> {
         label: 'Dashboard',
         icon: Icons.dashboard_outlined,
         page: DashboardPage(
+          sessionController: widget.sessionController,
           dashboard: _dashboard,
           onRefresh: _loadHomeData,
           roleName: widget.sessionController.roleName,
           scopeLevel: widget.sessionController.scopeLevel,
         ),
       ),
-      if (currentRoleName == 'HeadOffice' ||
-          currentRoleName == 'StationAdmin' ||
-          currentRoleName == 'Admin' ||
-          permissions.containsKey('users') ||
-          permissions.containsKey('stations') ||
-          permissions.containsKey('roles') ||
-          permissions.containsKey('station_modules') ||
-          permissions.containsKey('employee_profiles'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        permissionModules: const [
+          'users',
+          'stations',
+          'roles',
+          'station_modules',
+          'employee_profiles',
+        ],
+      ))
         _ShellDestination(
           label: 'Admin',
           icon: Icons.admin_panel_settings_outlined,
           page: AdminPage(sessionController: widget.sessionController),
         ),
-      if (currentRoleName != 'HeadOffice')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['fuel_sales'],
+        permissionModules: const ['fuel_sales'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Sales',
           icon: Icons.local_gas_station_outlined,
           page: SalesPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('shifts') ||
-          permissions.containsKey('shifts'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['shifts'],
+        permissionModules: const ['shifts'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Shifts',
           icon: Icons.manage_history_outlined,
           page: ShiftPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('pos_products') ||
-          enabledModules.contains('pos_sales') ||
-          permissions.containsKey('pos_products') ||
-          permissions.containsKey('pos_sales'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['pos_products', 'pos_sales'],
+        permissionModules: const ['pos_products', 'pos_sales'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'POS',
           icon: Icons.storefront_outlined,
           page: PosPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('attendance') &&
-          currentRoleName != 'HeadOffice')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['attendance'],
+        permissionModules: const ['attendance'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Attendance',
           icon: Icons.badge_outlined,
           page: AttendancePage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('expenses') ||
-          permissions.containsKey('expenses'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['expenses'],
+        permissionModules: const ['expenses'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Expenses',
           icon: Icons.receipt_long_outlined,
           page: ExpensesPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('customers') ||
-          enabledModules.contains('suppliers') ||
-          permissions.containsKey('customers') ||
-          permissions.containsKey('suppliers'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['customers', 'suppliers'],
+        permissionModules: const ['customers', 'suppliers'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Parties',
           icon: Icons.groups_outlined,
           page: PartiesPage(sessionController: widget.sessionController),
         ),
-      if ((enabledModules.contains('tanks') ||
-              enabledModules.contains('dispensers') ||
-              enabledModules.contains('nozzles') ||
-              permissions.containsKey('tanks') ||
-              permissions.containsKey('dispensers') ||
-              permissions.containsKey('nozzles')) &&
-          currentRoleName != 'HeadOffice')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['tanks', 'dispensers', 'nozzles'],
+        permissionModules: const ['tanks', 'dispensers', 'nozzles'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Inventory',
           icon: Icons.inventory_outlined,
           page: InventoryPage(sessionController: widget.sessionController),
         ),
-      if (permissions.containsKey('invoice_profiles') ||
-          currentRoleName == 'Admin' ||
-          currentRoleName == 'StationAdmin' ||
-          currentRoleName == 'HeadOffice')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        permissionModules: const ['invoice_profiles', 'document_templates'],
+      ))
         _ShellDestination(
           label: 'Setup',
           icon: Icons.build_circle_outlined,
           page: SetupPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('purchases') ||
-          enabledModules.contains('customer_payments') ||
-          enabledModules.contains('supplier_payments') ||
-          permissions.containsKey('purchases') ||
-          permissions.containsKey('customer_payments') ||
-          permissions.containsKey('supplier_payments'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const [
+          'purchases',
+          'customer_payments',
+          'supplier_payments',
+        ],
+        permissionModules: const [
+          'purchases',
+          'customer_payments',
+          'supplier_payments',
+        ],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Finance',
           icon: Icons.account_balance_outlined,
           page: FinancePage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('payroll') && currentRoleName != 'Operator')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['payroll'],
+        permissionModules: const ['payroll'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Payroll',
           icon: Icons.payments_outlined,
           page: PayrollPage(sessionController: widget.sessionController),
         ),
-      if (permissions.containsKey('reports'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        permissionModules: const ['reports'],
+      ))
         _ShellDestination(
           label: 'Reports',
           icon: Icons.assessment_outlined,
           page: ReportsPage(sessionController: widget.sessionController),
         ),
-      if (permissions.containsKey('reports'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        permissionModules: const ['reports'],
+      ))
         _ShellDestination(
           label: 'Documents',
           icon: Icons.description_outlined,
           page: DocumentsPage(sessionController: widget.sessionController),
         ),
-      if (enabledModules.contains('notifications'))
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['notifications'],
+        permissionModules: const ['notifications'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Notifications',
           icon: Icons.notifications_outlined,
           page: NotificationsPage(sessionController: widget.sessionController),
         ),
-      if ((enabledModules.contains('hardware') ||
-              permissions.containsKey('hardware') ||
-              permissions.containsKey('nozzles')) &&
-          currentRoleName != 'HeadOffice')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['hardware'],
+        permissionModules: const ['hardware', 'nozzles'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Hardware',
           icon: Icons.memory_outlined,
           page: HardwarePage(sessionController: widget.sessionController),
         ),
-      if ((enabledModules.contains('tankers') ||
-              permissions.containsKey('tankers')) &&
-          currentRoleName != 'Operator')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['tankers'],
+        permissionModules: const ['tankers'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Tankers',
           icon: Icons.local_shipping_outlined,
           page: TankerPage(sessionController: widget.sessionController),
         ),
-      if ((enabledModules.contains('expenses') ||
-              permissions.containsKey('expenses') ||
-              permissions.containsKey('purchases') ||
-              permissions.containsKey('customers')) &&
-          currentRoleName != 'Operator')
+      if (capabilities.featureVisible(
+        platformFeature: false,
+        modules: const ['expenses', 'purchases', 'customers'],
+        permissionModules: const ['expenses', 'purchases', 'customers'],
+        hideWhenModulesOff: true,
+      ))
         _ShellDestination(
           label: 'Governance',
           icon: Icons.approval_outlined,

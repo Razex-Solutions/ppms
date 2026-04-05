@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
+import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
 
@@ -59,6 +60,9 @@ class _TankerPageState extends State<TankerPage> {
   String _tripStatusFilter = 'all';
   String _deliverySaleType = 'cash';
 
+  SessionCapabilities get _capabilities =>
+      SessionCapabilities(widget.sessionController);
+
   @override
   void initState() {
     super.initState();
@@ -106,38 +110,42 @@ class _TankerPageState extends State<TankerPage> {
           preferredStationId ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final suppliers = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchSuppliers()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final customers = stationId == null
+      final suppliers = _showTankerWorkspace
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchSuppliers()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final customers = !_showTankerWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchCustomers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final fuelTypes = List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFuelTypes()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
-        ),
-      );
-      final tanks = stationId == null
+      final fuelTypes = _showTankerWorkspace
+          ? List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelTypes()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : const <Map<String, dynamic>>[];
+      final tanks = !_showTankerWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchTanks(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final tankers = stationId == null
+      final tankers = !_showTankerWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchTankers(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
-      final trips = stationId == null
+      final trips = !_showTankerWorkspace || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchTankerTrips(
@@ -513,6 +521,12 @@ class _TankerPageState extends State<TankerPage> {
   bool get _canCreateTripDeliveries => _hasAction('tankers', 'delivery_create');
   bool get _canCreateTripExpenses => _hasAction('tankers', 'expense_create');
   bool get _canCompleteTrips => _hasAction('tankers', 'complete');
+  bool get _showTankerWorkspace => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['tankers'],
+    permissionModules: const ['tankers'],
+    hideWhenModulesOff: true,
+  );
 
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
@@ -535,6 +549,19 @@ class _TankerPageState extends State<TankerPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_showTankerWorkspace) {
+      return Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Tanker operations are turned off for this scope, so this workspace stays hidden.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }

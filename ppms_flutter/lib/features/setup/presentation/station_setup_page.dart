@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _StationSetupSection {
   stationProfile,
@@ -588,19 +589,89 @@ class _StationSetupPageState extends State<StationSetupPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final sectionSubtitle = switch (_section) {
+      _StationSetupSection.stationProfile =>
+        'Control branding, operating flags, and the business setup state for the selected station.',
+      _StationSetupSection.fuelTypes =>
+        'Define the products that will flow through tanks, nozzles, reports, and documents.',
+      _StationSetupSection.inventory =>
+        'Map tanks, dispensers, and nozzles so the forecourt is ready for real sales activity.',
+      _StationSetupSection.invoiceProfile =>
+        'Finish the invoice identity the station will use on receipts and generated documents.',
+    };
+
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Text(
-            'Station Setup',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Move from organization onboarding into practical station configuration: operational flags, fuel setup, forecourt mapping, and invoice basics.',
-            style: Theme.of(context).textTheme.bodyLarge,
+          DashboardHeroCard(
+            eyebrow: 'Station Setup',
+            title: _selectedStation?['display_name'] as String? ??
+                _selectedStation?['name'] as String? ??
+                'Station Setup',
+            subtitle:
+                'Move from onboarding into practical station configuration: operational flags, fuel setup, forecourt mapping, and invoice basics.',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Current stage',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    (_selectedStation?['setup_status'] as String? ?? 'draft')
+                        .toUpperCase(),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                DashboardMetricTile(
+                  label: 'Fuel types',
+                  value: _fuelTypes.length.toString(),
+                  caption: 'Products currently available for setup',
+                  icon: Icons.opacity_outlined,
+                  tint: colorScheme.primary,
+                ),
+                DashboardMetricTile(
+                  label: 'Tanks',
+                  value: _tanks.length.toString(),
+                  caption: 'Storage units mapped for this station',
+                  icon: Icons.inventory_2_outlined,
+                  tint: colorScheme.secondary,
+                ),
+                DashboardMetricTile(
+                  label: 'Dispensers',
+                  value: _dispensers.length.toString(),
+                  caption: 'Forecourt equipment points configured',
+                  icon: Icons.ev_station_outlined,
+                  tint: colorScheme.tertiary,
+                ),
+                DashboardMetricTile(
+                  label: 'Nozzles',
+                  value: _nozzles.length.toString(),
+                  caption: 'Nozzle-to-tank sales paths available',
+                  icon: Icons.local_gas_station_outlined,
+                  tint: colorScheme.error,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
           Card(
@@ -695,6 +766,25 @@ class _StationSetupPageState extends State<StationSetupPage> {
                         });
                       },
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  DashboardSectionCard(
+                    icon: switch (_section) {
+                      _StationSetupSection.stationProfile => Icons.store_outlined,
+                      _StationSetupSection.fuelTypes => Icons.opacity_outlined,
+                      _StationSetupSection.inventory =>
+                        Icons.local_gas_station_outlined,
+                      _StationSetupSection.invoiceProfile =>
+                        Icons.receipt_long_outlined,
+                    },
+                    title: switch (_section) {
+                      _StationSetupSection.stationProfile => 'Station profile',
+                      _StationSetupSection.fuelTypes => 'Fuel setup',
+                      _StationSetupSection.inventory => 'Forecourt mapping',
+                      _StationSetupSection.invoiceProfile => 'Invoice basics',
+                    },
+                    subtitle: sectionSubtitle,
+                    child: const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 20),
                   if (_selectedStation == null)
@@ -850,37 +940,37 @@ class _StationSetupPageState extends State<StationSetupPage> {
           ),
         ],
       ),
-      secondary: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Current Station Context',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              Text('Organization: ${organization?['name'] ?? '-'}'),
-              Text('Brand: ${organization?['brand_name'] ?? '-'}'),
-              Text('Station: ${_selectedStation?['name'] ?? '-'}'),
-              Text('Code: ${_selectedStation?['code'] ?? '-'}'),
-              Text('Setup Status: ${_selectedStation?['setup_status'] ?? '-'}'),
-              Text(
-                'Head Office: ${_selectedStation?['is_head_office'] == true ? 'yes' : 'no'}',
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Recommended next order',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              const Text('1. Confirm flags and branding'),
-              const Text('2. Add fuel types if needed'),
-              const Text('3. Map tanks, dispensers, and nozzles'),
-              const Text('4. Save invoice basics'),
-            ],
-          ),
+      secondary: DashboardSectionCard(
+        icon: Icons.map_outlined,
+        title: 'Current station context',
+        subtitle:
+            'Use this side panel to confirm where the station sits before moving deeper into setup.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSummaryLine('Organization', '${organization?['name'] ?? '-'}'),
+            _buildSummaryLine('Brand', '${organization?['brand_name'] ?? '-'}'),
+            _buildSummaryLine('Station', '${_selectedStation?['name'] ?? '-'}'),
+            _buildSummaryLine('Code', '${_selectedStation?['code'] ?? '-'}'),
+            _buildSummaryLine(
+              'Setup Status',
+              '${_selectedStation?['setup_status'] ?? '-'}',
+            ),
+            _buildSummaryLine(
+              'Head Office',
+              _selectedStation?['is_head_office'] == true ? 'yes' : 'no',
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Recommended next order',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            _buildStepHint('1', 'Confirm branding and operating flags'),
+            _buildStepHint('2', 'Define fuel types you will actually sell'),
+            _buildStepHint('3', 'Map tanks, dispensers, and nozzles'),
+            _buildStepHint('4', 'Save invoice identity and document basics'),
+          ],
         ),
       ),
     );
@@ -942,6 +1032,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
   }
 
   Widget _buildInventorySection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final fuelTypeItems = [
       for (final fuelType in _fuelTypes)
         DropdownMenuItem<int>(
@@ -977,6 +1068,49 @@ class _StationSetupPageState extends State<StationSetupPage> {
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            DashboardMetricTile(
+              label: 'Tanks',
+              value: _tanks.length.toString(),
+              caption: 'Storage points configured',
+              icon: Icons.inventory_2_outlined,
+              tint: colorScheme.secondary,
+            ),
+            DashboardMetricTile(
+              label: 'Dispensers',
+              value: _dispensers.length.toString(),
+              caption: 'Forecourt units configured',
+              icon: Icons.ev_station_outlined,
+              tint: colorScheme.tertiary,
+            ),
+            DashboardMetricTile(
+              label: 'Nozzles',
+              value: _nozzles.length.toString(),
+              caption: 'Mapped sales paths',
+              icon: Icons.local_gas_station_outlined,
+              tint: colorScheme.error,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_nozzles.isNotEmpty) ...[
+          Text(
+            'Live relationship preview',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 10),
+          for (final nozzle in _nozzles.take(3))
+            _MappingRelationshipTile(
+              nozzleName: nozzle['name'] as String? ?? 'Nozzle',
+              dispenserName: _lookupName(_dispensers, nozzle['dispenser_id']),
+              tankName: _lookupName(_tanks, nozzle['tank_id']),
+              fuelTypeName: _lookupName(_fuelTypes, nozzle['fuel_type_id']),
+            ),
+          const SizedBox(height: 16),
+        ],
         ResponsiveSplit(
           breakpoint: 1200,
           primary: Column(
@@ -1341,6 +1475,118 @@ class _StationSetupPageState extends State<StationSetupPage> {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepHint(String index, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.teal.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              index,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label)),
+        ],
+      ),
+    );
+  }
+}
+
+class _MappingRelationshipTile extends StatelessWidget {
+  const _MappingRelationshipTile({
+    required this.nozzleName,
+    required this.dispenserName,
+    required this.tankName,
+    required this.fuelTypeName,
+  });
+
+  final String nozzleName;
+  final String dispenserName;
+  final String tankName;
+  final String fuelTypeName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.28,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            nozzleName,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _MappingChip(
+                icon: Icons.ev_station_outlined,
+                label: dispenserName,
+              ),
+              const Text('->'),
+              _MappingChip(
+                icon: Icons.inventory_2_outlined,
+                label: tankName,
+              ),
+              _MappingChip(
+                icon: Icons.opacity_outlined,
+                label: fuelTypeName,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MappingChip extends StatelessWidget {
+  const _MappingChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Text(label),
         ],
       ),
     );
