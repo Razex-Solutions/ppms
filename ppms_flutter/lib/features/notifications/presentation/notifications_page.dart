@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key, required this.sessionController});
@@ -43,7 +44,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           ? await widget.sessionController.fetchNotificationSummary()
           : <String, dynamic>{};
       final diagnostics = _showNotificationsWorkspace
-          ? await widget.sessionController.fetchNotificationDeliveryDiagnostics()
+          ? await widget.sessionController
+                .fetchNotificationDeliveryDiagnostics()
           : <String, dynamic>{};
       final notifications = _showNotificationsWorkspace
           ? List<Map<String, dynamic>>.from(
@@ -54,16 +56,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
           : const <Map<String, dynamic>>[];
       final preferences = _showNotificationsWorkspace
           ? List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchNotificationPreferences()).map(
-                (item) => Map<String, dynamic>.from(item as Map),
-              ),
+              (await widget.sessionController.fetchNotificationPreferences())
+                  .map((item) => Map<String, dynamic>.from(item as Map)),
             )
           : const <Map<String, dynamic>>[];
       final deliveries = _showNotificationsWorkspace
           ? List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchNotificationDeliveries()).map(
-                (item) => Map<String, dynamic>.from(item as Map),
-              ),
+              (await widget.sessionController.fetchNotificationDeliveries())
+                  .map((item) => Map<String, dynamic>.from(item as Map)),
             )
           : const <Map<String, dynamic>>[];
 
@@ -163,6 +163,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
     hideWhenModulesOff: true,
   );
 
+  int _countDeliveriesByStatus(String status) {
+    return _deliveries.where((delivery) {
+      return delivery['status']?.toString() == status;
+    }).length;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_showNotificationsWorkspace) {
@@ -191,44 +197,85 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final byChannel = Map<String, dynamic>.from(
       _diagnostics?['by_channel'] ?? const {},
     );
+    final failedDeliveries = _countDeliveriesByStatus('failed');
+    final sentDeliveries = _countDeliveriesByStatus('sent');
 
     return RefreshIndicator(
       onRefresh: _loadNotifications,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 720;
-              return Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: [
-                  _MetricCard(
-                    label: 'Unread',
-                    value: '$unreadCount',
-                    width: compact ? constraints.maxWidth : 220,
-                  ),
-                  _MetricCard(
-                    label: 'Total',
-                    value: '$totalCount',
-                    width: compact ? constraints.maxWidth : 220,
-                  ),
-                  _MetricCard(
-                    label: 'Dead Letter',
-                    value: '$deadLetterCount',
-                    width: compact ? constraints.maxWidth : 220,
-                  ),
-                  _MetricCard(
-                    label: 'Channels',
-                    value: byChannel.entries
-                        .map((entry) => '${entry.key}:${entry.value}')
-                        .join('  '),
-                    width: compact ? constraints.maxWidth : 220,
-                  ),
-                ],
-              );
-            },
+          DashboardHeroCard(
+            eyebrow: 'Notification Center',
+            title: unreadCount > 0
+                ? 'Inbox Needs Attention'
+                : 'Notification Flow Stable',
+            subtitle:
+                'Track inbox pressure, delivery health, and preference coverage without leaving the support workspace.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                DashboardMetricTile(
+                  label: 'Unread',
+                  value: '$unreadCount',
+                  caption: 'Actionable inbox items',
+                  icon: Icons.mark_email_unread_outlined,
+                  tint: Theme.of(context).colorScheme.primaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Total',
+                  value: '$totalCount',
+                  caption: 'Visible notifications',
+                  icon: Icons.notifications_active_outlined,
+                  tint: Theme.of(context).colorScheme.secondaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Dead Letter',
+                  value: '$deadLetterCount',
+                  caption: '$failedDeliveries failed deliveries',
+                  icon: Icons.report_problem_outlined,
+                  tint: Theme.of(context).colorScheme.errorContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Sent',
+                  value: '$sentDeliveries',
+                  caption: byChannel.entries
+                      .map((entry) => '${entry.key}:${entry.value}')
+                      .join('  '),
+                  icon: Icons.send_outlined,
+                  tint: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: 'Support Focus',
+            subtitle:
+                'Monitor the inbox, adjust channel preferences, and watch delivery reliability from a single communications surface.',
+            icon: Icons.support_agent_outlined,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _buildInfoChip(
+                  context,
+                  icon: Icons.inbox_outlined,
+                  label: '$unreadCount unread',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.settings_input_component_outlined,
+                  label: '${_preferences.length} preference sets',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.local_post_office_outlined,
+                  label: '${_deliveries.length} delivery records',
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           if (_errorMessage != null)
@@ -419,35 +466,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final text = value.toString().replaceFirst('T', ' ');
     return text.length >= 19 ? text.substring(0, 19) : text;
   }
-}
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.label,
-    required this.value,
-    this.width = 220,
-  });
-
-  final String label;
-  final String value;
-  final double width;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 8),
-              Text(value, style: Theme.of(context).textTheme.titleMedium),
-            ],
-          ),
-        ),
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
       ),
     );
   }

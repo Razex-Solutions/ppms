@@ -3,6 +3,7 @@ import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _TankerSection { tankers, trips, tripOps }
 
@@ -528,6 +529,29 @@ class _TankerPageState extends State<TankerPage> {
     hideWhenModulesOff: true,
   );
 
+  Map<String, String> _sectionMeta() {
+    switch (_section) {
+      case _TankerSection.tankers:
+        return {
+          'title': 'Fleet Control',
+          'subtitle':
+              'Register fuel tankers, check ownership mix, and keep vehicle readiness visible.',
+        };
+      case _TankerSection.trips:
+        return {
+          'title': 'Trip Planning',
+          'subtitle':
+              'Create supply and delivery runs while keeping tanker, supplier, and fuel context aligned.',
+        };
+      case _TankerSection.tripOps:
+        return {
+          'title': 'Trip Operations',
+          'subtitle':
+              'Post deliveries, record trip expenses, and close runs with a clear profitability view.',
+        };
+    }
+  }
+
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
       width: double.infinity,
@@ -574,12 +598,98 @@ class _TankerPageState extends State<TankerPage> {
     if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
       _section = availableSections.first;
     }
+    final meta = _sectionMeta();
+    final activeTrips = _trips.where((trip) {
+      return trip['status']?.toString() != 'completed';
+    }).length;
+    final totalQuantity = _trips.fold<double>(
+      0,
+      (sum, trip) => sum + ((trip['total_quantity'] as num?)?.toDouble() ?? 0),
+    );
+    final totalProfit = _trips.fold<double>(
+      0,
+      (sum, trip) => sum + ((trip['net_profit'] as num?)?.toDouble() ?? 0),
+    );
 
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Tanker Operations',
+            title: meta['title']!,
+            subtitle: meta['subtitle']!,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                DashboardMetricTile(
+                  label: 'Tankers',
+                  value: '${_tankers.length}',
+                  caption: 'Fleet records',
+                  icon: Icons.local_shipping_outlined,
+                  tint: Theme.of(context).colorScheme.primaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Trips',
+                  value: '${_trips.length}',
+                  caption: '$activeTrips active',
+                  icon: Icons.route_outlined,
+                  tint: Theme.of(context).colorScheme.secondaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Volume',
+                  value: _formatNumber(totalQuantity),
+                  caption: 'Across visible trips',
+                  icon: Icons.water_drop_outlined,
+                  tint: Theme.of(context).colorScheme.tertiaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Net Profit',
+                  value: _formatNumber(totalProfit),
+                  caption: 'Visible trip set',
+                  icon: Icons.trending_up_outlined,
+                  tint: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: 'Operations Context',
+            subtitle:
+                'Keep fleet setup, trip creation, and field posting tied to the selected station and current tanker permissions.',
+            icon: Icons.alt_route_outlined,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _buildInfoChip(
+                  context,
+                  icon: Icons.store_outlined,
+                  label: _selectedStationId == null
+                      ? 'No station selected'
+                      : 'Station #$_selectedStationId',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.view_agenda_outlined,
+                  label: meta['title']!,
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: _canManageTankers
+                      ? Icons.edit_note_outlined
+                      : Icons.visibility_outlined,
+                  label: _canManageTankers
+                      ? 'Managed workspace'
+                      : 'Review-first',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -1371,5 +1481,23 @@ class _TankerPageState extends State<TankerPage> {
   String _formatNumber(dynamic value) {
     if (value is num) return value.toStringAsFixed(2);
     return '0.00';
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
   }
 }

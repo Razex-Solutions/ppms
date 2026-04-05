@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 class ExpensesPage extends StatefulWidget {
   const ExpensesPage({super.key, required this.sessionController});
@@ -187,6 +188,21 @@ class _ExpensesPageState extends State<ExpensesPage> {
     hideWhenModulesOff: true,
   );
 
+  Map<String, String> _workspaceMeta() {
+    if (_canCreateExpenses) {
+      return {
+        'title': 'Expense Control',
+        'subtitle':
+            'Record station expenses, watch approval movement, and keep operating spend visible.',
+      };
+    }
+    return {
+      'title': 'Expense Review',
+      'subtitle':
+          'Inspect station expense activity and approval outcomes without changing records.',
+    };
+  }
+
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
       width: double.infinity,
@@ -220,12 +236,98 @@ class _ExpensesPageState extends State<ExpensesPage> {
 
     final canCreateExpenses = _canCreateExpenses;
     final canReadExpenses = _canReadExpenses;
+    final meta = _workspaceMeta();
+    final totalAmount = _expenses.fold<double>(
+      0,
+      (sum, expense) => sum + ((expense['amount'] as num?)?.toDouble() ?? 0),
+    );
+    final pendingCount = _expenses.where((expense) {
+      return expense['status']?.toString() == 'pending';
+    }).length;
+    final approvedCount = _expenses.where((expense) {
+      return expense['status']?.toString() == 'approved';
+    }).length;
+    final rejectedCount = _expenses.where((expense) {
+      return expense['status']?.toString() == 'rejected';
+    }).length;
 
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Expense Control',
+            title: meta['title']!,
+            subtitle: meta['subtitle']!,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                DashboardMetricTile(
+                  label: 'Visible Expenses',
+                  value: '${_expenses.length}',
+                  caption: 'Current filter scope',
+                  icon: Icons.receipt_long_outlined,
+                  tint: Theme.of(context).colorScheme.primaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Pending',
+                  value: '$pendingCount',
+                  caption: 'Awaiting decision',
+                  icon: Icons.pending_actions_outlined,
+                  tint: Theme.of(context).colorScheme.tertiaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Approved',
+                  value: '$approvedCount',
+                  caption: 'Cleared items',
+                  icon: Icons.verified_outlined,
+                  tint: Theme.of(context).colorScheme.secondaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Value',
+                  value: _formatNumber(totalAmount),
+                  caption: '$rejectedCount rejected',
+                  icon: Icons.account_balance_wallet_outlined,
+                  tint: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: 'Workspace Focus',
+            subtitle:
+                'Keep expense capture and review in one place while staying aligned with the selected station and filter.',
+            icon: Icons.rule_folder_outlined,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _buildInfoChip(
+                  context,
+                  icon: Icons.store_outlined,
+                  label: _selectedStationId == null
+                      ? 'No station selected'
+                      : 'Station #$_selectedStationId',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.filter_alt_outlined,
+                  label: 'Filter: $_statusFilter',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: canCreateExpenses
+                      ? Icons.edit_note_outlined
+                      : Icons.visibility_outlined,
+                  label: canCreateExpenses ? 'Create + review' : 'Review only',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -464,5 +566,23 @@ class _ExpensesPageState extends State<ExpensesPage> {
   String _formatDateTime(dynamic value) {
     if (value is! String || value.isEmpty) return 'Unknown';
     return value.replaceFirst('T', ' ').substring(0, 16);
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
   }
 }

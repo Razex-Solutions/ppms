@@ -142,24 +142,24 @@ class _StationSetupPageState extends State<StationSetupPage> {
     try {
       final organizations = _dedupeById(
         List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchOrganizations()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
+          (await widget.sessionController.fetchOrganizations()).map(
+            (item) => Map<String, dynamic>.from(item as Map),
+          ),
         ),
-      ),
       );
       final allStations = _dedupeById(
         List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchStations()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
+          (await widget.sessionController.fetchStations()).map(
+            (item) => Map<String, dynamic>.from(item as Map),
+          ),
         ),
-      ),
       );
       final fuelTypes = _dedupeById(
         List<Map<String, dynamic>>.from(
-        (await widget.sessionController.fetchFuelTypes()).map(
-          (item) => Map<String, dynamic>.from(item as Map),
+          (await widget.sessionController.fetchFuelTypes()).map(
+            (item) => Map<String, dynamic>.from(item as Map),
+          ),
         ),
-      ),
       );
 
       final organizationId =
@@ -169,10 +169,10 @@ class _StationSetupPageState extends State<StationSetupPage> {
           ? allStations
           : _dedupeById(
               allStations
-                .where(
-                  (station) => station['organization_id'] == organizationId,
-                )
-                .toList(),
+                  .where(
+                    (station) => station['organization_id'] == organizationId,
+                  )
+                  .toList(),
             );
       final stationId =
           _validSelection(_selectedStationId, stations) ??
@@ -180,25 +180,31 @@ class _StationSetupPageState extends State<StationSetupPage> {
 
       final tanks = stationId == null
           ? const <Map<String, dynamic>>[]
-          : _dedupeById(List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchTanks(
-                stationId: stationId,
-              )).map((item) => Map<String, dynamic>.from(item as Map)),
-            ));
+          : _dedupeById(
+              List<Map<String, dynamic>>.from(
+                (await widget.sessionController.fetchTanks(
+                  stationId: stationId,
+                )).map((item) => Map<String, dynamic>.from(item as Map)),
+              ),
+            );
       final dispensers = stationId == null
           ? const <Map<String, dynamic>>[]
-          : _dedupeById(List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchDispensers(
-                stationId: stationId,
-              )).map((item) => Map<String, dynamic>.from(item as Map)),
-            ));
+          : _dedupeById(
+              List<Map<String, dynamic>>.from(
+                (await widget.sessionController.fetchDispensers(
+                  stationId: stationId,
+                )).map((item) => Map<String, dynamic>.from(item as Map)),
+              ),
+            );
       final nozzles = stationId == null
           ? const <Map<String, dynamic>>[]
-          : _dedupeById(List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchNozzles(
-                stationId: stationId,
-              )).map((item) => Map<String, dynamic>.from(item as Map)),
-            ));
+          : _dedupeById(
+              List<Map<String, dynamic>>.from(
+                (await widget.sessionController.fetchNozzles(
+                  stationId: stationId,
+                )).map((item) => Map<String, dynamic>.from(item as Map)),
+              ),
+            );
       final selectedStation = stations.cast<Map<String, dynamic>?>().firstWhere(
         (station) => station?['id'] == stationId,
         orElse: () => null,
@@ -608,7 +614,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
         children: [
           DashboardHeroCard(
             eyebrow: 'Station Setup',
-            title: _selectedStation?['display_name'] as String? ??
+            title:
+                _selectedStation?['display_name'] as String? ??
                 _selectedStation?['name'] as String? ??
                 'Station Setup',
             subtitle:
@@ -770,7 +777,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
                   const SizedBox(height: 20),
                   DashboardSectionCard(
                     icon: switch (_section) {
-                      _StationSetupSection.stationProfile => Icons.store_outlined,
+                      _StationSetupSection.stationProfile =>
+                        Icons.store_outlined,
                       _StationSetupSection.fuelTypes => Icons.opacity_outlined,
                       _StationSetupSection.inventory =>
                         Icons.local_gas_station_outlined,
@@ -948,7 +956,10 @@ class _StationSetupPageState extends State<StationSetupPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSummaryLine('Organization', '${organization?['name'] ?? '-'}'),
+            _buildSummaryLine(
+              'Organization',
+              '${organization?['name'] ?? '-'}',
+            ),
             _buildSummaryLine('Brand', '${organization?['brand_name'] ?? '-'}'),
             _buildSummaryLine('Station', '${_selectedStation?['name'] ?? '-'}'),
             _buildSummaryLine('Code', '${_selectedStation?['code'] ?? '-'}'),
@@ -1111,6 +1122,54 @@ class _StationSetupPageState extends State<StationSetupPage> {
             ),
           const SizedBox(height: 16),
         ],
+        DashboardSectionCard(
+          title: 'Forecourt Builder',
+          subtitle:
+              'Think of setup as a flow: fuel type feeds the tank, the tank feeds the nozzle, and the nozzle sits on a dispenser. Build and review the forecourt in that order.',
+          icon: Icons.account_tree_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _buildFlowStepChip(
+                    context,
+                    icon: Icons.opacity_outlined,
+                    label: _selectedNozzleFuelTypeId == null
+                        ? 'Pick fuel type'
+                        : 'Fuel: ${_lookupName(_fuelTypes, _selectedNozzleFuelTypeId)}',
+                  ),
+                  _buildFlowStepChip(
+                    context,
+                    icon: Icons.inventory_2_outlined,
+                    label: _selectedNozzleTankId == null
+                        ? 'Pick tank'
+                        : 'Tank: ${_lookupName(_tanks, _selectedNozzleTankId)}',
+                  ),
+                  _buildFlowStepChip(
+                    context,
+                    icon: Icons.ev_station_outlined,
+                    label: _selectedNozzleDispenserId == null
+                        ? 'Pick dispenser'
+                        : 'Dispenser: ${_lookupName(_dispensers, _selectedNozzleDispenserId)}',
+                  ),
+                  _buildFlowStepChip(
+                    context,
+                    icon: Icons.local_gas_station_outlined,
+                    label: _nozzleNameController.text.trim().isEmpty
+                        ? 'Name nozzle'
+                        : 'Nozzle: ${_nozzleNameController.text.trim()}',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildForecourtBoard(context),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         ResponsiveSplit(
           breakpoint: 1200,
           primary: Column(
@@ -1505,6 +1564,154 @@ class _StationSetupPageState extends State<StationSetupPage> {
       ),
     );
   }
+
+  Widget _buildFlowStepChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
+  }
+
+  Widget _buildForecourtBoard(BuildContext context) {
+    return ResponsiveSplit(
+      breakpoint: 1100,
+      primary: _buildBoardColumn(
+        context,
+        title: 'Tank Side',
+        icon: Icons.inventory_2_outlined,
+        emptyLabel: 'Add tanks to start building storage points.',
+        children: [
+          for (final tank in _tanks.take(4))
+            _buildBoardItem(
+              context,
+              title: tank['name'] as String? ?? 'Tank',
+              subtitle:
+                  '${tank['code'] ?? '-'} • ${_lookupName(_fuelTypes, tank['fuel_type_id'])}',
+              selected: tank['id'] == _selectedNozzleTankId,
+            ),
+        ],
+      ),
+      secondary: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBoardColumn(
+            context,
+            title: 'Dispenser Side',
+            icon: Icons.ev_station_outlined,
+            emptyLabel: 'Add dispensers to shape the forecourt face.',
+            children: [
+              for (final dispenser in _dispensers.take(4))
+                _buildBoardItem(
+                  context,
+                  title: dispenser['name'] as String? ?? 'Dispenser',
+                  subtitle: dispenser['code'] as String? ?? '-',
+                  selected: dispenser['id'] == _selectedNozzleDispenserId,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildBoardColumn(
+            context,
+            title: 'Mapped Nozzles',
+            icon: Icons.local_gas_station_outlined,
+            emptyLabel:
+                'Create nozzles to connect the dispenser face to the right tank and fuel.',
+            children: [
+              for (final nozzle in _nozzles.take(5))
+                _buildBoardItem(
+                  context,
+                  title: nozzle['name'] as String? ?? 'Nozzle',
+                  subtitle:
+                      '${_lookupName(_dispensers, nozzle['dispenser_id'])} -> ${_lookupName(_tanks, nozzle['tank_id'])}',
+                  footnote: _lookupName(_fuelTypes, nozzle['fuel_type_id']),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBoardColumn(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required String emptyLabel,
+    required List<Widget> children,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: 10),
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (children.isEmpty) Text(emptyLabel) else ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardItem(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    String? footnote,
+    bool selected = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: selected
+            ? colorScheme.primaryContainer.withValues(alpha: 0.7)
+            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.35)
+              : colorScheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(subtitle),
+          if (footnote != null) ...[
+            const SizedBox(height: 4),
+            Text(footnote, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _MappingRelationshipTile extends StatelessWidget {
@@ -1526,9 +1733,9 @@ class _MappingRelationshipTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.28,
-        ),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -1551,14 +1758,8 @@ class _MappingRelationshipTile extends StatelessWidget {
                 label: dispenserName,
               ),
               const Text('->'),
-              _MappingChip(
-                icon: Icons.inventory_2_outlined,
-                label: tankName,
-              ),
-              _MappingChip(
-                icon: Icons.opacity_outlined,
-                label: fuelTypeName,
-              ),
+              _MappingChip(icon: Icons.inventory_2_outlined, label: tankName),
+              _MappingChip(icon: Icons.opacity_outlined, label: fuelTypeName),
             ],
           ),
         ],
@@ -1583,11 +1784,7 @@ class _MappingChip extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
+        children: [Icon(icon, size: 16), const SizedBox(width: 6), Text(label)],
       ),
     );
   }
