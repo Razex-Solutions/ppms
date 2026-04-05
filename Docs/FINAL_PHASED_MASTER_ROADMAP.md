@@ -414,13 +414,16 @@ Make daily fuel-station operations correct and fact-based.
 
 - shift templates
 - daily/hourly/custom shift model
+- 24 hour shift support
 - shift creation rules
+- automatic carry forward
 - opening cash
 - cash submission
 - multiple deposit support
 - meter readings
 - meter segments
 - meter adjustments
+- meter reverse permission rules
 - meter-based fuel sales
 - tank-volume calculation
 - internal fuel usage
@@ -674,6 +677,8 @@ Finish dynamic visibility, package logic, and role hierarchy.
 - organization subscriptions
 - dynamic role and module visibility
 - dip chart/calibration permission rules
+- dip chart calibration permission
+- meter reverse permission rules
 
 ### Required Database Work
 
