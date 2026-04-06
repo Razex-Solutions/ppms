@@ -919,6 +919,24 @@ class _AdminPageState extends State<AdminPage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  Map<String, dynamic>? get _selectedOrganization {
+    for (final organization in _organizations) {
+      if (organization['id'] == _selectedOrganizationId) {
+        return organization;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? get _selectedStation {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        return station;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1106,6 +1124,8 @@ class _AdminPageState extends State<AdminPage> {
                       );
                     },
                   ),
+                  const SizedBox(height: 20),
+                  _buildWorkspaceReview(context),
                   const SizedBox(height: 20),
                   _buildSection(context),
                   if (_errorMessage != null || _feedbackMessage != null)
@@ -2225,6 +2245,100 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Widget _buildWorkspaceReview(BuildContext context) {
+    final organization = _selectedOrganization;
+    final station = _selectedStation;
+    final subscription = _organizationSubscription;
+    final planName = _lookupName(_subscriptionPlans, subscription?['plan_id']);
+    final sectionMeta = _sectionMeta(_section);
+    final nextAction = switch (_section) {
+      _AdminSection.users =>
+        'Review station scope, role options, and existing users before creating or updating login access.',
+      _AdminSection.employeeProfiles =>
+        'Review staff profile counts and payroll state before creating profile-only or login-linked staff records.',
+      _AdminSection.stations =>
+        'Review organization context before creating or editing station structure.',
+      _AdminSection.roles =>
+        'Review protected roles and assigned user counts before changing role governance.',
+      _AdminSection.modules =>
+        'Review subscription, organization modules, and station module overrides before toggling capability visibility.',
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Admin Review',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(sectionMeta.$1, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.business_outlined,
+                label: organization == null
+                    ? 'No organization selected'
+                    : '${organization['name']} (${organization['code']})',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.store_outlined,
+                label: station == null
+                    ? 'No station selected'
+                    : '${station['name']} (${station['code']})',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.group_outlined,
+                label: 'Users ${_users.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.badge_outlined,
+                label: 'Staff ${_employeeProfiles.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.toggle_on_outlined,
+                label:
+                    'Modules ${_organizationModules.length}/${_stationModules.length}',
+              ),
+              if (_canReadSubscription)
+                _buildInfoChip(
+                  context,
+                  icon: Icons.workspace_premium_outlined,
+                  label: '$planName • ${subscription?['status'] ?? 'inactive'}',
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatNumber(dynamic value) {
     if (value is num) return value.toStringAsFixed(2);
     return '0.00';
@@ -2242,6 +2356,26 @@ class _AdminPageState extends State<AdminPage> {
 
   Widget _buildDetailWrap(List<Widget> children) {
     return Wrap(spacing: 12, runSpacing: 12, children: children);
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
   }
 
   Widget _buildReadOnlyNotice(String message) {
