@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 class PosPage extends StatefulWidget {
   const PosPage({super.key, required this.sessionController});
@@ -298,12 +299,103 @@ class _PosPageState extends State<PosPage> {
     }
 
     final selectedSale = _selectedSale;
+    final selectedStationLabel = _selectedStationLabel();
+    final cartItemCount = _cart.values.fold<double>(0, (sum, qty) => sum + qty);
+    final visibleSalesTotal = _sales.fold<double>(
+      0,
+      (sum, sale) => sum + ((sale['total_amount'] as num?)?.toDouble() ?? 0),
+    );
+    final reversedCount = _sales.where((sale) {
+      return sale['is_reversed'] == true;
+    }).length;
 
     return RefreshIndicator(
       onRefresh: _loadPosWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'POS',
+            title: 'POS Sales Review',
+            subtitle:
+                'Review the station, module, cart, and latest sale state before saving or reversing non-fuel station sales.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                DashboardMetricTile(
+                  label: 'Products',
+                  value: '${_products.length}',
+                  caption: _moduleLabel(_selectedModule),
+                  icon: Icons.inventory_2_outlined,
+                  tint: Theme.of(context).colorScheme.primaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Cart Qty',
+                  value: _formatNumber(cartItemCount),
+                  caption: 'Current ticket',
+                  icon: Icons.shopping_cart_outlined,
+                  tint: Theme.of(context).colorScheme.tertiaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Cart Total',
+                  value: _formatNumber(_cartTotal),
+                  caption: _paymentMethod,
+                  icon: Icons.point_of_sale_outlined,
+                  tint: Theme.of(context).colorScheme.secondaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Recent Value',
+                  value: _formatNumber(visibleSalesTotal),
+                  caption: '$reversedCount reversed',
+                  icon: Icons.receipt_long_outlined,
+                  tint: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: 'Workspace Focus',
+            subtitle:
+                'Keep the shop/service counter flow guided: confirm scope, build the cart, then review the latest sale before any reversal.',
+            icon: Icons.fact_check_outlined,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _buildInfoChip(
+                  context,
+                  icon: Icons.store_outlined,
+                  label: selectedStationLabel ?? 'No station selected',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.apps_outlined,
+                  label: 'Module: ${_moduleLabel(_selectedModule)}',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: cartItemCount > 0
+                      ? Icons.check_circle_outline
+                      : Icons.add_shopping_cart_outlined,
+                  label: cartItemCount > 0
+                      ? 'Next: save ticket'
+                      : 'Next: add products',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: selectedSale == null
+                      ? Icons.receipt_long_outlined
+                      : Icons.manage_search_outlined,
+                  label: selectedSale == null
+                      ? 'No sale selected'
+                      : 'Selected sale #${selectedSale['id']}',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -670,5 +762,32 @@ class _PosPageState extends State<PosPage> {
       return 'Unknown';
     }
     return value.replaceFirst('T', ' ').substring(0, 16);
+  }
+
+  String? _selectedStationLabel() {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        return '${station['name']} (${station['code']})';
+      }
+    }
+    return null;
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
   }
 }
