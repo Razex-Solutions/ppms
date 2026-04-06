@@ -71,7 +71,8 @@ Current phased execution status:
 - `Phase 2 - Operations Core`: complete locally
 - `Phase 3 - Finance, Ledgers, Payroll, Pricing`: complete locally
 - `Phase 4 - Tanker and Extended Operations`: complete locally
-- next sequence: `Phase 5 - Notifications, Documents, Reports, Profit`
+- `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
+- next sequence: `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
 
 Phase 1 completion now includes:
 - setup-foundation backend summary endpoints for organizations and stations
@@ -113,6 +114,15 @@ Phase 4 completion now includes:
 - manager-summary tanker workspace metrics for fleet mix, delivered fuel, leftovers, transfers, and purchase value
 - tanker guidance surfaced in station setup when tanker operations are enabled
 - targeted backend tanker/access/reporting coverage plus clean Flutter analyze/test validation
+
+Phase 5 completion now includes:
+- notification preferences, inbox summaries, delivery diagnostics, dead-letter visibility, retry flows, and process-due actions
+- financial document generation, PDF/download flows, dispatch history, retry flows, and process-due dispatch handling
+- filtered reports for daily closing, stock movement, balances, tanker profit/deliveries/expenses, and report export jobs
+- saved report definitions for reusable report views
+- filtered profit summary with station/organization scope and date filtering
+- report, document, notification, and dashboard flows now working as one connected communications/reporting layer
+- targeted backend reporting validation plus clean Flutter analyze/test validation
 
 ### Architecture Direction
 Current direction is:
@@ -881,11 +891,11 @@ Expected purpose:
 ## 16. Recommended Next Steps
 
 ### For product work
-1. execute `Phase 5 - Notifications, Documents, Reports, Profit`
-2. strengthen notification settings, templates, and delivery-log workflows
-3. expand report filters, dashboard summaries, and profit-oriented rollups on top of stable operational facts
-4. tighten document registry, attachments, and document dispatch flows
-5. prepare the next phase boundary review after notification/report behavior is stable
+1. execute `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
+2. centralize and tighten dynamic visibility across roles, scopes, and enabled modules
+3. align package/subscription/module rules with the actual app shell and dashboards
+4. remove remaining ghost visibility and role-overlap assumptions
+5. prepare the next phase boundary review after role/module behavior is stable
 
 ### For deployment later
 1. finalize local product behavior

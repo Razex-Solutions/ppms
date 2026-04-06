@@ -18,7 +18,7 @@ When returning to this project, use these files in this order:
 
 Start with:
 
-- `Phase 5 - Notifications, Documents, Reports, Profit`
+- `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
 
 from:
 
@@ -30,7 +30,8 @@ from:
 - `Phase 2 - Operations Core`: complete locally
 - `Phase 3 - Finance, Ledgers, Payroll, Pricing`: complete locally
 - `Phase 4 - Tanker and Extended Operations`: complete locally
-- next sequence: continue into `Phase 5 - Notifications, Documents, Reports, Profit`
+- `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
+- next sequence: continue into `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
 
 ## Important Decision Already Made
 
