@@ -27,6 +27,7 @@ from app.api.purchase import router as purchase_router
 from app.api.pos_product import router as pos_product_router
 from app.api.pos_sale import router as pos_sale_router
 from app.api.payroll import router as payroll_router
+from app.api.salary_adjustment import router as salary_adjustment_router
 from app.api.report_export import router as report_export_router
 from app.api.role import router as role_router
 from app.api.saas import router as saas_router
@@ -76,6 +77,7 @@ ROUTER_REGISTRY = [
     {"name": "pos_products", "router": pos_product_router, "protected": True},
     {"name": "pos_sales", "router": pos_sale_router, "protected": True},
     {"name": "payroll", "router": payroll_router, "protected": True},
+    {"name": "salary_adjustments", "router": salary_adjustment_router, "protected": True},
     {"name": "tankers", "router": tanker_router, "protected": True},
     {"name": "expenses", "router": expense_router, "protected": True},
     {"name": "accounting", "router": accounting_router, "protected": True},

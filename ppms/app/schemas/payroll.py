@@ -24,6 +24,9 @@ class PayrollLineResponse(BaseModel):
     payable_days: int
     monthly_salary: float
     gross_amount: float
+    attendance_deductions: float
+    adjustment_additions: float
+    adjustment_deductions: float
     deductions: float
     net_amount: float
 

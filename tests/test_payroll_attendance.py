@@ -94,6 +94,41 @@ def test_payroll_run_generation_and_finalize(client):
         )
         assert response.status_code == 200, response.text
 
+    bonus_adjustment = test_client.post(
+        "/salary-adjustments/",
+        headers=accountant_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "user_id": operator_id,
+            "effective_date": "2026-04-01",
+            "impact": "addition",
+            "amount": 50,
+            "reason": "Night shift bonus",
+        },
+    )
+    assert bonus_adjustment.status_code == 200, bonus_adjustment.text
+
+    deduction_adjustment = test_client.post(
+        "/salary-adjustments/",
+        headers=accountant_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "user_id": accountant_id,
+            "effective_date": "2026-04-01",
+            "impact": "deduction",
+            "amount": 25,
+            "reason": "Advance recovery",
+        },
+    )
+    assert deduction_adjustment.status_code == 200, deduction_adjustment.text
+
+    salary_adjustments = test_client.get(
+        f"/salary-adjustments/?station_id={data['station_a_id']}",
+        headers=accountant_headers,
+    )
+    assert salary_adjustments.status_code == 200, salary_adjustments.text
+    assert len(salary_adjustments.json()) >= 2
+
     payroll_run = test_client.post(
         "/payroll/runs",
         headers=accountant_headers,
@@ -113,7 +148,11 @@ def test_payroll_run_generation_and_finalize(client):
     assert payroll_lines.status_code == 200, payroll_lines.text
     line_by_user = {line["user_id"]: line for line in payroll_lines.json()}
     assert line_by_user[operator_id]["gross_amount"] == 100.0
+    assert line_by_user[operator_id]["adjustment_additions"] == 50.0
+    assert line_by_user[operator_id]["net_amount"] == 150.0
     assert line_by_user[accountant_id]["gross_amount"] == 100.0
+    assert line_by_user[accountant_id]["adjustment_deductions"] == 25.0
+    assert line_by_user[accountant_id]["net_amount"] == 75.0
 
     finalize_response = test_client.post(
         f"/payroll/runs/{payroll_run_id}/finalize",

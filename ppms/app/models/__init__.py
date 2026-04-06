@@ -17,6 +17,7 @@ from app.models.attendance_record import AttendanceRecord
 from app.models.employee_profile import EmployeeProfile
 from app.models.payroll_run import PayrollRun
 from app.models.payroll_line import PayrollLine
+from app.models.salary_adjustment import SalaryAdjustment
 from app.models.user import User
 from app.models.station import Station
 from app.models.fuel_type import FuelType

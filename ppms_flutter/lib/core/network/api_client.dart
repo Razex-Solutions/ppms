@@ -378,6 +378,39 @@ class ApiClient {
     );
   }
 
+  Future<List<dynamic>> getSalaryAdjustments(
+    String accessToken, {
+    int? stationId,
+    int? userId,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (userId != null) {
+      params['user_id'] = '$userId';
+    }
+    return _sendList(
+      'GET',
+      '/salary-adjustments/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createSalaryAdjustment(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/salary-adjustments/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<List<dynamic>> getStations(String accessToken) async {
     return _sendList('GET', '/stations/', accessToken: accessToken);
   }

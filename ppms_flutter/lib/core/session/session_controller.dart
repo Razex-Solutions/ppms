@@ -319,6 +319,28 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<dynamic>> fetchSalaryAdjustments({
+    int? stationId,
+    int? userId,
+    int limit = 50,
+  }) async {
+    return _apiClient.getSalaryAdjustments(
+      await _validAccessToken(),
+      stationId: stationId,
+      userId: userId,
+      limit: limit,
+    );
+  }
+
+  Future<Map<String, dynamic>> createSalaryAdjustment(
+    Map<String, dynamic> payload,
+  ) async {
+    return _apiClient.createSalaryAdjustment(
+      await _validAccessToken(),
+      payload: payload,
+    );
+  }
+
   Future<List<dynamic>> fetchStations() async {
     return _apiClient.getStations(await _validAccessToken());
   }

@@ -16,6 +16,9 @@ class PayrollLine(Base):
     payable_days = Column(Integer, nullable=False, default=0)
     monthly_salary = Column(Float, nullable=False, default=0.0)
     gross_amount = Column(Float, nullable=False, default=0.0)
+    attendance_deductions = Column(Float, nullable=False, default=0.0)
+    adjustment_additions = Column(Float, nullable=False, default=0.0)
+    adjustment_deductions = Column(Float, nullable=False, default=0.0)
     deductions = Column(Float, nullable=False, default=0.0)
     net_amount = Column(Float, nullable=False, default=0.0)
 

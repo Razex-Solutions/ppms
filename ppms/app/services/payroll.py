@@ -6,6 +6,7 @@ from app.core.time import utc_now
 from app.models.attendance_record import AttendanceRecord
 from app.models.payroll_line import PayrollLine
 from app.models.payroll_run import PayrollRun
+from app.models.salary_adjustment import SalaryAdjustment
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.payroll import PayrollRunCreate
@@ -28,6 +29,35 @@ def ensure_payroll_access(db: Session, station_id: int, current_user: User) -> S
 
 def _date_count(start_date, end_date) -> int:
     return (end_date - start_date).days + 1
+
+
+def _get_adjustment_totals(
+    db: Session,
+    *,
+    station_id: int,
+    user_id: int,
+    period_start,
+    period_end,
+) -> tuple[float, float]:
+    adjustments = (
+        db.query(SalaryAdjustment)
+        .filter(
+            SalaryAdjustment.station_id == station_id,
+            SalaryAdjustment.user_id == user_id,
+            SalaryAdjustment.effective_date >= period_start,
+            SalaryAdjustment.effective_date <= period_end,
+        )
+        .all()
+    )
+    additions = round(
+        sum(adjustment.amount for adjustment in adjustments if adjustment.impact == "addition"),
+        2,
+    )
+    deductions = round(
+        sum(adjustment.amount for adjustment in adjustments if adjustment.impact == "deduction"),
+        2,
+    )
+    return additions, deductions
 
 
 def create_payroll_run(db: Session, *, data: PayrollRunCreate, current_user: User) -> PayrollRun:
@@ -91,8 +121,20 @@ def create_payroll_run(db: Session, *, data: PayrollRunCreate, current_user: Use
         absent_days = max(period_days - payable_days, 0)
         monthly_salary = round(user.monthly_salary or 0.0, 2)
         gross_amount = round((monthly_salary / 30.0) * (present_days + leave_days + (half_days * 0.5)), 2)
-        deduction_amount = round((monthly_salary / 30.0) * max(absent_days - leave_days, 0), 2) if monthly_salary else 0.0
-        net_amount = max(round(gross_amount - deduction_amount, 2), 0.0)
+        attendance_deduction_amount = (
+            round((monthly_salary / 30.0) * max(absent_days - leave_days, 0), 2)
+            if monthly_salary
+            else 0.0
+        )
+        adjustment_additions, adjustment_deductions = _get_adjustment_totals(
+            db,
+            station_id=data.station_id,
+            user_id=user.id,
+            period_start=data.period_start,
+            period_end=data.period_end,
+        )
+        deduction_amount = round(attendance_deduction_amount + adjustment_deductions, 2)
+        net_amount = max(round(gross_amount + adjustment_additions - deduction_amount, 2), 0.0)
 
         line = PayrollLine(
             payroll_run_id=payroll_run.id,
@@ -103,6 +145,9 @@ def create_payroll_run(db: Session, *, data: PayrollRunCreate, current_user: Use
             payable_days=payable_days,
             monthly_salary=monthly_salary,
             gross_amount=gross_amount,
+            attendance_deductions=attendance_deduction_amount,
+            adjustment_additions=adjustment_additions,
+            adjustment_deductions=adjustment_deductions,
             deductions=deduction_amount,
             net_amount=net_amount,
         )
