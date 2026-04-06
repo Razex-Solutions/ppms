@@ -292,6 +292,43 @@ class _StationSetupPageState extends State<StationSetupPage> {
   Map<String, dynamic>? get _invoiceIdentity =>
       _stationSetupFoundation?['invoice_identity'] as Map<String, dynamic>?;
 
+  int get _setupChecklistComplete {
+    var score = 0;
+    if (_selectedStation != null) score += 1;
+    if (_fuelTypes.isNotEmpty) score += 1;
+    if (_tanks.isNotEmpty) score += 1;
+    if (_dispensers.isNotEmpty) score += 1;
+    if (_nozzles.isNotEmpty) score += 1;
+    if ((_invoiceProfile?['business_name'] as String? ?? '')
+        .trim()
+        .isNotEmpty) {
+      score += 1;
+    }
+    return score;
+  }
+
+  String get _recommendedNextSetupAction {
+    if (_selectedStation == null) {
+      return 'Complete onboarding so a station exists.';
+    }
+    if (_fuelTypes.isEmpty) {
+      return 'Add the fuel types this station will actually sell.';
+    }
+    if (_tanks.isEmpty) {
+      return 'Create tanks next so storage is defined before forecourt mapping.';
+    }
+    if (_dispensers.isEmpty) {
+      return 'Create dispensers to represent the forecourt face.';
+    }
+    if (_nozzles.isEmpty) {
+      return 'Map nozzles to tanks and fuel types.';
+    }
+    if ((_invoiceProfile?['business_name'] as String? ?? '').trim().isEmpty) {
+      return 'Finish invoice basics so receipts and documents resolve correctly.';
+    }
+    return 'Phase 1 setup basics are in place for this station.';
+  }
+
   Future<void> _changeOrganization(int? organizationId) async {
     if (organizationId == null) return;
     setState(() {
@@ -803,6 +840,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     child: const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 20),
+                  _buildChecklistPanel(context),
+                  const SizedBox(height: 20),
                   if (_selectedStation == null)
                     const Text(
                       'No station found for this organization yet. Complete onboarding first.',
@@ -999,6 +1038,60 @@ class _StationSetupPageState extends State<StationSetupPage> {
             _buildStepHint('2', 'Define fuel types you will actually sell'),
             _buildStepHint('3', 'Map tanks, dispensers, and nozzles'),
             _buildStepHint('4', 'Save invoice identity and document basics'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChecklistPanel(BuildContext context) {
+    final total = 6;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Phase 1 Checklist',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(_recommendedNextSetupAction),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: _setupChecklistComplete / total,
+              minHeight: 10,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Completed $_setupChecklistComplete of $total setup checkpoints',
+            ),
+            const SizedBox(height: 14),
+            _ChecklistLine(
+              label: 'Station selected',
+              complete: _selectedStation != null,
+            ),
+            _ChecklistLine(
+              label: 'Fuel types ready',
+              complete: _fuelTypes.isNotEmpty,
+            ),
+            _ChecklistLine(label: 'Tanks created', complete: _tanks.isNotEmpty),
+            _ChecklistLine(
+              label: 'Dispensers created',
+              complete: _dispensers.isNotEmpty,
+            ),
+            _ChecklistLine(
+              label: 'Nozzles mapped',
+              complete: _nozzles.isNotEmpty,
+            ),
+            _ChecklistLine(
+              label: 'Invoice basics saved',
+              complete: (_invoiceProfile?['business_name'] as String? ?? '')
+                  .trim()
+                  .isNotEmpty,
+            ),
           ],
         ),
       ),
@@ -1908,6 +2001,34 @@ class _SetupBrandAvatar extends StatelessWidget {
       child: Text(
         initials.isEmpty ? 'BR' : initials,
         style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _ChecklistLine extends StatelessWidget {
+  const _ChecklistLine({required this.label, required this.complete});
+
+  final String label;
+  final bool complete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(
+            complete
+                ? Icons.check_circle_outline
+                : Icons.radio_button_unchecked,
+            size: 18,
+            color: complete ? colorScheme.primary : colorScheme.outline,
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label)),
+        ],
       ),
     );
   }

@@ -346,6 +346,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
   String get _selectedBrandName =>
       _selectedBrandData?['name'] as String? ?? 'Custom';
 
+  int get _resolvedHeadOfficeCount =>
+      _stationDrafts.where((draft) => draft.isHeadOffice).length;
+
+  List<_ResolvedStationPreview> get _stationPreviews =>
+      List.generate(_stationDrafts.length, (index) {
+        final draft = _stationDrafts[index];
+        return _ResolvedStationPreview(
+          title: _resolvedStationName(draft).isEmpty
+              ? 'Station ${index + 1}'
+              : _resolvedStationName(draft),
+          code: _resolvedStationCode(draft),
+          city: _emptyToNull(draft.cityController.text),
+          usesOrganizationBranding: draft.useOrganizationBranding,
+          isHeadOffice: draft.isHeadOffice,
+        );
+      });
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -552,6 +569,22 @@ class _OnboardingPageState extends State<OnboardingPage> {
             inheritedStationName: _organizationNameController.text.trim(),
             inheritedStationCode: _organizationCodeController.text.trim(),
           ),
+        const SizedBox(height: 24),
+        _OnboardingReviewCard(
+          organizationName: _organizationNameController.text.trim(),
+          organizationCode: _organizationCodeController.text.trim(),
+          brandName: _selectedBrandIsCustom
+              ? (_organizationNameController.text.trim().isEmpty
+                    ? 'Custom'
+                    : _organizationNameController.text.trim())
+              : _selectedBrandName,
+          stationCount: _stationCount,
+          headOfficeCount: _resolvedHeadOfficeCount,
+          createHeadOfficeAccount: _createHeadOfficeAccount,
+          singleStationInherited:
+              _isSingleStationFlow && _singleStationUsesOrganizationDetails,
+          stations: _stationPreviews,
+        ),
         const SizedBox(height: 24),
         Text(
           'Initial Head Office Login',
@@ -1011,6 +1044,129 @@ class _BrandAvatar extends StatelessWidget {
       child: Text(
         initials.isEmpty ? 'BR' : initials,
         style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _ResolvedStationPreview {
+  const _ResolvedStationPreview({
+    required this.title,
+    required this.code,
+    required this.city,
+    required this.usesOrganizationBranding,
+    required this.isHeadOffice,
+  });
+
+  final String title;
+  final String code;
+  final String? city;
+  final bool usesOrganizationBranding;
+  final bool isHeadOffice;
+}
+
+class _OnboardingReviewCard extends StatelessWidget {
+  const _OnboardingReviewCard({
+    required this.organizationName,
+    required this.organizationCode,
+    required this.brandName,
+    required this.stationCount,
+    required this.headOfficeCount,
+    required this.createHeadOfficeAccount,
+    required this.singleStationInherited,
+    required this.stations,
+  });
+
+  final String organizationName;
+  final String organizationCode;
+  final String brandName;
+  final int stationCount;
+  final int headOfficeCount;
+  final bool createHeadOfficeAccount;
+  final bool singleStationInherited;
+  final List<_ResolvedStationPreview> stations;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Review Before Create',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 10),
+            _reviewLine(
+              'Organization',
+              organizationName.isEmpty ? 'Not entered yet' : organizationName,
+            ),
+            _reviewLine(
+              'Code',
+              organizationCode.isEmpty ? 'Not entered yet' : organizationCode,
+            ),
+            _reviewLine('Brand', brandName),
+            _reviewLine('Stations', '$stationCount'),
+            _reviewLine('Head office stations', '$headOfficeCount'),
+            _reviewLine(
+              'First login',
+              createHeadOfficeAccount ? 'Will be created' : 'Skipped',
+            ),
+            if (singleStationInherited)
+              _reviewLine(
+                'Single-station mode',
+                'Station will inherit organization name/code',
+              ),
+            const SizedBox(height: 12),
+            Text(
+              'Resolved station preview',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            for (final station in stations)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  station.isHeadOffice
+                      ? Icons.apartment_outlined
+                      : Icons.store_outlined,
+                ),
+                title: Text(station.title),
+                subtitle: Text(
+                  [
+                    if (station.code.isNotEmpty) station.code,
+                    if (station.city != null && station.city!.isNotEmpty)
+                      station.city!,
+                    station.usesOrganizationBranding
+                        ? 'Org branding'
+                        : 'Custom branding',
+                  ].join(' • '),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _reviewLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
       ),
     );
   }
