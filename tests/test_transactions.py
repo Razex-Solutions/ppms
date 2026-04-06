@@ -332,6 +332,40 @@ def test_customer_and_supplier_ledger_summaries_reflect_transactions(client):
     assert supplier_ledger.json()["ledger"][-1]["balance"] == 60
 
 
+def test_fuel_price_history_is_station_scoped_and_queryable(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    manager_headers = login(test_client, "manager", "manager123")
+    operator_headers = login(test_client, "operator", "operator123")
+    foreign_headers = login(test_client, "foreignmanager", "foreign123")
+
+    create_response = test_client.post(
+        f"/fuel-types/{data['fuel_type_id']}/price-history",
+        headers=manager_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "price": 282.5,
+            "reason": "Morning retail update",
+        },
+    )
+    assert create_response.status_code == 200, create_response.text
+    assert create_response.json()["price"] == 282.5
+
+    list_response = test_client.get(
+        f"/fuel-types/{data['fuel_type_id']}/price-history?station_id={data['station_a_id']}",
+        headers=operator_headers,
+    )
+    assert list_response.status_code == 200, list_response.text
+    assert len(list_response.json()) == 1
+    assert list_response.json()[0]["reason"] == "Morning retail update"
+
+    forbidden_response = test_client.get(
+        f"/fuel-types/{data['fuel_type_id']}/price-history?station_id={data['station_a_id']}",
+        headers=foreign_headers,
+    )
+    assert forbidden_response.status_code == 403
+
+
 def test_purchase_reverse_updates_payables_dashboard(client):
     test_client, session_local = client
     data = seed_base_data(session_local)

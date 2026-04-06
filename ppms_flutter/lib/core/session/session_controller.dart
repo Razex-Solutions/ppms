@@ -1070,6 +1070,30 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<dynamic>> fetchFuelPriceHistory({
+    required int fuelTypeId,
+    required int stationId,
+    int limit = 20,
+  }) async {
+    return _apiClient.getFuelPriceHistory(
+      await _validAccessToken(),
+      fuelTypeId: fuelTypeId,
+      stationId: stationId,
+      limit: limit,
+    );
+  }
+
+  Future<Map<String, dynamic>> createFuelPriceHistory({
+    required int fuelTypeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.createFuelPriceHistory(
+      await _validAccessToken(),
+      fuelTypeId: fuelTypeId,
+      payload: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> fetchInvoiceProfile({
     required int stationId,
   }) async {

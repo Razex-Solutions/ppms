@@ -1393,6 +1393,33 @@ class ApiClient {
     return _send('DELETE', '/fuel-types/$fuelTypeId', accessToken: accessToken);
   }
 
+  Future<List<dynamic>> getFuelPriceHistory(
+    String accessToken, {
+    required int fuelTypeId,
+    required int stationId,
+    int limit = 20,
+  }) async {
+    return _sendList(
+      'GET',
+      '/fuel-types/$fuelTypeId/price-history',
+      accessToken: accessToken,
+      queryParams: {'station_id': '$stationId', 'limit': '$limit'},
+    );
+  }
+
+  Future<Map<String, dynamic>> createFuelPriceHistory(
+    String accessToken, {
+    required int fuelTypeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/fuel-types/$fuelTypeId/price-history',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> getInvoiceProfile(
     String accessToken, {
     required int stationId,

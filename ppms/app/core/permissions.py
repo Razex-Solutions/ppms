@@ -162,6 +162,10 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "update": {"Admin"},
         "delete": {"Admin"},
     },
+    "fuel_pricing": {
+        "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
+        "update": {"Admin", "HeadOffice", "Manager"},
+    },
     "tanks": {
         "create": {"Admin", "Manager"},
         "update": {"Admin", "Manager"},

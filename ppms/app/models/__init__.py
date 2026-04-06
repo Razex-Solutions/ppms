@@ -21,6 +21,7 @@ from app.models.salary_adjustment import SalaryAdjustment
 from app.models.user import User
 from app.models.station import Station
 from app.models.fuel_type import FuelType
+from app.models.fuel_price_history import FuelPriceHistory
 from app.models.tank import Tank
 from app.models.dispenser import Dispenser
 from app.models.nozzle import Nozzle

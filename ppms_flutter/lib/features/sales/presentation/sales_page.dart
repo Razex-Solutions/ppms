@@ -18,6 +18,8 @@ class SalesPage extends StatefulWidget {
 
 class _SalesPageState extends State<SalesPage> {
   final _formKey = GlobalKey<FormState>();
+  final _priceReasonController = TextEditingController();
+  final _priceNotesController = TextEditingController();
   final _rateController = TextEditingController();
   final _closingMeterController = TextEditingController();
   final _shiftNameController = TextEditingController();
@@ -31,6 +33,7 @@ class _SalesPageState extends State<SalesPage> {
   List<Map<String, dynamic>> _nozzles = const [];
   List<Map<String, dynamic>> _customers = const [];
   List<Map<String, dynamic>> _fuelTypes = const [];
+  List<Map<String, dynamic>> _priceHistory = const [];
   List<Map<String, dynamic>> _recentSales = const [];
 
   int? _selectedStationId;
@@ -73,6 +76,8 @@ class _SalesPageState extends State<SalesPage> {
 
   @override
   void dispose() {
+    _priceReasonController.dispose();
+    _priceNotesController.dispose();
     _rateController.dispose();
     _closingMeterController.dispose();
     _shiftNameController.dispose();
@@ -147,6 +152,20 @@ class _SalesPageState extends State<SalesPage> {
       final selectedCustomerId = _saleType == 'credit'
           ? _validSelection(_selectedCustomerId, customers)
           : null;
+      final selectedNozzle = nozzles.cast<Map<String, dynamic>?>().firstWhere(
+        (item) => item?['id'] == selectedNozzleId,
+        orElse: () => null,
+      );
+      final selectedFuelTypeId = selectedNozzle?['fuel_type_id'] as int?;
+      final priceHistory =
+          !_canReadPricing || stationId == null || selectedFuelTypeId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelPriceHistory(
+                fuelTypeId: selectedFuelTypeId,
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
 
       setState(() {
         _stations = stations;
@@ -154,11 +173,13 @@ class _SalesPageState extends State<SalesPage> {
         _nozzles = nozzles;
         _customers = customers;
         _fuelTypes = fuelTypes;
+        _priceHistory = priceHistory;
         _recentSales = recentSales;
         _selectedNozzleId = selectedNozzleId;
         _selectedCustomerId = selectedCustomerId;
         _isLoading = false;
       });
+      _applyLatestPriceIfNeeded();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -187,6 +208,7 @@ class _SalesPageState extends State<SalesPage> {
         setState(() {
           _nozzles = const [];
           _customers = const [];
+          _priceHistory = const [];
           _recentSales = const [];
           _selectedNozzleId = null;
           _selectedCustomerId = null;
@@ -222,15 +244,30 @@ class _SalesPageState extends State<SalesPage> {
       final selectedCustomerId = _saleType == 'credit'
           ? _validSelection(_selectedCustomerId, customers)
           : null;
+      final selectedNozzle = nozzles.cast<Map<String, dynamic>?>().firstWhere(
+        (item) => item?['id'] == selectedNozzleId,
+        orElse: () => null,
+      );
+      final selectedFuelTypeId = selectedNozzle?['fuel_type_id'] as int?;
+      final priceHistory = !_canReadPricing || selectedFuelTypeId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchFuelPriceHistory(
+                fuelTypeId: selectedFuelTypeId,
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
 
       setState(() {
         _nozzles = nozzles;
         _customers = customers;
+        _priceHistory = priceHistory;
         _recentSales = recentSales;
         _selectedNozzleId = selectedNozzleId;
         _selectedCustomerId = selectedCustomerId;
         _isLoading = false;
       });
+      _applyLatestPriceIfNeeded();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -303,6 +340,110 @@ class _SalesPageState extends State<SalesPage> {
         _recentSales = recentSales;
         _feedbackMessage =
             'Sale #${createdSale['id']} saved: ${_formatNumber(createdSale['quantity'])}L for ${_formatNumber(createdSale['total_amount'])}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _changeNozzle(int? nozzleId) async {
+    setState(() {
+      _selectedNozzleId = nozzleId;
+    });
+    await _reloadPriceHistory();
+  }
+
+  Future<void> _reloadPriceHistory() async {
+    final selectedNozzle = _selectedNozzle;
+    final stationId = _selectedStationId;
+    if (!_canReadPricing || selectedNozzle == null || stationId == null) {
+      if (mounted) {
+        setState(() {
+          _priceHistory = const [];
+        });
+      }
+      return;
+    }
+    try {
+      final history = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchFuelPriceHistory(
+          fuelTypeId: selectedNozzle['fuel_type_id'] as int,
+          stationId: stationId,
+        )).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _priceHistory = history;
+      });
+      _applyLatestPriceIfNeeded();
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    }
+  }
+
+  Future<void> _recordPriceUpdate() async {
+    final selectedNozzle = _selectedNozzle;
+    final stationId = _selectedStationId;
+    if (selectedNozzle == null || stationId == null) {
+      setState(() {
+        _feedbackMessage =
+            'Select a station and nozzle before recording pricing.';
+      });
+      return;
+    }
+    final price = double.tryParse(_rateController.text.trim());
+    if (price == null || price <= 0) {
+      setState(() {
+        _feedbackMessage = 'Enter a valid positive rate first.';
+      });
+      return;
+    }
+    if (_priceReasonController.text.trim().isEmpty) {
+      setState(() {
+        _feedbackMessage = 'Enter the reason for the price change.';
+      });
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      final entry = await widget.sessionController.createFuelPriceHistory(
+        fuelTypeId: selectedNozzle['fuel_type_id'] as int,
+        payload: {
+          'station_id': stationId,
+          'price': price,
+          'reason': _priceReasonController.text.trim(),
+          'notes': _priceNotesController.text.trim().isEmpty
+              ? null
+              : _priceNotesController.text.trim(),
+        },
+      );
+      _priceReasonController.clear();
+      _priceNotesController.clear();
+      await _reloadPriceHistory();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _feedbackMessage =
+            'Price updated to ${_formatNumber(entry['price'])} for ${_fuelTypeName(selectedNozzle['fuel_type_id'] as int)}.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -530,12 +671,24 @@ class _SalesPageState extends State<SalesPage> {
   bool get _canCreateSales => _hasAction('fuel_sales', 'create');
   bool get _canReadSales =>
       _canCreateSales || _hasAction('fuel_sales', 'reverse');
+  bool get _canReadPricing => _hasAction('fuel_pricing', 'read');
+  bool get _canUpdatePricing => _hasAction('fuel_pricing', 'update');
   bool get _showSalesWorkspace => _capabilities.featureVisible(
     platformFeature: false,
     modules: const ['fuel_sales'],
     permissionModules: const ['fuel_sales'],
     hideWhenModulesOff: true,
   );
+
+  void _applyLatestPriceIfNeeded() {
+    if (_rateController.text.trim().isNotEmpty || _priceHistory.isEmpty) {
+      return;
+    }
+    final latestPrice = _priceHistory.first['price'];
+    if (latestPrice is num) {
+      _rateController.text = latestPrice.toStringAsFixed(2);
+    }
+  }
 
   Map<String, String> _workspaceMeta({
     required bool canCreateSales,
@@ -769,13 +922,7 @@ class _SalesPageState extends State<SalesPage> {
                               ),
                             ),
                         ],
-                        onChanged: canCreateSales
-                            ? (value) {
-                                setState(() {
-                                  _selectedNozzleId = value;
-                                });
-                              }
-                            : null,
+                        onChanged: canCreateSales ? _changeNozzle : null,
                         validator: (value) =>
                             value == null ? 'Select a nozzle' : null,
                       ),
@@ -792,6 +939,12 @@ class _SalesPageState extends State<SalesPage> {
                           'Fuel: ${_fuelTypeName(selectedNozzle['fuel_type_id'] as int)} • '
                           'Current meter: ${_formatNumber(selectedNozzle['meter_reading'])} • '
                           'Segment start: ${_formatNumber(selectedNozzle['current_segment_start_reading'])}',
+                        ),
+                      ],
+                      if (_priceHistory.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Current station price: ${_formatNumber(_priceHistory.first['price'])} | Effective ${_formatDateTime(_priceHistory.first['effective_at'])}',
                         ),
                       ],
                       const SizedBox(height: 12),
@@ -862,7 +1015,8 @@ class _SalesPageState extends State<SalesPage> {
                         enabled: canCreateSales,
                         decoration: const InputDecoration(
                           labelText: 'Rate Per Liter',
-                          helperText: 'Enter the selling rate for this sale.',
+                          helperText:
+                              'Uses the latest station price if one is available.',
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
@@ -907,6 +1061,38 @@ class _SalesPageState extends State<SalesPage> {
                           labelText: 'Shift Name (optional)',
                         ),
                       ),
+                      if (_canUpdatePricing && selectedNozzle != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Update Station Price',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _priceReasonController,
+                          enabled: !_isSubmitting,
+                          decoration: const InputDecoration(
+                            labelText: 'Price Change Reason',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _priceNotesController,
+                          enabled: !_isSubmitting,
+                          decoration: const InputDecoration(
+                            labelText: 'Pricing Notes',
+                          ),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.tonalIcon(
+                          onPressed: _isSubmitting ? null : _recordPriceUpdate,
+                          icon: const Icon(Icons.price_change_outlined),
+                          label: const Text(
+                            'Save Current Rate As Station Price',
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       if (_errorMessage != null)
                         Text(
@@ -1003,6 +1189,32 @@ class _SalesPageState extends State<SalesPage> {
                             ],
                           ),
                         ),
+                    if (_canReadPricing) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        'Recent Price History',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      if (_priceHistory.isEmpty)
+                        _buildEmptyState(
+                          context,
+                          'No station fuel price has been recorded yet.',
+                          'Managers can save the current rate as the active station price from the sales form.',
+                        )
+                      else
+                        for (final entry in _priceHistory.take(6))
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.timeline_outlined),
+                            title: Text(
+                              '${_formatNumber(entry['price'])} | ${entry['reason']}',
+                            ),
+                            subtitle: Text(
+                              '${_formatDateTime(entry['effective_at'])}${(entry['notes'] as String?)?.isNotEmpty == true ? ' | ${entry['notes']}' : ''}',
+                            ),
+                          ),
+                    ],
                   ],
                 ),
               ),
@@ -1018,6 +1230,13 @@ class _SalesPageState extends State<SalesPage> {
       return value.toStringAsFixed(2);
     }
     return '0.00';
+  }
+
+  String _formatDateTime(dynamic value) {
+    if (value is! String || value.isEmpty) {
+      return 'Unknown';
+    }
+    return value.replaceFirst('T', ' ').substring(0, 16);
   }
 
   Widget _buildHintBanner(BuildContext context, String message) {

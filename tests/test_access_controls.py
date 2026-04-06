@@ -232,6 +232,23 @@ def test_operator_cannot_read_ledgers(client):
     assert supplier_response.status_code == 403
 
 
+def test_operator_cannot_update_station_fuel_pricing(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    response = test_client.post(
+        f"/fuel-types/{data['fuel_type_id']}/price-history",
+        headers=operator_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "price": 281,
+            "reason": "Unauthorized change",
+        },
+    )
+    assert response.status_code == 403
+
+
 def test_operator_cannot_create_customer_or_tanker_master_data(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
