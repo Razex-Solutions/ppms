@@ -9,6 +9,8 @@ class SessionCapabilities {
 
   bool get isPlatformUser => _session.isPlatformUser;
   bool get isTenantUser => !isPlatformUser;
+  String get roleName => _session.roleName;
+  String get scopeLevel => _session.scopeLevel;
 
   List<String> permissionActions(String module) {
     final actions = _session.permissions[module];
@@ -104,5 +106,16 @@ class SessionCapabilities {
       }
     }
     return true;
+  }
+
+  bool hasRole(String expectedRole) => roleName == expectedRole;
+
+  bool hasAnyRole(Iterable<String> roleNames) {
+    for (final role in roleNames) {
+      if (roleName == role) {
+        return true;
+      }
+    }
+    return false;
   }
 }

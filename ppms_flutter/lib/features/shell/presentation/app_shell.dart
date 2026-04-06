@@ -367,16 +367,17 @@ class _AppShellState extends State<AppShell> {
           scopeLevel: widget.sessionController.scopeLevel,
         ),
       ),
-      if (capabilities.featureVisible(
-        platformFeature: false,
-        permissionModules: const [
-          'users',
-          'stations',
-          'roles',
-          'station_modules',
-          'employee_profiles',
-        ],
-      ))
+      if (capabilities.hasAnyRole(const ['HeadOffice', 'StationAdmin']) &&
+          capabilities.featureVisible(
+            platformFeature: false,
+            permissionModules: const [
+              'users',
+              'stations',
+              'roles',
+              'station_modules',
+              'employee_profiles',
+            ],
+          ))
         _ShellDestination(
           label: 'Admin',
           icon: Icons.admin_panel_settings_outlined,
@@ -459,10 +460,11 @@ class _AppShellState extends State<AppShell> {
           icon: Icons.inventory_outlined,
           page: InventoryPage(sessionController: widget.sessionController),
         ),
-      if (capabilities.featureVisible(
-        platformFeature: false,
-        permissionModules: const ['invoice_profiles', 'document_templates'],
-      ))
+      if (capabilities.hasRole('StationAdmin') &&
+          capabilities.featureVisible(
+            platformFeature: false,
+            permissionModules: const ['invoice_profiles', 'document_templates'],
+          ))
         _ShellDestination(
           label: 'Setup',
           icon: Icons.build_circle_outlined,
@@ -546,12 +548,13 @@ class _AppShellState extends State<AppShell> {
           icon: Icons.local_shipping_outlined,
           page: TankerPage(sessionController: widget.sessionController),
         ),
-      if (capabilities.featureVisible(
-        platformFeature: false,
-        modules: const ['expenses', 'purchases', 'customers'],
-        permissionModules: const ['expenses', 'purchases', 'customers'],
-        hideWhenModulesOff: true,
-      ))
+      if (capabilities.hasRole('HeadOffice') &&
+          capabilities.featureVisible(
+            platformFeature: false,
+            modules: const ['expenses', 'purchases', 'customers'],
+            permissionModules: const ['expenses', 'purchases', 'customers'],
+            hideWhenModulesOff: true,
+          ))
         _ShellDestination(
           label: 'Governance',
           icon: Icons.approval_outlined,
