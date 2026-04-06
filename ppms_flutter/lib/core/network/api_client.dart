@@ -601,6 +601,30 @@ class ApiClient {
     return _sendList('GET', '/organizations/', accessToken: accessToken);
   }
 
+  Future<List<dynamic>> getOrganizationModules(
+    String accessToken, {
+    required int organizationId,
+  }) async {
+    return _sendList(
+      'GET',
+      '/organization-modules/$organizationId',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateOrganizationModule(
+    String accessToken, {
+    required int organizationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/organization-modules/$organizationId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<List<dynamic>> getBrands(String accessToken) async {
     return _sendList('GET', '/brands/', accessToken: accessToken);
   }
@@ -661,6 +685,34 @@ class ApiClient {
 
   Future<Map<String, dynamic>> getPermissionCatalog(String accessToken) async {
     return _send('GET', '/roles/permission-catalog', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getSubscriptionPlans(String accessToken) async {
+    return _sendList('GET', '/saas/plans', accessToken: accessToken);
+  }
+
+  Future<Map<String, dynamic>> getOrganizationSubscription(
+    String accessToken, {
+    required int organizationId,
+  }) async {
+    return _send(
+      'GET',
+      '/saas/organizations/$organizationId/subscription',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateOrganizationSubscription(
+    String accessToken, {
+    required int organizationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/saas/organizations/$organizationId/subscription',
+      accessToken: accessToken,
+      body: payload,
+    );
   }
 
   Future<List<dynamic>> getUsers(String accessToken, {int? stationId}) async {

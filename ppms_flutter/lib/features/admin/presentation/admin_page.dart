@@ -47,7 +47,10 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> _roles = const [];
   List<Map<String, dynamic>> _users = const [];
   List<Map<String, dynamic>> _employeeProfiles = const [];
+  List<Map<String, dynamic>> _organizationModules = const [];
   List<Map<String, dynamic>> _stationModules = const [];
+  List<Map<String, dynamic>> _subscriptionPlans = const [];
+  Map<String, dynamic>? _organizationSubscription;
   Map<String, dynamic>? _permissionCatalog;
 
   int? _selectedStationId;
@@ -97,9 +100,24 @@ class _AdminPageState extends State<AdminPage> {
       _hasAction('roles', 'update') ||
       _hasAction('roles', 'delete');
   bool get _canReadModules =>
+      _hasAction('organization_modules', 'read') ||
+      _hasAction('organization_modules', 'update') ||
+      _hasAction('station_modules', 'read') ||
+      _hasAction('station_modules', 'update') ||
+      _hasAction('saas', 'read') ||
+      _hasAction('saas', 'manage');
+  bool get _canReadOrganizationModules =>
+      _hasAction('organization_modules', 'read') ||
+      _hasAction('organization_modules', 'update');
+  bool get _canManageOrganizationModules =>
+      _hasAction('organization_modules', 'update');
+  bool get _canReadStationModules =>
       _hasAction('station_modules', 'read') ||
       _hasAction('station_modules', 'update');
-  bool get _canManageModules => _hasAction('station_modules', 'update');
+  bool get _canManageStationModules => _hasAction('station_modules', 'update');
+  bool get _canReadSubscription =>
+      _hasAction('saas', 'read') || _hasAction('saas', 'manage');
+  bool get _canManageSubscription => _hasAction('saas', 'manage');
 
   @override
   void initState() {
@@ -142,7 +160,7 @@ class _AdminPageState extends State<AdminPage> {
           _canReadUsers ||
           _canReadEmployeeProfiles ||
           _canReadModules;
-      final shouldLoadOrganizations = _canReadStations;
+      final shouldLoadOrganizations = _canReadStations || _canReadModules;
       final shouldLoadRoles = _canReadRoles || _canManageUsers;
       final shouldLoadPermissionCatalog = _canReadRoles || _canManageUsers;
 
@@ -171,12 +189,35 @@ class _AdminPageState extends State<AdminPage> {
           ? await widget.sessionController.fetchPermissionCatalog()
           : null;
 
+      final preferredOrganizationId =
+          _selectedOrganizationId ??
+          widget.sessionController.currentUser?['organization_id'] as int?;
       final preferredStationId =
           widget.sessionController.currentUser?['station_id'] as int?;
+      final organizationId =
+          preferredOrganizationId ??
+          (organizations.isNotEmpty ? organizations.first['id'] as int : null);
+      final scopedStations = organizationId == null
+          ? stations
+          : stations
+                .where(
+                  (station) => station['organization_id'] == organizationId,
+                )
+                .toList();
       final stationId =
-          _selectedStationId ??
-          preferredStationId ??
-          (stations.isNotEmpty ? stations.first['id'] as int : null);
+          (_selectedStationId != null &&
+              scopedStations.any(
+                (station) => station['id'] == _selectedStationId,
+              ))
+          ? _selectedStationId
+          : (preferredStationId != null &&
+                scopedStations.any(
+                  (station) => station['id'] == preferredStationId,
+                ))
+          ? preferredStationId
+          : (scopedStations.isNotEmpty
+                ? scopedStations.first['id'] as int
+                : null);
 
       final users = _canReadUsers
           ? List<Map<String, dynamic>>.from(
@@ -189,24 +230,41 @@ class _AdminPageState extends State<AdminPage> {
           ? List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchEmployeeProfiles(
                 stationId: stationId,
-                organizationId: _selectedOrganizationId,
+                organizationId: organizationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             )
           : const <Map<String, dynamic>>[];
-      final stationModules = !_canReadModules || stationId == null
+      final organizationModules =
+          !_canReadOrganizationModules || organizationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchOrganizationModules(
+                organizationId: organizationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
+      final stationModules = !_canReadStationModules || stationId == null
           ? const <Map<String, dynamic>>[]
           : List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchStationModules(
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
+      final subscriptionPlans = !_canReadSubscription
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchSubscriptionPlans()).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            );
+      final organizationSubscription =
+          !_canReadSubscription || organizationId == null
+          ? null
+          : await widget.sessionController.fetchOrganizationSubscription(
+              organizationId: organizationId,
+            );
 
       if (!mounted) return;
 
-      final organizationId =
-          _selectedOrganizationId ??
-          widget.sessionController.currentUser?['organization_id'] as int? ??
-          (organizations.isNotEmpty ? organizations.first['id'] as int : null);
       final creatableRoleNames = widget.sessionController.creatableRoles;
       final creatableRoles = creatableRoleNames.isEmpty
           ? roles
@@ -230,7 +288,10 @@ class _AdminPageState extends State<AdminPage> {
         _roles = roles;
         _users = users;
         _employeeProfiles = employeeProfiles;
+        _organizationModules = organizationModules;
         _stationModules = stationModules;
+        _subscriptionPlans = subscriptionPlans;
+        _organizationSubscription = organizationSubscription;
         _permissionCatalog = permissionCatalog;
         _selectedStationId = stationId;
         _selectedOrganizationId = organizationId;
@@ -250,6 +311,15 @@ class _AdminPageState extends State<AdminPage> {
     if (stationId == null) return;
     setState(() {
       _selectedStationId = stationId;
+    });
+    await _loadWorkspace();
+  }
+
+  Future<void> _changeOrganization(int? organizationId) async {
+    if (organizationId == null) return;
+    setState(() {
+      _selectedOrganizationId = organizationId;
+      _selectedStationId = null;
     });
     await _loadWorkspace();
   }
@@ -754,6 +824,85 @@ class _AdminPageState extends State<AdminPage> {
       setState(() {
         _feedbackMessage =
             'Module $moduleName ${isEnabled ? 'enabled' : 'disabled'}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _toggleOrganizationModule(
+    String moduleName,
+    bool isEnabled,
+  ) async {
+    final organizationId = _selectedOrganizationId;
+    if (organizationId == null) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      await widget.sessionController.updateOrganizationModule(
+        organizationId: organizationId,
+        payload: {'module_name': moduleName, 'is_enabled': isEnabled},
+      );
+      if (!mounted) return;
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Organization module $moduleName ${isEnabled ? 'enabled' : 'disabled'}.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _saveSubscription({
+    required int? planId,
+    required String status,
+    required String billingCycle,
+    required bool autoRenew,
+  }) async {
+    final organizationId = _selectedOrganizationId;
+    if (organizationId == null) return;
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      await widget.sessionController.updateOrganizationSubscription(
+        organizationId: organizationId,
+        payload: {
+          'plan_id': planId,
+          'status': status,
+          'billing_cycle': billingCycle,
+          'auto_renew': autoRenew,
+          'price_override': _organizationSubscription?['price_override'],
+          'notes': _organizationSubscription?['notes'],
+          'start_date': _organizationSubscription?['start_date'],
+          'end_date': _organizationSubscription?['end_date'],
+          'trial_ends_at': _organizationSubscription?['trial_ends_at'],
+        },
+      );
+      if (!mounted) return;
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage = 'Subscription settings updated.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -1798,6 +1947,22 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget _buildModulesSection(BuildContext context) {
+    final selectedOrganization = _organizations
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['id'] == _selectedOrganizationId,
+          orElse: () => null,
+        );
+    final selectedStation = _stations.cast<Map<String, dynamic>?>().firstWhere(
+      (item) => item?['id'] == _selectedStationId,
+      orElse: () => null,
+    );
+    final subscription = _organizationSubscription ?? const <String, dynamic>{};
+    final planId = subscription['plan_id'] as int?;
+    final subscriptionStatus = subscription['status'] as String? ?? 'inactive';
+    final billingCycle = subscription['billing_cycle'] as String? ?? 'monthly';
+    final autoRenew = subscription['auto_renew'] as bool? ?? false;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1805,34 +1970,220 @@ class _AdminPageState extends State<AdminPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Station Modules',
+              'Capability Controls',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
-            if (!_canManageModules) ...[
+            if (!_canManageOrganizationModules &&
+                !_canManageStationModules &&
+                !_canManageSubscription) ...[
               _buildReadOnlyNotice(
-                'This role can review module state but cannot change module toggles.',
+                'This role can review package and module state but cannot change these controls.',
               ),
               const SizedBox(height: 12),
             ],
-            if (_selectedStationId == null)
-              const Text('Select a station to manage modules.')
-            else if (_stationModules.isEmpty)
-              const Text('No module settings found for this station yet.')
-            else
-              for (final module in _stationModules)
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: module['is_enabled'] as bool? ?? false,
-                  title: Text(module['module_name'] as String? ?? 'Module'),
-                  subtitle: Text('Station ${module['station_id']}'),
-                  onChanged: !_canManageModules || _isSubmitting
+            if (_organizations.isNotEmpty)
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'admin-module-organization-${_selectedOrganizationId ?? 'none'}',
+                ),
+                initialValue: _selectedOrganizationId,
+                decoration: const InputDecoration(labelText: 'Organization'),
+                items: [
+                  for (final organization in _organizations)
+                    DropdownMenuItem<int>(
+                      value: organization['id'] as int,
+                      child: Text(
+                        '${organization['name']} (${organization['code']})',
+                      ),
+                    ),
+                ],
+                onChanged: _changeOrganization,
+              ),
+            if (_stations.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'admin-module-station-${_selectedStationId ?? 'none'}',
+                ),
+                initialValue: _selectedStationId,
+                decoration: const InputDecoration(labelText: 'Station'),
+                items: [
+                  for (final station in _stations)
+                    if (_selectedOrganizationId == null ||
+                        station['organization_id'] == _selectedOrganizationId)
+                      DropdownMenuItem<int>(
+                        value: station['id'] as int,
+                        child: Text('${station['name']} (${station['code']})'),
+                      ),
+                ],
+                onChanged: _changeStation,
+              ),
+            ],
+            if (_selectedOrganizationId == null) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Select an organization to review capability controls.',
+              ),
+            ] else ...[
+              const SizedBox(height: 20),
+              Text(
+                'Subscription',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (!_canReadSubscription)
+                const Text('This role cannot review subscription state.')
+              else ...[
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Organization',
+                    selectedOrganization?['name'] as String? ?? '-',
+                  ),
+                  _buildDetailItem(
+                    'Plan',
+                    _lookupName(_subscriptionPlans, planId),
+                  ),
+                  _buildDetailItem('Status', subscriptionStatus),
+                  _buildDetailItem('Billing', billingCycle),
+                ]),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: ValueKey<String>(
+                    'admin-module-plan-${planId ?? 'none'}',
+                  ),
+                  initialValue: planId,
+                  decoration: const InputDecoration(labelText: 'Plan'),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('No plan'),
+                    ),
+                    for (final plan in _subscriptionPlans)
+                      DropdownMenuItem<int?>(
+                        value: plan['id'] as int,
+                        child: Text('${plan['name']} (${plan['code']})'),
+                      ),
+                  ],
+                  onChanged: !_canManageSubscription || _isSubmitting
                       ? null
-                      : (value) => _toggleStationModule(
-                          module['module_name'] as String,
-                          value,
+                      : (value) => _saveSubscription(
+                          planId: value,
+                          status: subscriptionStatus,
+                          billingCycle: billingCycle,
+                          autoRenew: autoRenew,
                         ),
                 ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  key: ValueKey<String>(
+                    'admin-module-status-$subscriptionStatus',
+                  ),
+                  initialValue: subscriptionStatus,
+                  decoration: const InputDecoration(
+                    labelText: 'Subscription status',
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'inactive',
+                      child: Text('Inactive'),
+                    ),
+                    DropdownMenuItem(value: 'trial', child: Text('Trial')),
+                    DropdownMenuItem(value: 'active', child: Text('Active')),
+                    DropdownMenuItem(
+                      value: 'suspended',
+                      child: Text('Suspended'),
+                    ),
+                  ],
+                  onChanged: !_canManageSubscription || _isSubmitting
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          _saveSubscription(
+                            planId: planId,
+                            status: value,
+                            billingCycle: billingCycle,
+                            autoRenew: autoRenew,
+                          );
+                        },
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: autoRenew,
+                  title: const Text('Auto renew'),
+                  subtitle: const Text(
+                    'Keep the organization on its current subscription cycle automatically.',
+                  ),
+                  onChanged: !_canManageSubscription || _isSubmitting
+                      ? null
+                      : (value) => _saveSubscription(
+                          planId: planId,
+                          status: subscriptionStatus,
+                          billingCycle: billingCycle,
+                          autoRenew: value,
+                        ),
+                ),
+              ],
+              const Divider(height: 32),
+              Text(
+                'Organization Modules',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (!_canReadOrganizationModules)
+                const Text('This role cannot review organization module state.')
+              else if (_organizationModules.isEmpty)
+                const Text('No organization module settings found yet.')
+              else
+                for (final module in _organizationModules)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: module['is_enabled'] as bool? ?? false,
+                    title: Text(module['module_name'] as String? ?? 'Module'),
+                    subtitle: Text(
+                      selectedOrganization?['name'] as String? ??
+                          'Organization',
+                    ),
+                    onChanged: !_canManageOrganizationModules || _isSubmitting
+                        ? null
+                        : (value) => _toggleOrganizationModule(
+                            module['module_name'] as String,
+                            value,
+                          ),
+                  ),
+              const Divider(height: 32),
+              Text(
+                'Station Modules',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (!_canReadStationModules)
+                const Text('This role cannot review station module state.')
+              else if (_selectedStationId == null)
+                const Text('Select a station to manage station modules.')
+              else if (_stationModules.isEmpty)
+                const Text(
+                  'No station module settings found for this station yet.',
+                )
+              else
+                for (final module in _stationModules)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: module['is_enabled'] as bool? ?? false,
+                    title: Text(module['module_name'] as String? ?? 'Module'),
+                    subtitle: Text(
+                      selectedStation?['name'] as String? ??
+                          'Station ${module['station_id']}',
+                    ),
+                    onChanged: !_canManageStationModules || _isSubmitting
+                        ? null
+                        : (value) => _toggleStationModule(
+                            module['module_name'] as String,
+                            value,
+                          ),
+                  ),
+            ],
           ],
         ),
       ),
@@ -1868,7 +2219,7 @@ class _AdminPageState extends State<AdminPage> {
       case _AdminSection.modules:
         return (
           'Module switches',
-          'Turn station services on or off so users only see what the business actually uses.',
+          'Manage package state, organization visibility, and station-level toggles so the app matches the tenant setup immediately.',
           Icons.toggle_on_outlined,
         );
     }

@@ -451,6 +451,26 @@ class SessionController extends ChangeNotifier {
     return _apiClient.getOrganizations(await _validAccessToken());
   }
 
+  Future<List<dynamic>> fetchOrganizationModules({
+    required int organizationId,
+  }) async {
+    return _apiClient.getOrganizationModules(
+      await _validAccessToken(),
+      organizationId: organizationId,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateOrganizationModule({
+    required int organizationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.updateOrganizationModule(
+      await _validAccessToken(),
+      organizationId: organizationId,
+      payload: payload,
+    );
+  }
+
   Future<List<dynamic>> fetchBrands() async {
     return _apiClient.getBrands(await _validAccessToken());
   }
@@ -498,6 +518,30 @@ class SessionController extends ChangeNotifier {
 
   Future<Map<String, dynamic>> fetchPermissionCatalog() async {
     return _apiClient.getPermissionCatalog(await _validAccessToken());
+  }
+
+  Future<List<dynamic>> fetchSubscriptionPlans() async {
+    return _apiClient.getSubscriptionPlans(await _validAccessToken());
+  }
+
+  Future<Map<String, dynamic>> fetchOrganizationSubscription({
+    required int organizationId,
+  }) async {
+    return _apiClient.getOrganizationSubscription(
+      await _validAccessToken(),
+      organizationId: organizationId,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateOrganizationSubscription({
+    required int organizationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.updateOrganizationSubscription(
+      await _validAccessToken(),
+      organizationId: organizationId,
+      payload: payload,
+    );
   }
 
   Future<List<dynamic>> fetchUsers({int? stationId}) async {
