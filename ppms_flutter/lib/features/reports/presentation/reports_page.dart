@@ -199,6 +199,8 @@ class _ReportsPageState extends State<ReportsPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          _buildWorkspaceReview(context),
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -582,6 +584,104 @@ class _ReportsPageState extends State<ReportsPage> {
     }
     final text = value.toString().replaceFirst('T', ' ');
     return text.length >= 19 ? text.substring(0, 19) : text;
+  }
+
+  Widget _buildWorkspaceReview(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Report Review',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Current reporting view is ready to review',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Review daily cash, stock movement, party balances, and profit before exporting or saving a reusable report view.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.calendar_today_outlined,
+                label: 'Daily ${_reportDateController.text.trim()}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.timeline_outlined,
+                label:
+                    '${_fromDateController.text.trim()} to ${_toDateController.text.trim()}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.account_balance_wallet_outlined,
+                label:
+                    'Net cash ${_value(_dailyClosing?['net_cash_movement'])}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.trending_up_outlined,
+                label: 'Net profit ${_value(_profitSummary?['net_profit'])}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.file_download_outlined,
+                label: 'Exports ${_exports.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.bookmark_outline,
+                label: 'Saved views ${_definitions.length}',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
   }
 }
 
