@@ -307,6 +307,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
             ),
           ),
           const SizedBox(height: 16),
+          _buildWorkspaceReview(
+            context,
+            unreadCount: unreadCount,
+            failedDeliveries: failedDeliveries,
+            deadLetterCount: deadLetterCount,
+          ),
+          const SizedBox(height: 16),
           if (_errorMessage != null)
             Text(
               _errorMessage!,
@@ -574,6 +581,88 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
     final text = value.toString().replaceFirst('T', ' ');
     return text.length >= 19 ? text.substring(0, 19) : text;
+  }
+
+  Widget _buildWorkspaceReview(
+    BuildContext context, {
+    required dynamic unreadCount,
+    required int failedDeliveries,
+    required dynamic deadLetterCount,
+  }) {
+    final unread = unreadCount is num ? unreadCount.toInt() : 0;
+    final deadLetters = deadLetterCount is num ? deadLetterCount.toInt() : 0;
+    final title = unread > 0 || failedDeliveries > 0 || deadLetters > 0
+        ? 'Communication queue needs review'
+        : 'Communication queue is stable';
+    final nextAction = unread > 0
+        ? 'Review unread notifications first, then mark handled items as read.'
+        : failedDeliveries > 0 || deadLetters > 0
+        ? 'Review failed deliveries, retry eligible records, and process due delivery jobs.'
+        : 'Review preferences and delivery history before changing channel behavior.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Notification Review',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.mark_email_unread_outlined,
+                label: '$unread unread',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.report_problem_outlined,
+                label: '$failedDeliveries failed',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.outbox_outlined,
+                label: '$deadLetters dead-letter',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.filter_alt_outlined,
+                label:
+                    'Filters $_deliveryStatusFilter / $_deliveryChannelFilter',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.settings_input_component_outlined,
+                label: '${_preferences.length} preferences',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildInfoChip(
