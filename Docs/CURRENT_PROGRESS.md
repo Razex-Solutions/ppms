@@ -70,7 +70,8 @@ Current phased execution status:
 - `Phase 1 - Setup Hierarchy Foundation`: complete locally
 - `Phase 2 - Operations Core`: complete locally
 - `Phase 3 - Finance, Ledgers, Payroll, Pricing`: complete locally
-- next sequence: `Phase 4 - Tanker and Extended Operations`
+- `Phase 4 - Tanker and Extended Operations`: complete locally
+- next sequence: `Phase 5 - Notifications, Documents, Reports, Profit`
 
 Phase 1 completion now includes:
 - setup-foundation backend summary endpoints for organizations and stations
@@ -102,6 +103,16 @@ Phase 3 completion now includes:
 - station fuel price history with role-based update/read permissions
 - sales workspace now shows current station pricing and recent price history
 - targeted backend finance/access validation plus clean Flutter analyze/test validation
+
+Phase 4 completion now includes:
+- tanker master records with ownership type, station scope, and fuel-type linkage
+- tanker compartments with automatic equal-split setup support and explicit compartment management APIs
+- trip summary entry with loaded quantity, purchase rate, compartment planning, and manual tanker-sale posting
+- leftover fuel transfer from tanker trips into station tanks with recorded transfer facts
+- tanker-linked expenses and supplier-to-station purchase conversion on trip completion
+- manager-summary tanker workspace metrics for fleet mix, delivered fuel, leftovers, transfers, and purchase value
+- tanker guidance surfaced in station setup when tanker operations are enabled
+- targeted backend tanker/access/reporting coverage plus clean Flutter analyze/test validation
 
 ### Architecture Direction
 Current direction is:
@@ -740,6 +751,8 @@ Flutter:
 Backend:
 - [ppms/app/api/tanker.py](/C:/Fuel%20Management%20System/ppms/app/api/tanker.py)
 - [ppms/app/services/tanker_ops.py](/C:/Fuel%20Management%20System/ppms/app/services/tanker_ops.py)
+- [ppms/app/models/tanker_compartment.py](/C:/Fuel%20Management%20System/ppms/app/models/tanker_compartment.py)
+- [ppms/app/models/fuel_transfer.py](/C:/Fuel%20Management%20System/ppms/app/models/fuel_transfer.py)
 - tanker models under [ppms/app/models](/C:/Fuel%20Management%20System/ppms/app/models)
 
 Flutter:
@@ -868,11 +881,11 @@ Expected purpose:
 ## 16. Recommended Next Steps
 
 ### For product work
-1. execute `Phase 4 - Tanker and Extended Operations`
-2. tighten tanker setup, compartments, and trip summary workflows
-3. connect tanker loads, manual sales, and leftover transfer flows more directly to station stock
-4. keep extending module-driven visibility around tanker-enabled organizations only
-5. prepare the next phase boundary review after tanker operations are stable
+1. execute `Phase 5 - Notifications, Documents, Reports, Profit`
+2. strengthen notification settings, templates, and delivery-log workflows
+3. expand report filters, dashboard summaries, and profit-oriented rollups on top of stable operational facts
+4. tighten document registry, attachments, and document dispatch flows
+5. prepare the next phase boundary review after notification/report behavior is stable
 
 ### For deployment later
 1. finalize local product behavior
