@@ -50,6 +50,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
   bool _hasHardware = false;
   bool _allowMeterAdjustments = true;
   bool _stationIsActive = true;
+  bool _invoiceUsesResolvedDefaults = true;
 
   String? _errorMessage;
   String? _feedbackMessage;
@@ -220,6 +221,9 @@ class _StationSetupPageState extends State<StationSetupPage> {
 
       _hydrateStation(selectedStation);
       _hydrateInvoice(invoiceProfile);
+      if (_invoiceUsesResolvedDefaults) {
+        _applyInvoiceResolvedDefaults();
+      }
 
       final selectedTankFuelTypeId =
           _validSelection(_selectedTankFuelTypeId, fuelTypes) ??
@@ -291,6 +295,17 @@ class _StationSetupPageState extends State<StationSetupPage> {
 
   Map<String, dynamic>? get _invoiceIdentity =>
       _stationSetupFoundation?['invoice_identity'] as Map<String, dynamic>?;
+
+  void _applyInvoiceResolvedDefaults() {
+    final invoiceIdentity = _invoiceIdentity;
+    if (invoiceIdentity == null) {
+      return;
+    }
+    _businessNameController.text =
+        invoiceIdentity['business_name'] as String? ?? '';
+    _footerTextController.text =
+        invoiceIdentity['footer_text'] as String? ?? '';
+  }
 
   int get _setupChecklistComplete {
     var score = 0;
@@ -587,6 +602,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
       _hydrateInvoice(profile);
       setState(() {
         _invoiceProfile = profile;
+        _invoiceUsesResolvedDefaults = false;
         _feedbackMessage = 'Invoice profile updated.';
         _isSubmitting = false;
       });
@@ -1176,6 +1192,9 @@ class _StationSetupPageState extends State<StationSetupPage> {
           child: Text(dispenser['name'] as String? ?? 'Dispenser'),
         ),
     ];
+    final canCreateTank = _fuelTypes.isNotEmpty;
+    final canCreateDispenser = _tanks.isNotEmpty;
+    final canCreateNozzle = _tanks.isNotEmpty && _dispensers.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1188,6 +1207,38 @@ class _StationSetupPageState extends State<StationSetupPage> {
         Text(
           'Create tanks, dispensers, and nozzles in sequence so later sales and meter logic map correctly.',
           style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recommended build order',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                _ChecklistLine(
+                  label: '1. Add at least one fuel type',
+                  complete: _fuelTypes.isNotEmpty,
+                ),
+                _ChecklistLine(
+                  label: '2. Create tanks for each fuel type you stock',
+                  complete: _tanks.isNotEmpty,
+                ),
+                _ChecklistLine(
+                  label: '3. Create dispensers for the forecourt face',
+                  complete: _dispensers.isNotEmpty,
+                ),
+                _ChecklistLine(
+                  label: '4. Map nozzles from dispenser to tank',
+                  complete: _nozzles.isNotEmpty,
+                ),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 16),
         Wrap(
@@ -1325,6 +1376,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankCapacityController,
+                      enabled: canCreateTank,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1333,6 +1385,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankCurrentVolumeController,
+                      enabled: canCreateTank,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1343,6 +1396,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankThresholdController,
+                      enabled: canCreateTank,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1353,11 +1407,20 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankLocationController,
+                      enabled: canCreateTank,
                       decoration: const InputDecoration(labelText: 'Location'),
                     ),
+                    if (!canCreateTank) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Add fuel types first so the tank can be assigned correctly.',
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: _isSubmitting ? null : _createTank,
+                      onPressed: _isSubmitting || !canCreateTank
+                          ? null
+                          : _createTank,
                       child: Text(_isSubmitting ? 'Saving...' : 'Create Tank'),
                     ),
                   ],
@@ -1389,11 +1452,20 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _dispenserLocationController,
+                      enabled: canCreateDispenser,
                       decoration: const InputDecoration(labelText: 'Location'),
                     ),
+                    if (!canCreateDispenser) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Create tanks first so the forecourt builder follows the setup order.',
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: _isSubmitting ? null : _createDispenser,
+                      onPressed: _isSubmitting || !canCreateDispenser
+                          ? null
+                          : _createDispenser,
                       child: Text(
                         _isSubmitting ? 'Saving...' : 'Create Dispenser',
                       ),
@@ -1432,11 +1504,13 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       initialValue: _selectedNozzleFuelTypeId,
                       decoration: const InputDecoration(labelText: 'Fuel Type'),
                       items: fuelTypeItems,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedNozzleFuelTypeId = value;
-                        });
-                      },
+                      onChanged: !canCreateNozzle
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedNozzleFuelTypeId = value;
+                              });
+                            },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
@@ -1446,22 +1520,24 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       initialValue: _selectedNozzleTankId,
                       decoration: const InputDecoration(labelText: 'Tank'),
                       items: tankItems,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedNozzleTankId = value;
-                          final selectedTank = _tanks
-                              .cast<Map<String, dynamic>?>()
-                              .firstWhere(
-                                (item) => item?['id'] == value,
-                                orElse: () => null,
-                              );
-                          final tankFuelTypeId =
-                              selectedTank?['fuel_type_id'] as int?;
-                          if (tankFuelTypeId != null) {
-                            _selectedNozzleFuelTypeId = tankFuelTypeId;
-                          }
-                        });
-                      },
+                      onChanged: !canCreateNozzle
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedNozzleTankId = value;
+                                final selectedTank = _tanks
+                                    .cast<Map<String, dynamic>?>()
+                                    .firstWhere(
+                                      (item) => item?['id'] == value,
+                                      orElse: () => null,
+                                    );
+                                final tankFuelTypeId =
+                                    selectedTank?['fuel_type_id'] as int?;
+                                if (tankFuelTypeId != null) {
+                                  _selectedNozzleFuelTypeId = tankFuelTypeId;
+                                }
+                              });
+                            },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
@@ -1471,15 +1547,18 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       initialValue: _selectedNozzleDispenserId,
                       decoration: const InputDecoration(labelText: 'Dispenser'),
                       items: dispenserItems,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedNozzleDispenserId = value;
-                        });
-                      },
+                      onChanged: !canCreateNozzle
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedNozzleDispenserId = value;
+                              });
+                            },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _nozzleMeterController,
+                      enabled: canCreateNozzle,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1489,9 +1568,17 @@ class _StationSetupPageState extends State<StationSetupPage> {
                             'Later meter adjustments still go through the Hardware workspace.',
                       ),
                     ),
+                    if (!canCreateNozzle) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Create at least one tank and one dispenser before mapping nozzles.',
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: _isSubmitting ? null : _createNozzle,
+                      onPressed: _isSubmitting || !canCreateNozzle
+                          ? null
+                          : _createNozzle,
                       child: Text(
                         _isSubmitting ? 'Saving...' : 'Create Nozzle',
                       ),
@@ -1567,11 +1654,64 @@ class _StationSetupPageState extends State<StationSetupPage> {
         children: [
           Text('Invoice Basics', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _invoiceUsesResolvedDefaults,
+            title: const Text('Use resolved station invoice defaults'),
+            subtitle: const Text(
+              'Start from the station and organization identity, then override only what needs to differ.',
+            ),
+            onChanged: (value) {
+              setState(() {
+                _invoiceUsesResolvedDefaults = value;
+                if (value) {
+                  _applyInvoiceResolvedDefaults();
+                }
+              });
+            },
+          ),
+          if (_invoiceIdentity != null) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Resolved Invoice Identity',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSummaryLine(
+                      'Source',
+                      '${_invoiceIdentity?['source'] ?? '-'}',
+                    ),
+                    _buildSummaryLine(
+                      'Business Name',
+                      '${_invoiceIdentity?['business_name'] ?? '-'}',
+                    ),
+                    _buildSummaryLine(
+                      'Legal Name',
+                      '${_invoiceIdentity?['legal_name'] ?? '-'}',
+                    ),
+                    _buildSummaryLine(
+                      'Brand',
+                      '${_invoiceIdentity?['brand_name'] ?? '-'}',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           TextFormField(
             controller: _businessNameController,
-            decoration: const InputDecoration(
+            enabled: !_invoiceUsesResolvedDefaults,
+            decoration: InputDecoration(
               labelText: 'Business Name',
-              helperText: 'Shown on receipts, statements, and invoices.',
+              helperText: _invoiceUsesResolvedDefaults
+                  ? 'Currently following the resolved station/organization identity.'
+                  : 'Shown on receipts, statements, and invoices.',
             ),
           ),
           const SizedBox(height: 12),
@@ -1582,7 +1722,13 @@ class _StationSetupPageState extends State<StationSetupPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _footerTextController,
-            decoration: const InputDecoration(labelText: 'Footer Text'),
+            enabled: !_invoiceUsesResolvedDefaults,
+            decoration: InputDecoration(
+              labelText: 'Footer Text',
+              helperText: _invoiceUsesResolvedDefaults
+                  ? 'Following the resolved default footer until you override it.'
+                  : null,
+            ),
             maxLines: 3,
           ),
           const SizedBox(height: 16),
