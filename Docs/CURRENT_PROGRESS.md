@@ -74,7 +74,8 @@ Current phased execution status:
 - `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
 - `Phase 6 - Roles, Permissions, Modules, SaaS Rules`: complete locally
 - `Phase 7 - Flutter App Completion`: complete locally
-- next sequence: `Phase 8 - Master Admin Support Frontend`
+- `Phase 8 - Master Admin Support Frontend`: complete locally
+- next sequence: `Phase 9 - Local Stabilization and Acceptance`
 
 Phase 1 completion now includes:
 - setup-foundation backend summary endpoints for organizations and stations
@@ -145,13 +146,24 @@ Phase 7 completion now includes:
 - module and permission-aware visibility remains the guiding rule for workspace entry points and in-page actions
 - clean Flutter analyze/test validation across the Phase 7 workspace batches
 
+Phase 8 completion now includes:
+- separate Next.js support console in `support_console` for MasterAdmin/platform support work
+- Master Admin login through the existing backend auth flow and support proxy route
+- organization search/open flow with station, user, staff, subscription, module, communication, and reporting context
+- support-side organization and station correction forms kept separate from the tenant Flutter operations app
+- package/subscription controls for plan, status, billing cycle, auto-renew, price override, and support notes
+- organization and station module toggles for support/package visibility correction
+- notification and financial document delivery health panels with process-due and retry support actions
+- support reporting review for tenant profit summary, saved report definitions, and recent report export jobs
+- clean support console `npm run lint` and `npm run build` validation across the Phase 8 batches
+
 ### Architecture Direction
 Current direction is:
 - local-first development
 - GitHub as source of truth
 - backend on FastAPI
 - Flutter as the main operational client
-- future separate Node.js support console for MasterAdmin/support work
+- separate Node.js/Next.js support console for MasterAdmin/support work
 - later deployment target:
   - backend on Amazon EC2
   - web frontend on Vercel
@@ -166,6 +178,8 @@ Root: [C:\Fuel Management System](/C:/Fuel%20Management%20System)
   - FastAPI backend source
 - [ppms_flutter](/C:/Fuel%20Management%20System/ppms_flutter)
   - Flutter desktop/mobile client
+- [support_console](/C:/Fuel%20Management%20System/support_console)
+  - Next.js MasterAdmin/support web console
 - [alembic](/C:/Fuel%20Management%20System/alembic)
   - DB migrations
 - [tests](/C:/Fuel%20Management%20System/tests)
@@ -868,10 +882,11 @@ The Flutter app has moved away from being only raw CRUD pages.
 ## 13. Planned But Not Yet Fully Built
 
 ### Planned next major product pieces
-- deeper review pass and targeted UI fixes role by role
-- Node.js MasterAdmin/support console
-  - separate support/admin frontend
-  - for editing/supporting customer organizations directly
+- local stabilization and acceptance testing
+  - migration validation
+  - fresh database rebuild validation
+  - role-by-role walkthroughs
+  - support console walkthroughs
 - cloud deployment
   - backend on EC2
   - web frontend on Vercel
@@ -879,15 +894,17 @@ The Flutter app has moved away from being only raw CRUD pages.
 - eventual production PostgreSQL deployment
 
 ### Node.js support console status
-This is planned, not yet implemented in this repo.
+This is now implemented locally as a Next.js app under `support_console`.
 
-Expected purpose:
+Current purpose:
 - Razex support dashboard
 - open any organization
 - inspect/fix data
 - edit tenant values during support
 - support billing/subscription views
-- support override/admin flows
+- support module controls
+- support communication delivery triage
+- support reporting/profit review
 
 ## 14. Deployment Status
 
@@ -914,11 +931,11 @@ Expected purpose:
 ## 16. Recommended Next Steps
 
 ### For product work
-1. execute `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
-2. centralize and tighten dynamic visibility across roles, scopes, and enabled modules
-3. align package/subscription/module rules with the actual app shell and dashboards
-4. remove remaining ghost visibility and role-overlap assumptions
-5. prepare the next phase boundary review after role/module behavior is stable
+1. execute `Phase 9 - Local Stabilization and Acceptance`
+2. validate migrations and fresh database rebuilds
+3. run role-by-role tenant Flutter walkthroughs
+4. run MasterAdmin support console walkthroughs
+5. prepare the local freeze gate before cloud deployment
 
 ### For deployment later
 1. finalize local product behavior
@@ -940,8 +957,8 @@ What exists now:
 - onboarding, station setup, operations, finance, documents, reporting, payroll, notifications, hardware, tanker support
 
 What still remains:
-- deeper review/fix pass
-- Node.js MasterAdmin support console
+- local stabilization and acceptance testing
+- deeper review/fix pass during Phase 9
 - final deployment automation and production hosting
 
 This file should be updated as the next major milestone source-of-truth whenever:

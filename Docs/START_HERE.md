@@ -18,7 +18,7 @@ When returning to this project, use these files in this order:
 
 Start with:
 
-- `Phase 8 - Master Admin Support Frontend`
+- `Phase 9 - Local Stabilization and Acceptance`
 
 from:
 
@@ -33,7 +33,8 @@ from:
 - `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
 - `Phase 6 - Roles, Permissions, Modules, SaaS Rules`: complete locally
 - `Phase 7 - Flutter App Completion`: complete locally
-- next sequence: continue into `Phase 8 - Master Admin Support Frontend`
+- `Phase 8 - Master Admin Support Frontend`: complete locally
+- next sequence: continue into `Phase 9 - Local Stabilization and Acceptance`
 
 ## Important Decision Already Made
 
