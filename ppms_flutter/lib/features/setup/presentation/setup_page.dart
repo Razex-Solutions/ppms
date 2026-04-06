@@ -3,6 +3,7 @@ import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/core/widgets/responsive_split.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 enum _SetupSection { fuelTypes, invoiceProfile }
 
@@ -431,6 +432,31 @@ class _SetupPageState extends State<SetupPage> {
     );
   }
 
+  Widget _buildSummaryChip(
+    BuildContext context, {
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 180, maxWidth: 360),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Text(value, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -444,184 +470,287 @@ class _SetupPageState extends State<SetupPage> {
     if (availableSections.isNotEmpty && !availableSections.contains(_section)) {
       _section = availableSections.first;
     }
+    final selectedStation = _stations.cast<Map<String, dynamic>?>().firstWhere(
+      (item) => item?['id'] == _selectedStationId,
+      orElse: () => null,
+    );
+    final setupComplete =
+        _fuelTypes.isNotEmpty &&
+        ((_invoiceProfile?['business_name'] as String?)?.isNotEmpty ?? false) &&
+        ((_invoiceProfile?['invoice_prefix'] as String?)?.isNotEmpty ?? false);
+    final nextAction = switch (_section) {
+      _SetupSection.fuelTypes =>
+        _fuelTypes.isEmpty
+            ? 'Add the first fuel type so tanks, nozzles, pricing, and purchases can stay consistent.'
+            : 'Review whether the fuel list matches what this station actually sells.',
+      _SetupSection.invoiceProfile =>
+        _invoiceProfile == null
+            ? 'Load and save the invoice identity before documents start going out to customers.'
+            : 'Review tax, numbering, and footer settings before live document dispatch.',
+    };
 
     return RefreshIndicator(
       onRefresh: _loadWorkspace,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Setup Workspace',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Configure station business setup, with edit controls only where this role is allowed to manage them.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<int>(
-                          key: ValueKey<String>(
-                            'setup-station-${_selectedStationId ?? 'none'}',
-                          ),
-                          initialValue: _selectedStationId,
-                          decoration: const InputDecoration(
-                            labelText: 'Station',
-                          ),
-                          items: [
-                            for (final station in _stations)
-                              DropdownMenuItem<int>(
-                                value: station['id'] as int,
-                                child: Text(
-                                  '${station['name']} (${station['code']})',
-                                ),
-                              ),
-                          ],
-                          onChanged: _changeStation,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SegmentedButton<_SetupSection>(
-                          segments: [
-                            if (_canReadFuelTypes)
-                              const ButtonSegment(
-                                value: _SetupSection.fuelTypes,
-                                label: Text('Fuel Types'),
-                                icon: Icon(Icons.opacity_outlined),
-                              ),
-                            if (_canReadInvoiceProfile)
-                              const ButtonSegment(
-                                value: _SetupSection.invoiceProfile,
-                                label: Text('Invoice Profile'),
-                                icon: Icon(Icons.receipt_outlined),
-                              ),
-                          ],
-                          selected: {_section},
-                          onSelectionChanged: (selection) {
-                            setState(() {
-                              _section = selection.first;
-                              _errorMessage = null;
-                              _feedbackMessage = null;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  if (_section == _SetupSection.fuelTypes)
-                    _buildFuelTypesSection(context)
-                  else
-                    _buildInvoiceProfileSection(context),
-                  if (_errorMessage != null || _feedbackMessage != null)
-                    const SizedBox(height: 16),
-                  if (_errorMessage != null)
-                    Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  if (_feedbackMessage != null)
-                    Text(
-                      _feedbackMessage!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                ],
-              ),
+          DashboardHeroCard(
+            eyebrow: 'Station Setup',
+            title: selectedStation == null
+                ? 'Setup workspace'
+                : 'Setup workspace for ${selectedStation['name']}',
+            subtitle:
+                'Review fuel identity, invoice identity, and readiness before daily operations depend on them.',
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                DashboardMetricTile(
+                  label: 'Fuel Types',
+                  value: '${_fuelTypes.length}',
+                  caption: _fuelTypes.isEmpty
+                      ? 'No configured fuel types yet'
+                      : 'Active fuel options available in setup',
+                  icon: Icons.opacity_outlined,
+                  tint: Theme.of(context).colorScheme.primary,
+                ),
+                DashboardMetricTile(
+                  label: 'Invoice Identity',
+                  value: _invoiceProfile == null ? 'Pending' : 'Ready',
+                  caption: _invoiceProfile == null
+                      ? 'Business identity still needs review'
+                      : 'Document identity and numbering are loaded',
+                  icon: Icons.receipt_long_outlined,
+                  tint: Theme.of(context).colorScheme.secondary,
+                ),
+                DashboardMetricTile(
+                  label: 'Presets',
+                  value: '${_compliancePresets.length}',
+                  caption: _compliancePresets.isEmpty
+                      ? 'No compliance presets available'
+                      : 'Preset options can accelerate compliance setup',
+                  icon: Icons.rule_folder_outlined,
+                  tint: Theme.of(context).colorScheme.tertiary,
+                ),
+                DashboardMetricTile(
+                  label: 'Readiness',
+                  value: setupComplete ? 'Ready' : 'In Progress',
+                  caption: setupComplete
+                      ? 'Core setup details are already in place'
+                      : 'One or more foundation items still need attention',
+                  icon: Icons.task_alt_outlined,
+                  tint: setupComplete
+                      ? Colors.green.shade700
+                      : Theme.of(context).colorScheme.error,
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 20),
+          DashboardSectionCard(
+            icon: Icons.checklist_rtl_outlined,
+            title: 'Setup Review',
+            subtitle:
+                'Use this page as a guided review checkpoint first. Edit fields only after the current setup picture looks right.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _buildSummaryChip(
+                      context,
+                      label: 'Station',
+                      value: selectedStation == null
+                          ? 'Not selected'
+                          : '${selectedStation['name']} (${selectedStation['code']})',
+                    ),
+                    _buildSummaryChip(
+                      context,
+                      label: 'Current Focus',
+                      value: _section == _SetupSection.fuelTypes
+                          ? 'Fuel types'
+                          : 'Invoice profile',
+                    ),
+                    _buildSummaryChip(
+                      context,
+                      label: 'Next Action',
+                      value: nextAction,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ResponsiveSplit(
+                  breakpoint: 1050,
+                  primary: DropdownButtonFormField<int>(
+                    key: ValueKey<String>(
+                      'setup-station-${_selectedStationId ?? 'none'}',
+                    ),
+                    initialValue: _selectedStationId,
+                    decoration: const InputDecoration(labelText: 'Station'),
+                    items: [
+                      for (final station in _stations)
+                        DropdownMenuItem<int>(
+                          value: station['id'] as int,
+                          child: Text(
+                            '${station['name']} (${station['code']})',
+                          ),
+                        ),
+                    ],
+                    onChanged: _changeStation,
+                  ),
+                  secondary: SegmentedButton<_SetupSection>(
+                    segments: [
+                      if (_canReadFuelTypes)
+                        const ButtonSegment(
+                          value: _SetupSection.fuelTypes,
+                          label: Text('Fuel Types'),
+                          icon: Icon(Icons.opacity_outlined),
+                        ),
+                      if (_canReadInvoiceProfile)
+                        const ButtonSegment(
+                          value: _SetupSection.invoiceProfile,
+                          label: Text('Invoice Profile'),
+                          icon: Icon(Icons.receipt_outlined),
+                        ),
+                    ],
+                    selected: {_section},
+                    onSelectionChanged: (selection) {
+                      setState(() {
+                        _section = selection.first;
+                        _errorMessage = null;
+                        _feedbackMessage = null;
+                      });
+                    },
+                  ),
+                ),
+                if (_errorMessage != null || _feedbackMessage != null)
+                  const SizedBox(height: 16),
+                if (_errorMessage != null)
+                  Text(
+                    _errorMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                if (_feedbackMessage != null)
+                  Text(
+                    _feedbackMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (_section == _SetupSection.fuelTypes)
+            _buildFuelTypesSection(context)
+          else
+            _buildInvoiceProfileSection(context),
         ],
       ),
     );
   }
 
   Widget _buildFuelTypesSection(BuildContext context) {
+    final selectedFuelType = _fuelTypes
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (item) => item?['id'] == _selectedFuelTypeId,
+          orElse: () => null,
+        );
     return ResponsiveSplit(
       breakpoint: 1150,
-      primary: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!_canManageFuelTypes) ...[
-            _buildPermissionNotice(
-              'This role can review fuel types here but cannot create, update, or delete them.',
+      primary: DashboardSectionCard(
+        icon: Icons.opacity_outlined,
+        title: 'Fuel setup',
+        subtitle:
+            'Keep the fuel list intentionally small and operationally accurate. Tanks, nozzles, and pricing depend on these names staying clear.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!_canManageFuelTypes) ...[
+              _buildPermissionNotice(
+                'This role can review fuel types here but cannot create, update, or delete them.',
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (selectedFuelType != null) ...[
+              _buildSummaryChip(
+                context,
+                label: 'Editing',
+                value: selectedFuelType['name'] as String? ?? 'Fuel type',
+              ),
+              const SizedBox(height: 12),
+            ],
+            Text(
+              _selectedFuelTypeId == null
+                  ? 'Create Fuel Type'
+                  : 'Edit Fuel Type',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
+            TextFormField(
+              controller: _fuelTypeNameController,
+              enabled: _canManageFuelTypes,
+              decoration: const InputDecoration(labelText: 'Fuel Type Name'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _fuelTypeDescriptionController,
+              enabled: _canManageFuelTypes,
+              decoration: const InputDecoration(labelText: 'Description'),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  onPressed: !_canManageFuelTypes || _isSubmitting
+                      ? null
+                      : _createFuelType,
+                  icon: Icon(
+                    _selectedFuelTypeId == null
+                        ? Icons.add_circle_outline
+                        : Icons.save_outlined,
+                  ),
+                  label: Text(
+                    _selectedFuelTypeId == null
+                        ? 'Create Fuel Type'
+                        : 'Save Fuel Type',
+                  ),
+                ),
+                if (_selectedFuelTypeId != null && _canManageFuelTypes)
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      OutlinedButton(
+                        onPressed: _isSubmitting
+                            ? null
+                            : () {
+                                setState(() {
+                                  _resetFuelTypeForm();
+                                  _feedbackMessage =
+                                      'Fuel type edit cancelled.';
+                                });
+                              },
+                        child: const Text('Cancel Edit'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _isSubmitting ? null : _deleteFuelType,
+                        child: const Text('Delete Fuel Type'),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
           ],
-          Text(
-            _selectedFuelTypeId == null ? 'Create Fuel Type' : 'Edit Fuel Type',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _fuelTypeNameController,
-            enabled: _canManageFuelTypes,
-            decoration: const InputDecoration(labelText: 'Fuel Type Name'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _fuelTypeDescriptionController,
-            enabled: _canManageFuelTypes,
-            decoration: const InputDecoration(labelText: 'Description'),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                onPressed: !_canManageFuelTypes || _isSubmitting
-                    ? null
-                    : _createFuelType,
-                icon: Icon(
-                  _selectedFuelTypeId == null
-                      ? Icons.add_circle_outline
-                      : Icons.save_outlined,
-                ),
-                label: Text(
-                  _selectedFuelTypeId == null
-                      ? 'Create Fuel Type'
-                      : 'Save Fuel Type',
-                ),
-              ),
-              if (_selectedFuelTypeId != null && _canManageFuelTypes)
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    OutlinedButton(
-                      onPressed: _isSubmitting
-                          ? null
-                          : () {
-                              setState(() {
-                                _resetFuelTypeForm();
-                                _feedbackMessage = 'Fuel type edit cancelled.';
-                              });
-                            },
-                      child: const Text('Cancel Edit'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _isSubmitting ? null : _deleteFuelType,
-                      child: const Text('Delete Fuel Type'),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ],
+        ),
       ),
       secondary: Card(
         child: Padding(
@@ -637,6 +766,11 @@ class _SetupPageState extends State<SetupPage> {
                 for (final fuelType in _fuelTypes)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      fuelType['id'] == _selectedFuelTypeId
+                          ? Icons.radio_button_checked_outlined
+                          : Icons.opacity_outlined,
+                    ),
                     title: Text(fuelType['name'] as String? ?? 'Fuel'),
                     subtitle: Text(fuelType['description'] as String? ?? '-'),
                     onTap: _canManageFuelTypes
@@ -651,318 +785,301 @@ class _SetupPageState extends State<SetupPage> {
   }
 
   Widget _buildInvoiceProfileSection(BuildContext context) {
-    final canApplyPreset = _canManageInvoiceProfile && _compliancePresets.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!_canManageInvoiceProfile) ...[
-          _buildPermissionNotice(
-            'This role can review invoice profile settings here but cannot change them.',
-          ),
-          const SizedBox(height: 12),
-        ],
-        Row(
+    final canApplyPreset =
+        _canManageInvoiceProfile && _compliancePresets.isNotEmpty;
+    return ResponsiveSplit(
+      breakpoint: 1180,
+      primary: DashboardSectionCard(
+        icon: Icons.receipt_long_outlined,
+        title: 'Invoice identity',
+        subtitle:
+            'Treat this as the station business profile customers will see. Tax, numbering, and contact details should be easy to review before documents leave the station.',
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 5,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            if (!_canManageInvoiceProfile) ...[
+              _buildPermissionNotice(
+                'This role can review invoice profile settings here but cannot change them.',
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (_invoiceProfile != null) ...[
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Text(
-                    'Invoice Profile',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  _buildSummaryChip(
+                    context,
+                    label: 'Business Name',
+                    value: _invoiceProfile?['business_name'] as String? ?? '-',
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _businessNameController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Business Name',
-                    ),
+                  _buildSummaryChip(
+                    context,
+                    label: 'Compliance',
+                    value:
+                        _invoiceProfile?['compliance_mode'] as String? ?? '-',
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _legalNameController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(labelText: 'Legal Name'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _registrationNoController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Registration No',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _taxRegistrationNoController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Tax Registration No',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _taxRateController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Default Tax Rate',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey<String>(
-                      'setup-compliance-$_selectedComplianceMode',
-                    ),
-                    initialValue: _selectedComplianceMode,
-                    decoration: const InputDecoration(
-                      labelText: 'Compliance Mode',
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'standard',
-                        child: Text('Standard'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'regulated',
-                        child: Text('Regulated'),
-                      ),
-                      DropdownMenuItem(value: 'strict', child: Text('Strict')),
-                    ],
-                    onChanged: _canManageInvoiceProfile
-                        ? (value) {
-                            setState(() {
-                              _selectedComplianceMode = value ?? 'standard';
-                            });
-                          }
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _regionCodeController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(labelText: 'Region Code'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _currencyCodeController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Currency Code',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _contactEmailController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Contact Email',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _contactPhoneController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Contact Phone',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _invoicePrefixController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Invoice Prefix',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _invoiceSeriesController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Invoice Series',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _invoiceWidthController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Invoice Number Width',
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _paymentTermsController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Payment Terms',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _footerTextController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(labelText: 'Footer Text'),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _saleNotesController,
-                    enabled: _canManageInvoiceProfile,
-                    decoration: const InputDecoration(
-                      labelText: 'Sale Invoice Notes',
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _taxInclusive,
-                    title: const Text('Tax Inclusive'),
-                    onChanged: _canManageInvoiceProfile
-                        ? (value) {
-                            setState(() {
-                              _taxInclusive = value;
-                            });
-                          }
-                        : null,
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _enforceTaxRegistration,
-                    title: const Text('Enforce Tax Registration'),
-                    onChanged: _canManageInvoiceProfile
-                        ? (value) {
-                            setState(() {
-                              _enforceTaxRegistration = value;
-                            });
-                          }
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      FilledButton.icon(
-                        onPressed: !_canManageInvoiceProfile || _isSubmitting
-                            ? null
-                            : _saveInvoiceProfile,
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text('Save Profile'),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 220,
-                        child: DropdownButtonFormField<String>(
-                          key: ValueKey<String>(
-                            'setup-preset-${_selectedPresetCode ?? 'none'}',
-                          ),
-                          initialValue: _selectedPresetCode,
-                          decoration: const InputDecoration(
-                            labelText: 'Compliance Preset',
-                          ),
-                          items: [
-                            for (final preset in _compliancePresets)
-                              DropdownMenuItem<String>(
-                                value: preset['code'] as String?,
-                                child: Text(
-                                  preset['code'] as String? ?? 'Preset',
-                                ),
-                              ),
-                          ],
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedPresetCode = value;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton.tonalIcon(
-                        onPressed: !canApplyPreset || _isSubmitting
-                            ? null
-                            : _applyPreset,
-                        icon: const Icon(Icons.rule_folder_outlined),
-                        label: const Text('Apply Preset'),
-                      ),
-                    ],
+                  _buildSummaryChip(
+                    context,
+                    label: 'Invoice Key',
+                    value:
+                        '${_invoiceProfile?['invoice_prefix'] ?? '-'} / ${_invoiceProfile?['invoice_series'] ?? '-'}',
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+            ],
+            Text(
+              'Invoice Profile',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              flex: 4,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Current Profile',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 12),
-                      if (_invoiceProfile == null)
-                        const Text('No invoice profile loaded yet.')
-                      else ...[
-                        Text(
-                          'Business: ${_invoiceProfile?['business_name'] ?? '-'}',
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _businessNameController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Business Name'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _legalNameController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Legal Name'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _registrationNoController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Registration No'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _taxRegistrationNoController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(
+                labelText: 'Tax Registration No',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _taxRateController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Default Tax Rate'),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              key: ValueKey<String>(
+                'setup-compliance-$_selectedComplianceMode',
+              ),
+              initialValue: _selectedComplianceMode,
+              decoration: const InputDecoration(labelText: 'Compliance Mode'),
+              items: const [
+                DropdownMenuItem(value: 'standard', child: Text('Standard')),
+                DropdownMenuItem(value: 'regulated', child: Text('Regulated')),
+                DropdownMenuItem(value: 'strict', child: Text('Strict')),
+              ],
+              onChanged: _canManageInvoiceProfile
+                  ? (value) {
+                      setState(() {
+                        _selectedComplianceMode = value ?? 'standard';
+                      });
+                    }
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _regionCodeController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Region Code'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _currencyCodeController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Currency Code'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _contactEmailController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Contact Email'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _contactPhoneController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Contact Phone'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _invoicePrefixController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Invoice Prefix'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _invoiceSeriesController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Invoice Series'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _invoiceWidthController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(
+                labelText: 'Invoice Number Width',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _paymentTermsController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Payment Terms'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _footerTextController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(labelText: 'Footer Text'),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _saleNotesController,
+              enabled: _canManageInvoiceProfile,
+              decoration: const InputDecoration(
+                labelText: 'Sale Invoice Notes',
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _taxInclusive,
+              title: const Text('Tax Inclusive'),
+              onChanged: _canManageInvoiceProfile
+                  ? (value) {
+                      setState(() {
+                        _taxInclusive = value;
+                      });
+                    }
+                  : null,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _enforceTaxRegistration,
+              title: const Text('Enforce Tax Registration'),
+              onChanged: _canManageInvoiceProfile
+                  ? (value) {
+                      setState(() {
+                        _enforceTaxRegistration = value;
+                      });
+                    }
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  onPressed: !_canManageInvoiceProfile || _isSubmitting
+                      ? null
+                      : _saveInvoiceProfile,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save Profile'),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey<String>(
+                      'setup-preset-${_selectedPresetCode ?? 'none'}',
+                    ),
+                    initialValue: _selectedPresetCode,
+                    decoration: const InputDecoration(
+                      labelText: 'Compliance Preset',
+                    ),
+                    items: [
+                      for (final preset in _compliancePresets)
+                        DropdownMenuItem<String>(
+                          value: preset['code'] as String?,
+                          child: Text(preset['code'] as String? ?? 'Preset'),
                         ),
-                        Text('Legal: ${_invoiceProfile?['legal_name'] ?? '-'}'),
-                        Text(
-                          'Tax Rate: ${_invoiceProfile?['default_tax_rate'] ?? 0}',
-                        ),
-                        Text(
-                          'Compliance: ${_invoiceProfile?['compliance_mode'] ?? '-'}',
-                        ),
-                        Text(
-                          'Currency: ${_invoiceProfile?['currency_code'] ?? '-'}',
-                        ),
-                        Text(
-                          'Invoice Prefix: ${_invoiceProfile?['invoice_prefix'] ?? '-'}',
-                        ),
-                        Text(
-                          'Invoice Series: ${_invoiceProfile?['invoice_series'] ?? '-'}',
-                        ),
-                        Text(
-                          'Footer: ${_invoiceProfile?['footer_text'] ?? '-'}',
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      Text(
-                        'Available Presets',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      if (_compliancePresets.isEmpty)
-                        const Text('No presets available.')
-                      else
-                        for (final preset in _compliancePresets)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(preset['code'] as String? ?? 'Preset'),
-                            subtitle: Text(
-                              preset['label'] as String? ??
-                                  preset['description'] as String? ??
-                                  '-',
-                            ),
-                          ),
                     ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedPresetCode = value;
+                      });
+                    },
                   ),
                 ),
-              ),
+                FilledButton.tonalIcon(
+                  onPressed: !canApplyPreset || _isSubmitting
+                      ? null
+                      : _applyPreset,
+                  icon: const Icon(Icons.rule_folder_outlined),
+                  label: const Text('Apply Preset'),
+                ),
+              ],
             ),
           ],
         ),
-      ],
+      ),
+      secondary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Current Profile',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (_invoiceProfile == null)
+                const Text('No invoice profile loaded yet.')
+              else ...[
+                Text('Business: ${_invoiceProfile?['business_name'] ?? '-'}'),
+                Text('Legal: ${_invoiceProfile?['legal_name'] ?? '-'}'),
+                Text('Tax Rate: ${_invoiceProfile?['default_tax_rate'] ?? 0}'),
+                Text(
+                  'Compliance: ${_invoiceProfile?['compliance_mode'] ?? '-'}',
+                ),
+                Text('Currency: ${_invoiceProfile?['currency_code'] ?? '-'}'),
+                Text(
+                  'Invoice Prefix: ${_invoiceProfile?['invoice_prefix'] ?? '-'}',
+                ),
+                Text(
+                  'Invoice Series: ${_invoiceProfile?['invoice_series'] ?? '-'}',
+                ),
+                Text('Footer: ${_invoiceProfile?['footer_text'] ?? '-'}'),
+              ],
+              const SizedBox(height: 20),
+              Text(
+                'Available Presets',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (_compliancePresets.isEmpty)
+                const Text('No presets available.')
+              else
+                for (final preset in _compliancePresets)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(preset['code'] as String? ?? 'Preset'),
+                    subtitle: Text(
+                      preset['label'] as String? ??
+                          preset['description'] as String? ??
+                          '-',
+                    ),
+                  ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
