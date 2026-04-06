@@ -46,6 +46,18 @@ function getId(item: ApiRecord) {
   return numberValue(item.id);
 }
 
+function optionalText(value: FormDataEntryValue | null) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.length > 0 ? text : null;
+}
+
+function optionalNumber(value: FormDataEntryValue | null) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function upsertModuleSetting(current: ApiRecord[], setting: ApiRecord) {
   const moduleName = textValue(setting.module_name);
   const withoutCurrent = current.filter(
@@ -461,6 +473,97 @@ export default function SupportConsolePage() {
     }
   }
 
+  async function submitOrganizationCorrection(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!selectedOrganizationId) return;
+    const formData = new FormData(event.currentTarget);
+    setIsBusy(true);
+    setStatus(null);
+    try {
+      const updatedOrganization = (await apiFetch(
+        `/organizations/${selectedOrganizationId}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            name: optionalText(formData.get("name")),
+            legal_name: optionalText(formData.get("legal_name")),
+            brand_name: optionalText(formData.get("brand_name")),
+            contact_email: optionalText(formData.get("contact_email")),
+            contact_phone: optionalText(formData.get("contact_phone")),
+            onboarding_status: optionalText(formData.get("onboarding_status")),
+            billing_status: optionalText(formData.get("billing_status")),
+            station_target_count: optionalNumber(
+              formData.get("station_target_count"),
+            ),
+            inherit_branding_to_stations:
+              formData.get("inherit_branding_to_stations") === "on",
+            is_active: formData.get("is_active") === "on",
+          }),
+        },
+      )) as ApiRecord;
+      setOrganizations((current) =>
+        current.map((item) =>
+          getId(item) === selectedOrganizationId ? updatedOrganization : item,
+        ),
+      );
+      await loadOrganizationContext(selectedOrganizationId);
+      setStatus("Organization support correction saved.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Organization correction failed",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function submitStationCorrection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedStationId) return;
+    const formData = new FormData(event.currentTarget);
+    setIsBusy(true);
+    setStatus(null);
+    try {
+      const updatedStation = (await apiFetch(`/stations/${selectedStationId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: optionalText(formData.get("name")),
+          display_name: optionalText(formData.get("display_name")),
+          legal_name_override: optionalText(formData.get("legal_name_override")),
+          address: optionalText(formData.get("address")),
+          city: optionalText(formData.get("city")),
+          setup_status: optionalText(formData.get("setup_status")),
+          use_organization_branding:
+            formData.get("use_organization_branding") === "on",
+          is_active: formData.get("is_active") === "on",
+          has_shops: formData.get("has_shops") === "on",
+          has_pos: formData.get("has_pos") === "on",
+          has_tankers: formData.get("has_tankers") === "on",
+          has_hardware: formData.get("has_hardware") === "on",
+          allow_meter_adjustments:
+            formData.get("allow_meter_adjustments") === "on",
+        }),
+      })) as ApiRecord;
+      setStations((current) =>
+        current.map((item) =>
+          getId(item) === selectedStationId ? updatedStation : item,
+        ),
+      );
+      await loadStationModules(selectedStationId);
+      setStatus("Station support correction saved.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Station correction failed",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   function logout() {
     setSession(null);
     setOrganizations([]);
@@ -717,6 +820,258 @@ export default function SupportConsolePage() {
               correction flows can be added here without overloading the tenant
               Flutter app.
             </p>
+          </div>
+
+          <div className="card span-6">
+            <p className="eyebrow">Support correction</p>
+            <h2>Organization profile</h2>
+            <form
+              className="form-grid"
+              key={`organization-correction-${selectedOrganizationId ?? "none"}`}
+              onSubmit={submitOrganizationCorrection}
+            >
+              <label>
+                Organization name
+                <input
+                  defaultValue={textValue(selectedOrganization?.name, "")}
+                  name="name"
+                />
+              </label>
+              <label>
+                Legal name
+                <input
+                  defaultValue={textValue(selectedOrganization?.legal_name, "")}
+                  name="legal_name"
+                />
+              </label>
+              <label>
+                Brand name
+                <input
+                  defaultValue={textValue(selectedOrganization?.brand_name, "")}
+                  name="brand_name"
+                />
+              </label>
+              <div className="two-column">
+                <label>
+                  Contact email
+                  <input
+                    defaultValue={textValue(
+                      selectedOrganization?.contact_email,
+                      "",
+                    )}
+                    name="contact_email"
+                  />
+                </label>
+                <label>
+                  Contact phone
+                  <input
+                    defaultValue={textValue(
+                      selectedOrganization?.contact_phone,
+                      "",
+                    )}
+                    name="contact_phone"
+                  />
+                </label>
+              </div>
+              <div className="two-column">
+                <label>
+                  Onboarding status
+                  <select
+                    defaultValue={textValue(
+                      selectedOrganization?.onboarding_status,
+                      "active",
+                    )}
+                    name="onboarding_status"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </label>
+                <label>
+                  Billing status
+                  <select
+                    defaultValue={textValue(
+                      selectedOrganization?.billing_status,
+                      "trial",
+                    )}
+                    name="billing_status"
+                  >
+                    <option value="trial">Trial</option>
+                    <option value="local">Local</option>
+                    <option value="active">Active</option>
+                    <option value="past_due">Past due</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                Station target count
+                <input
+                  defaultValue={textValue(
+                    selectedOrganization?.station_target_count,
+                    "",
+                  )}
+                  min="0"
+                  name="station_target_count"
+                  type="number"
+                />
+              </label>
+              <div className="checkbox-row">
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(
+                      selectedOrganization?.inherit_branding_to_stations,
+                    )}
+                    name="inherit_branding_to_stations"
+                    type="checkbox"
+                  />
+                  Inherit branding to stations
+                </label>
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(selectedOrganization?.is_active)}
+                    name="is_active"
+                    type="checkbox"
+                  />
+                  Organization active
+                </label>
+              </div>
+              <button disabled={isBusy || !selectedOrganizationId} type="submit">
+                Save organization correction
+              </button>
+            </form>
+          </div>
+
+          <div className="card span-6">
+            <p className="eyebrow">Support correction</p>
+            <h2>Station profile</h2>
+            <form
+              className="form-grid"
+              key={`station-correction-${selectedStationId ?? "none"}`}
+              onSubmit={submitStationCorrection}
+            >
+              <div className="two-column">
+                <label>
+                  Station name
+                  <input
+                    defaultValue={textValue(selectedStation?.name, "")}
+                    name="name"
+                  />
+                </label>
+                <label>
+                  Display name
+                  <input
+                    defaultValue={textValue(selectedStation?.display_name, "")}
+                    name="display_name"
+                  />
+                </label>
+              </div>
+              <label>
+                Legal name override
+                <input
+                  defaultValue={textValue(
+                    selectedStation?.legal_name_override,
+                    "",
+                  )}
+                  name="legal_name_override"
+                />
+              </label>
+              <div className="two-column">
+                <label>
+                  Address
+                  <input
+                    defaultValue={textValue(selectedStation?.address, "")}
+                    name="address"
+                  />
+                </label>
+                <label>
+                  City
+                  <input
+                    defaultValue={textValue(selectedStation?.city, "")}
+                    name="city"
+                  />
+                </label>
+              </div>
+              <label>
+                Setup status
+                <select
+                  defaultValue={textValue(selectedStation?.setup_status, "active")}
+                  name="setup_status"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                </select>
+              </label>
+              <div className="checkbox-row">
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(
+                      selectedStation?.use_organization_branding,
+                    )}
+                    name="use_organization_branding"
+                    type="checkbox"
+                  />
+                  Use organization branding
+                </label>
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(selectedStation?.is_active)}
+                    name="is_active"
+                    type="checkbox"
+                  />
+                  Station active
+                </label>
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(selectedStation?.has_shops)}
+                    name="has_shops"
+                    type="checkbox"
+                  />
+                  Shops
+                </label>
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(selectedStation?.has_pos)}
+                    name="has_pos"
+                    type="checkbox"
+                  />
+                  POS
+                </label>
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(selectedStation?.has_tankers)}
+                    name="has_tankers"
+                    type="checkbox"
+                  />
+                  Tankers
+                </label>
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(selectedStation?.has_hardware)}
+                    name="has_hardware"
+                    type="checkbox"
+                  />
+                  Hardware
+                </label>
+                <label className="inline-check">
+                  <input
+                    defaultChecked={boolValue(
+                      selectedStation?.allow_meter_adjustments,
+                    )}
+                    name="allow_meter_adjustments"
+                    type="checkbox"
+                  />
+                  Meter adjustments
+                </label>
+              </div>
+              <button disabled={isBusy || !selectedStationId} type="submit">
+                Save station correction
+              </button>
+            </form>
           </div>
 
           <div className="card span-6">
