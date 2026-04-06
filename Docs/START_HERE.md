@@ -18,7 +18,7 @@ When returning to this project, use these files in this order:
 
 Start with:
 
-- `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
+- `Phase 7 - Flutter App Completion`
 
 from:
 
@@ -31,7 +31,8 @@ from:
 - `Phase 3 - Finance, Ledgers, Payroll, Pricing`: complete locally
 - `Phase 4 - Tanker and Extended Operations`: complete locally
 - `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
-- next sequence: continue into `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
+- `Phase 6 - Roles, Permissions, Modules, SaaS Rules`: complete locally
+- next sequence: continue into `Phase 7 - Flutter App Completion`
 
 ## Important Decision Already Made
 

@@ -72,7 +72,8 @@ Current phased execution status:
 - `Phase 3 - Finance, Ledgers, Payroll, Pricing`: complete locally
 - `Phase 4 - Tanker and Extended Operations`: complete locally
 - `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
-- next sequence: `Phase 6 - Roles, Permissions, Modules, SaaS Rules`
+- `Phase 6 - Roles, Permissions, Modules, SaaS Rules`: complete locally
+- next sequence: `Phase 7 - Flutter App Completion`
 
 Phase 1 completion now includes:
 - setup-foundation backend summary endpoints for organizations and stations
@@ -123,6 +124,16 @@ Phase 5 completion now includes:
 - filtered profit summary with station/organization scope and date filtering
 - report, document, notification, and dashboard flows now working as one connected communications/reporting layer
 - targeted backend reporting validation plus clean Flutter analyze/test validation
+
+Phase 6 completion now includes:
+- centralized effective capability resolution returned from `/auth/me`
+- resolved backend, organization, station, and feature-flag module visibility for the active user session
+- tenant shell navigation now shaped by effective capability state instead of global module assumptions
+- admin capability controls for organization modules, station modules, subscription plans, and organization subscription state
+- role-aware shell/menu separation so `HeadOffice`, `StationAdmin`, `Manager`, `Accountant`, and `Operator` do not share the same control surfaces by default
+- setup visibility now stays with station-control roles while governance visibility stays with oversight roles
+- zero-ghost-module direction substantially enforced across shell and dashboard entry points
+- clean targeted backend validation plus clean Flutter analyze/test validation across the Phase 6 batches
 
 ### Architecture Direction
 Current direction is:
