@@ -216,6 +216,10 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "approve_reverse": {"Admin", "HeadOffice"},
         "reject_reverse": {"Admin", "HeadOffice"},
     },
+    "internal_fuel_usage": {
+        "create": {"Admin", "Manager", "Operator"},
+        "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
+    },
     "customer_payments": {
         "create": {"Admin", "Manager", "Operator", "Accountant"},
         "reverse": {"Admin", "Manager", "Operator", "Accountant"},

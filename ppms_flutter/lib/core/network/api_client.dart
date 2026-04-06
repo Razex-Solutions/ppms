@@ -1461,6 +1461,39 @@ class ApiClient {
     );
   }
 
+  Future<List<dynamic>> getInternalFuelUsage(
+    String accessToken, {
+    int? stationId,
+    int? tankId,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (tankId != null) {
+      params['tank_id'] = '$tankId';
+    }
+    return _sendList(
+      'GET',
+      '/internal-fuel-usage/',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createInternalFuelUsage(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/internal-fuel-usage/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<List<dynamic>> getPosProducts(
     String accessToken, {
     int? stationId,

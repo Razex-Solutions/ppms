@@ -26,6 +26,7 @@ from app.models.nozzle import Nozzle
 from app.models.fuel_sale import FuelSale
 from app.models.customer import Customer
 from app.models.supplier import Supplier
+from app.models.internal_fuel_usage import InternalFuelUsage
 from app.models.purchase import Purchase
 from app.models.tanker import Tanker
 from app.models.expense import Expense

@@ -22,6 +22,9 @@ class _InventoryPageState extends State<InventoryPage> {
   final _tankCurrentVolumeController = TextEditingController(text: '0');
   final _tankLowStockController = TextEditingController(text: '1000');
   final _tankLocationController = TextEditingController();
+  final _internalUsageQuantityController = TextEditingController(text: '0');
+  final _internalUsagePurposeController = TextEditingController();
+  final _internalUsageNotesController = TextEditingController();
   final _dispenserNameController = TextEditingController();
   final _dispenserCodeController = TextEditingController();
   final _dispenserLocationController = TextEditingController();
@@ -41,6 +44,7 @@ class _InventoryPageState extends State<InventoryPage> {
   List<Map<String, dynamic>> _tanks = const [];
   List<Map<String, dynamic>> _dispensers = const [];
   List<Map<String, dynamic>> _nozzles = const [];
+  List<Map<String, dynamic>> _internalUsageRecords = const [];
   int? _selectedStationId;
   int? _selectedTankId;
   int? _selectedDispenserId;
@@ -67,6 +71,9 @@ class _InventoryPageState extends State<InventoryPage> {
     _tankCurrentVolumeController.dispose();
     _tankLowStockController.dispose();
     _tankLocationController.dispose();
+    _internalUsageQuantityController.dispose();
+    _internalUsagePurposeController.dispose();
+    _internalUsageNotesController.dispose();
     _dispenserNameController.dispose();
     _dispenserCodeController.dispose();
     _dispenserLocationController.dispose();
@@ -124,6 +131,13 @@ class _InventoryPageState extends State<InventoryPage> {
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
+      final internalUsageRecords = !_showInventoryWorkspace || stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchInternalFuelUsage(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
 
       if (!mounted) return;
 
@@ -134,6 +148,7 @@ class _InventoryPageState extends State<InventoryPage> {
         _tanks = tanks;
         _dispensers = dispensers;
         _nozzles = nozzles;
+        _internalUsageRecords = internalUsageRecords;
         _selectedTankFuelTypeId =
             _selectedTankFuelTypeId ?? _firstId(fuelTypes);
         _selectedNozzleFuelTypeId =
@@ -230,6 +245,54 @@ class _InventoryPageState extends State<InventoryPage> {
       setState(() {
         _feedbackMessage =
             'Tank ${tank['name']} ${isEditing ? 'updated' : 'created'} successfully.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _recordInternalFuelUsage() async {
+    final selectedTank = _tanks.cast<Map<String, dynamic>?>().firstWhere(
+      (tank) => tank?['id'] == _selectedTankId,
+      orElse: () => null,
+    );
+    if (selectedTank == null) {
+      setState(() {
+        _feedbackMessage =
+            'Select a tank before recording internal fuel usage.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final usage = await widget.sessionController.createInternalFuelUsage({
+        'tank_id': selectedTank['id'] as int,
+        'fuel_type_id': selectedTank['fuel_type_id'] as int,
+        'quantity': double.parse(_internalUsageQuantityController.text.trim()),
+        'purpose': _internalUsagePurposeController.text.trim(),
+        'notes': _emptyToNull(_internalUsageNotesController.text),
+      });
+      if (!mounted) return;
+
+      _internalUsageQuantityController.text = '0';
+      _internalUsagePurposeController.clear();
+      _internalUsageNotesController.clear();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Internal fuel usage of ${_formatNumber(usage['quantity'] as num?)} recorded.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -588,10 +651,15 @@ class _InventoryPageState extends State<InventoryPage> {
   bool get _canReadTanks =>
       _hasAction('tanks', 'create') ||
       _hasAction('tanks', 'update') ||
-      _hasAction('tanks', 'delete');
+      _hasAction('tanks', 'delete') ||
+      _hasAction('internal_fuel_usage', 'read');
   bool get _canManageTanks =>
       _hasAction('tanks', 'create') || _hasAction('tanks', 'update');
   bool get _canDeleteTanks => _hasAction('tanks', 'delete');
+  bool get _canReadInternalFuelUsage =>
+      _hasAction('internal_fuel_usage', 'read');
+  bool get _canRecordInternalFuelUsage =>
+      _hasAction('internal_fuel_usage', 'create');
   bool get _canReadDispensers =>
       _hasAction('dispensers', 'create') ||
       _hasAction('dispensers', 'update') ||
@@ -770,6 +838,8 @@ class _InventoryPageState extends State<InventoryPage> {
   Widget _buildTanks() {
     final canManageTanks = _canManageTanks;
     final canDeleteTanks = _canDeleteTanks;
+    final canRecordInternalFuelUsage = _canRecordInternalFuelUsage;
+    final canReadInternalFuelUsage = _canReadInternalFuelUsage;
     final fuelTypeItems = _fuelTypes
         .map(
           (fuelType) => DropdownMenuItem<int>(
@@ -783,6 +853,11 @@ class _InventoryPageState extends State<InventoryPage> {
       (tank) => tank?['id'] == _selectedTankId,
       orElse: () => null,
     );
+    final selectedTankUsage = selectedTank == null
+        ? const <Map<String, dynamic>>[]
+        : _internalUsageRecords
+              .where((record) => record['tank_id'] == selectedTank['id'])
+              .toList();
     return ResponsiveSplit(
       primary: Card(
         child: Padding(
@@ -991,6 +1066,81 @@ class _InventoryPageState extends State<InventoryPage> {
                     selectedTank['location'] as String? ?? '-',
                   ),
                 ]),
+                const SizedBox(height: 16),
+                Text(
+                  'Internal Fuel Usage',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if (!canRecordInternalFuelUsage)
+                  _buildPermissionNotice(
+                    context,
+                    canReadInternalFuelUsage
+                        ? 'This role can review internal fuel usage but cannot record it.'
+                        : 'Internal fuel usage is not available for this role.',
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        controller: _internalUsageQuantityController,
+                        decoration: const InputDecoration(
+                          labelText: 'Usage Quantity',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _internalUsagePurposeController,
+                        decoration: const InputDecoration(labelText: 'Purpose'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _internalUsageNotesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Notes (optional)',
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonal(
+                        onPressed: _isSubmitting
+                            ? null
+                            : _recordInternalFuelUsage,
+                        child: Text(
+                          _isSubmitting
+                              ? 'Recording...'
+                              : 'Record Internal Usage',
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+                if (!canReadInternalFuelUsage)
+                  const SizedBox.shrink()
+                else if (selectedTankUsage.isEmpty)
+                  const Text(
+                    'No internal fuel usage recorded for this tank yet.',
+                  )
+                else
+                  ...selectedTankUsage
+                      .take(5)
+                      .map(
+                        (record) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.local_shipping_outlined),
+                          title: Text(
+                            '${_formatNumber(record['quantity'] as num?)} used for ${record['purpose']}',
+                          ),
+                          subtitle: Text(
+                            record['notes'] as String? ??
+                                'Internal consumption record',
+                          ),
+                        ),
+                      ),
               ],
             ],
           ),

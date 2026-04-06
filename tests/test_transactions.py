@@ -101,6 +101,43 @@ def test_fuel_sale_can_be_fetched_and_reversed_safely(client):
         db.close()
 
 
+def test_internal_fuel_usage_reduces_tank_volume_and_is_queryable(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+
+    usage = test_client.post(
+        "/internal-fuel-usage/",
+        headers=operator_headers,
+        json={
+            "tank_id": data["tank_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "quantity": 15,
+            "purpose": "Generator refill",
+            "notes": "Night backup run",
+        },
+    )
+    assert usage.status_code == 200, usage.text
+    assert usage.json()["station_id"] == data["station_a_id"]
+    assert usage.json()["quantity"] == 15
+
+    list_response = test_client.get(
+        f"/internal-fuel-usage/?tank_id={data['tank_id']}",
+        headers=accountant_headers,
+    )
+    assert list_response.status_code == 200, list_response.text
+    assert len(list_response.json()) == 1
+    assert list_response.json()[0]["purpose"] == "Generator refill"
+
+    db = session_local()
+    try:
+        tank = db.query(Tank).filter(Tank.id == data["tank_id"]).first()
+        assert tank.current_volume == 85
+    finally:
+        db.close()
+
+
 def test_customer_and_supplier_payments_have_detail_and_reverse_flows(client):
     test_client, session_local = client
     data = seed_base_data(session_local)

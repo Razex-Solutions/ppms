@@ -1124,6 +1124,28 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<dynamic>> fetchInternalFuelUsage({
+    int? stationId,
+    int? tankId,
+    int limit = 50,
+  }) async {
+    return _apiClient.getInternalFuelUsage(
+      await _validAccessToken(),
+      stationId: stationId,
+      tankId: tankId,
+      limit: limit,
+    );
+  }
+
+  Future<Map<String, dynamic>> createInternalFuelUsage(
+    Map<String, dynamic> payload,
+  ) async {
+    return _apiClient.createInternalFuelUsage(
+      await _validAccessToken(),
+      payload: payload,
+    );
+  }
+
   Future<List<dynamic>> fetchPosProducts({
     int? stationId,
     String? module,

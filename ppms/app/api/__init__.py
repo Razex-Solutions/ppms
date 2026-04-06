@@ -15,6 +15,7 @@ from app.api.fuel_type import router as fuel_type_router
 from app.api.financial_document import router as financial_document_router
 from app.api.hardware import router as hardware_router
 from app.api.invoice_profile import router as invoice_profile_router
+from app.api.internal_fuel_usage import router as internal_fuel_usage_router
 from app.api.ledger import router as ledger_router
 from app.api.maintenance import router as maintenance_router
 from app.api.nozzle import router as nozzle_router
@@ -66,6 +67,7 @@ ROUTER_REGISTRY = [
     {"name": "saas", "router": saas_router, "protected": True},
     {"name": "hardware", "router": hardware_router, "protected": True},
     {"name": "invoice_profiles", "router": invoice_profile_router, "protected": True},
+    {"name": "internal_fuel_usage", "router": internal_fuel_usage_router, "protected": True},
     {"name": "document_templates", "router": document_template_router, "protected": True},
     {"name": "employee_profiles", "router": employee_profile_router, "protected": True},
     {"name": "customers", "router": customer_router, "protected": True},
