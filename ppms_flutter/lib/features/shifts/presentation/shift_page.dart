@@ -204,6 +204,17 @@ class _ShiftPageState extends State<ShiftPage> {
 
   Map<String, dynamic>? get _currentOpenShift => _currentOpenShiftFrom(_shifts);
 
+  String get _selectedStationLabel {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        final name = station['name'] as String? ?? 'Station';
+        final code = station['code'] as String? ?? '-';
+        return '$name ($code)';
+      }
+    }
+    return 'No station selected';
+  }
+
   Future<void> _changeStation(int? stationId) async {
     if (stationId == null) {
       return;
@@ -613,6 +624,14 @@ class _ShiftPageState extends State<ShiftPage> {
                         ),
                     ],
                   ),
+          ),
+          const SizedBox(height: 16),
+          _buildWorkspaceReview(
+            context,
+            canOpenShifts: canOpenShifts,
+            canCloseShifts: canCloseShifts,
+            selectedShift: selectedShift,
+            shiftCashSummary: shiftCashSummary,
           ),
           const SizedBox(height: 16),
           Row(
@@ -1039,6 +1058,10 @@ class _ShiftPageState extends State<ShiftPage> {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 16),
+                        if (selectedShift != null) ...[
+                          _buildShiftSummaryBanner(context, selectedShift),
+                          const SizedBox(height: 16),
+                        ],
                         DropdownButtonFormField<String>(
                           key: ValueKey<String>('shift-filter-$_statusFilter'),
                           initialValue: _statusFilter,
@@ -1102,6 +1125,36 @@ class _ShiftPageState extends State<ShiftPage> {
     );
   }
 
+  Widget _buildShiftSummaryBanner(
+    BuildContext context,
+    Map<String, dynamic> shift,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _formatShiftTitle(shift),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Expected ${_formatNumber(shift['expected_cash'])} • Cash ${_formatNumber(shift['total_sales_cash'])} • Credit ${_formatNumber(shift['total_sales_credit'])}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOpenShiftSummary(
     BuildContext context,
     Map<String, dynamic> shift,
@@ -1131,6 +1184,93 @@ class _ShiftPageState extends State<ShiftPage> {
           Text(
             'Initial cash ${_formatNumber(shift['initial_cash'])} • '
             'Expected cash ${_formatNumber(shift['expected_cash'])}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkspaceReview(
+    BuildContext context, {
+    required bool canOpenShifts,
+    required bool canCloseShifts,
+    required Map<String, dynamic>? selectedShift,
+    required Map<String, dynamic>? shiftCashSummary,
+  }) {
+    final selectedTemplate = _selectedShiftTemplate;
+    final selectedShiftLabel = selectedShift == null
+        ? 'No shift selected yet'
+        : _formatShiftTitle(selectedShift);
+    final nextAction = selectedShift == null
+        ? 'Choose a shift from the activity list, or open a new shift if operations are starting now.'
+        : selectedShift['status'] == 'open'
+        ? 'Review expected cash and submissions before recording cash or closing the shift.'
+        : 'Review the closed shift variance and totals before moving to the next shift.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Review First',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            selectedShiftLabel,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildStatusChip(
+                context,
+                Icons.store_outlined,
+                _selectedStationLabel,
+              ),
+              _buildStatusChip(
+                context,
+                Icons.schedule_send_outlined,
+                selectedTemplate == null
+                    ? 'No template selected'
+                    : '${selectedTemplate['name']} • ${selectedTemplate['window_label']}',
+              ),
+              _buildStatusChip(
+                context,
+                Icons.account_balance_wallet_outlined,
+                shiftCashSummary == null
+                    ? 'No cash summary yet'
+                    : 'Expected ${_formatNumber(shiftCashSummary['expected_cash'])}',
+              ),
+              _buildStatusChip(
+                context,
+                canOpenShifts || canCloseShifts
+                    ? Icons.edit_note_outlined
+                    : Icons.lock_outline,
+                canOpenShifts || canCloseShifts
+                    ? 'Shift controls enabled'
+                    : 'Review-only mode',
+              ),
+            ],
           ),
         ],
       ),
