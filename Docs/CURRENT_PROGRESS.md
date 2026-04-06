@@ -73,7 +73,8 @@ Current phased execution status:
 - `Phase 4 - Tanker and Extended Operations`: complete locally
 - `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
 - `Phase 6 - Roles, Permissions, Modules, SaaS Rules`: complete locally
-- next sequence: `Phase 7 - Flutter App Completion`
+- `Phase 7 - Flutter App Completion`: complete locally
+- next sequence: `Phase 8 - Master Admin Support Frontend`
 
 Phase 1 completion now includes:
 - setup-foundation backend summary endpoints for organizations and stations
@@ -134,6 +135,15 @@ Phase 6 completion now includes:
 - setup visibility now stays with station-control roles while governance visibility stays with oversight roles
 - zero-ghost-module direction substantially enforced across shell and dashboard entry points
 - clean targeted backend validation plus clean Flutter analyze/test validation across the Phase 6 batches
+
+Phase 7 completion now includes:
+- guided setup and station setup flows reshaped around review cards, next-action guidance, inheritance context, and summary-first setup decisions
+- role-aware dashboard and shell behavior carried forward from the capability system into the tenant Flutter experience
+- major workspaces refined into summary-first flows before forms: setup, admin, sales, shifts, finance, parties, inventory, tankers, payroll, reports, documents, notifications, attendance, POS, expenses, hardware, and governance
+- financial, party, report, document, notification, tanker, shift, payroll, inventory, and sales pages now surface selected-record context before risky or posting actions
+- POS and attendance now use the same review-first pattern as the rest of the operational client
+- module and permission-aware visibility remains the guiding rule for workspace entry points and in-page actions
+- clean Flutter analyze/test validation across the Phase 7 workspace batches
 
 ### Architecture Direction
 Current direction is:
@@ -835,6 +845,8 @@ The Flutter app has moved away from being only raw CRUD pages.
 - hardware
 - expenses
 - tankers
+- attendance
+- POS
 - notifications
 
 ### Shared design system in active use

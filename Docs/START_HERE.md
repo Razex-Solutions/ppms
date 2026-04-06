@@ -18,7 +18,7 @@ When returning to this project, use these files in this order:
 
 Start with:
 
-- `Phase 7 - Flutter App Completion`
+- `Phase 8 - Master Admin Support Frontend`
 
 from:
 
@@ -32,7 +32,8 @@ from:
 - `Phase 4 - Tanker and Extended Operations`: complete locally
 - `Phase 5 - Notifications, Documents, Reports, Profit`: complete locally
 - `Phase 6 - Roles, Permissions, Modules, SaaS Rules`: complete locally
-- next sequence: continue into `Phase 7 - Flutter App Completion`
+- `Phase 7 - Flutter App Completion`: complete locally
+- next sequence: continue into `Phase 8 - Master Admin Support Frontend`
 
 ## Important Decision Already Made
 
