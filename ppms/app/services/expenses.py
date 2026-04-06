@@ -8,7 +8,7 @@ from app.models.station import Station
 from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.services.audit import log_audit_event
-from app.services.notifications import notify_approval_requested, notify_decision
+from app.services.notifications import notify_decision
 
 
 def _get_station(db: Session, station_id: int) -> Station:
@@ -46,17 +46,16 @@ def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expe
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
 
-    is_auto_approved = current_user.role.name == "Admin" or is_master_admin(current_user)
     expense = Expense(
         title=data.title,
         category=data.category,
         amount=data.amount,
         notes=data.notes,
         station_id=data.station_id,
-        status="approved" if is_auto_approved else "pending",
+        status="approved",
         submitted_by_user_id=current_user.id,
-        approved_by_user_id=current_user.id if is_auto_approved else None,
-        approved_at=utc_now() if is_auto_approved else None,
+        approved_by_user_id=current_user.id,
+        approved_at=utc_now(),
     )
     db.add(expense)
     db.flush()
@@ -76,18 +75,6 @@ def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expe
             "organization_id": station.organization_id,
         },
     )
-    if not is_auto_approved:
-        notify_approval_requested(
-            db,
-            actor_user=current_user,
-            station_id=expense.station_id,
-            organization_id=station.organization_id,
-            entity_type="expense",
-            entity_id=expense.id,
-            title="Expense approval requested",
-            message=f"{current_user.full_name} submitted expense '{expense.title}' for approval.",
-            event_type="expense.pending_approval",
-        )
     db.commit()
     db.refresh(expense)
     return expense

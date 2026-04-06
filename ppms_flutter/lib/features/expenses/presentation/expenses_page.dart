@@ -148,7 +148,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
       if (!mounted) return;
       setState(() {
         _feedbackMessage =
-            'Expense #${expense['id']} created with status ${expense['status']}.';
+            'Expense #${expense['id']} recorded successfully with status ${expense['status']}.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -193,7 +193,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
       return {
         'title': 'Expense Control',
         'subtitle':
-            'Record station expenses, watch approval movement, and keep operating spend visible.',
+            'Record station expenses directly and keep operating spend visible without waiting on a default approval queue.',
       };
     }
     return {
@@ -341,7 +341,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
                   const SizedBox(height: 8),
                   Text(
                     canCreateExpenses
-                        ? 'Record station expenses and monitor their review status.'
+                        ? 'Record station expenses directly and keep station spending visible.'
                         : 'Review station expense history and approval status for the selected station.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),

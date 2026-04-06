@@ -247,7 +247,7 @@ def test_flutter_contract_for_admin_setup_finance_and_governance_lists(client):
     )
 
     expenses = test_client.get(
-        f"/expenses/?station_id={data['station_a_id']}&status=pending",
+        f"/expenses/?station_id={data['station_a_id']}&status=approved",
         headers=operator_headers,
     )
     assert expenses.status_code == 200, expenses.text

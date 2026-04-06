@@ -201,15 +201,7 @@ def test_report_permissions_and_financial_reports(client):
         },
     )
     assert expense_response.status_code == 200, expense_response.text
-    assert expense_response.json()["status"] == "pending"
-
-    expense_approval = test_client.post(
-        f"/expenses/{expense_response.json()['id']}/approve",
-        headers=head_office_headers,
-        json={"reason": "Approved for reporting"},
-    )
-    assert expense_approval.status_code == 200, expense_approval.text
-    assert expense_approval.json()["status"] == "approved"
+    assert expense_response.json()["status"] == "approved"
 
     purchase_response = test_client.post(
         "/purchases/",
@@ -285,12 +277,7 @@ def test_head_office_reports_and_dashboard_are_organization_scoped(client):
         },
     )
     assert local_expense.status_code == 200, local_expense.text
-    local_expense_approval = test_client.post(
-        f"/expenses/{local_expense.json()['id']}/approve",
-        headers=head_office_headers,
-        json={"reason": "Approved for org dashboard"},
-    )
-    assert local_expense_approval.status_code == 200, local_expense_approval.text
+    assert local_expense.json()["status"] == "approved"
 
     db = session_local()
     try:
@@ -393,30 +380,38 @@ def test_head_office_reports_and_dashboard_are_organization_scoped(client):
     assert dashboard_response.json()["sales"]["total"] == 40
 
 
-def test_expense_approval_workflow_controls_financial_reporting(client):
+def test_expense_approval_workflow_controls_financial_reporting_for_pending_records(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    manager_headers = login(test_client, "manager", "manager123")
     accountant_headers = login(test_client, "accountant", "accountant123")
+    manager_headers = login(test_client, "manager", "manager123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")
 
-    pending_expense = test_client.post(
-        "/expenses/",
-        headers=manager_headers,
-        json={
-            "title": "Pending Expense",
-            "category": "Ops",
-            "amount": 25,
-            "station_id": data["station_a_id"],
-        },
-    )
-    assert pending_expense.status_code == 200, pending_expense.text
-    expense_id = pending_expense.json()["id"]
-    assert pending_expense.json()["status"] == "pending"
+    db = session_local()
+    try:
+        from app.models.expense import Expense
+        from app.models.user import User
+
+        manager = db.query(User).filter(User.username == "manager").first()
+        pending_expense = Expense(
+            title="Pending Expense",
+            category="Ops",
+            amount=25,
+            station_id=data["station_a_id"],
+            status="pending",
+            submitted_by_user_id=manager.id if manager else None,
+        )
+        db.add(pending_expense)
+        db.commit()
+        db.refresh(pending_expense)
+        expense_id = pending_expense.id
+        report_date = pending_expense.created_at.date().isoformat()
+    finally:
+        db.close()
 
     pending_report = test_client.get(
         "/reports/daily-closing",
-        params={"report_date": pending_expense.json()["created_at"][:10]},
+        params={"report_date": report_date},
         headers=accountant_headers,
     )
     assert pending_report.status_code == 200
@@ -439,7 +434,7 @@ def test_expense_approval_workflow_controls_financial_reporting(client):
 
     approved_report = test_client.get(
         "/reports/daily-closing",
-        params={"report_date": pending_expense.json()["created_at"][:10]},
+        params={"report_date": report_date},
         headers=accountant_headers,
     )
     assert approved_report.status_code == 200
@@ -486,13 +481,7 @@ def test_report_exports_create_and_download_csv(client):
         },
     )
     assert expense_response.status_code == 200, expense_response.text
-
-    expense_approval = test_client.post(
-        f"/expenses/{expense_response.json()['id']}/approve",
-        headers=head_office_headers,
-        json={"reason": "Approved for export"},
-    )
-    assert expense_approval.status_code == 200, expense_approval.text
+    assert expense_response.json()["status"] == "approved"
 
     export_response = test_client.post(
         "/report-exports/",
@@ -698,32 +687,7 @@ def test_notifications_cover_approval_export_and_meter_events(client):
     )
     assert expense_response.status_code == 200, expense_response.text
     expense_id = expense_response.json()["id"]
-
-    head_office_notifications = test_client.get("/notifications/", headers=head_office_headers)
-    assert head_office_notifications.status_code == 200, head_office_notifications.text
-    assert any(
-        n["event_type"] == "expense.pending_approval" and n["entity_id"] == expense_id
-        for n in head_office_notifications.json()
-    )
-
-    approval_response = test_client.post(
-        f"/expenses/{expense_id}/approve",
-        headers=head_office_headers,
-        json={"reason": "Approved for notifications"},
-    )
-    assert approval_response.status_code == 200, approval_response.text
-
-    manager_notifications = test_client.get("/notifications/", headers=manager_headers)
-    assert manager_notifications.status_code == 200, manager_notifications.text
-    approved_notification = next(
-        n for n in manager_notifications.json()
-        if n["event_type"] == "expense.approved" and n["entity_id"] == expense_id
-    )
-    assert approved_notification["is_read"] is False
-
-    mark_read = test_client.post(f"/notifications/{approved_notification['id']}/read", headers=manager_headers)
-    assert mark_read.status_code == 200, mark_read.text
-    assert mark_read.json()["is_read"] is True
+    assert expense_response.json()["status"] == "approved"
 
     export_response = test_client.post(
         "/report-exports/",
