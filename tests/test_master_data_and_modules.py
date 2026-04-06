@@ -240,6 +240,102 @@ def test_phase1_setup_foundation_endpoints_and_auto_generated_forecourt_records(
     assert station_summary.json()["resolved_legal_name"] == "Station A"
 
 
+def test_phase1_setup_foundation_resolves_inherited_branding_and_invoice_identity(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+
+    db = session_local()
+    try:
+        from app.models.organization import Organization
+        from app.models.station import Station
+
+        organization = db.query(Organization).filter(Organization.id == data["organization_id"]).first()
+        station = db.query(Station).filter(Station.id == data["station_a_id"]).first()
+        organization.brand_name = "Shell"
+        organization.brand_code = "SHELL"
+        organization.logo_url = "https://example.com/shell.png"
+        organization.legal_name = "Org A Legal"
+        organization.contact_email = "org@example.com"
+        organization.contact_phone = "03001234567"
+        station.use_organization_branding = True
+        station.legal_name_override = None
+        db.commit()
+    finally:
+        db.close()
+
+    station_summary = test_client.get(
+        f"/stations/{data['station_a_id']}/setup-foundation",
+        headers=admin_headers,
+    )
+    assert station_summary.status_code == 200, station_summary.text
+    payload = station_summary.json()
+    assert payload["resolved_branding"]["source"] == "organization"
+    assert payload["resolved_branding"]["brand_name"] == "Shell"
+    assert payload["resolved_legal_name"] == "Org A Legal"
+    assert payload["invoice_identity"]["business_name"] == "Station A"
+    assert payload["invoice_identity"]["legal_name"] == "Org A Legal"
+    assert payload["invoice_identity"]["brand_name"] == "Shell"
+    assert payload["invoice_identity"]["logo_url"] == "https://example.com/shell.png"
+    assert payload["invoice_identity"]["source"] == "station_defaults"
+
+
+def test_phase1_setup_foundation_resolves_station_overrides_and_invoice_profile_overrides(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+
+    db = session_local()
+    try:
+        from app.models.organization import Organization
+        from app.models.station import Station
+
+        organization = db.query(Organization).filter(Organization.id == data["organization_id"]).first()
+        station = db.query(Station).filter(Station.id == data["station_a_id"]).first()
+        organization.brand_name = "PSO"
+        organization.brand_code = "PSO"
+        station.use_organization_branding = False
+        station.brand_name = "Station Custom"
+        station.brand_code = "STA-C"
+        station.logo_url = "https://example.com/station.png"
+        station.legal_name_override = "Station A Legal"
+        db.commit()
+    finally:
+        db.close()
+
+    invoice_put = test_client.put(
+        f"/invoice-profiles/{data['station_a_id']}",
+        headers=admin_headers,
+        json={
+            "business_name": "Station A Trading",
+            "legal_name": "Station A Tax Legal",
+            "logo_url": "https://example.com/invoice-logo.png",
+            "contact_email": "billing@example.com",
+            "contact_phone": "03110000000",
+            "footer_text": "Thank you",
+            "invoice_prefix": "STA",
+            "invoice_number_width": 6,
+        },
+    )
+    assert invoice_put.status_code == 200, invoice_put.text
+
+    station_summary = test_client.get(
+        f"/stations/{data['station_a_id']}/setup-foundation",
+        headers=admin_headers,
+    )
+    assert station_summary.status_code == 200, station_summary.text
+    payload = station_summary.json()
+    assert payload["resolved_branding"]["source"] == "station"
+    assert payload["resolved_branding"]["brand_name"] == "Station Custom"
+    assert payload["resolved_legal_name"] == "Station A Legal"
+    assert payload["invoice_identity"]["source"] == "invoice_profile"
+    assert payload["invoice_identity"]["business_name"] == "Station A Trading"
+    assert payload["invoice_identity"]["legal_name"] == "Station A Tax Legal"
+    assert payload["invoice_identity"]["logo_url"] == "https://example.com/invoice-logo.png"
+    assert payload["invoice_identity"]["contact_email"] == "billing@example.com"
+    assert payload["invoice_identity"]["footer_text"] == "Thank you"
+
+
 def test_head_office_can_read_only_own_organization_users_and_stations(client):
     test_client, session_local = client
     data = seed_base_data(session_local)

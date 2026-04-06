@@ -2,27 +2,32 @@
 
 When returning to this project, use these files in this order:
 
-1. [FINAL_PHASED_MASTER_ROADMAP.md](/C:/Fuel%20Management%20System/Docs/FINAL_PHASED_MASTER_ROADMAP.md)
+1. [FINAL_PHASED_MASTER_ROADMAP.md](FINAL_PHASED_MASTER_ROADMAP.md)
    - this is the main execution roadmap
 
-2. [SIMPLIFIED_SETUP_AND_ROLE_PLAN.md](/C:/Fuel%20Management%20System/Docs/SIMPLIFIED_SETUP_AND_ROLE_PLAN.md)
+2. [SIMPLIFIED_SETUP_AND_ROLE_PLAN.md](SIMPLIFIED_SETUP_AND_ROLE_PLAN.md)
    - this contains the business logic and product rules
 
-3. [CURRENT_PROGRESS.md](/C:/Fuel%20Management%20System/Docs/CURRENT_PROGRESS.md)
+3. [CURRENT_PROGRESS.md](CURRENT_PROGRESS.md)
    - this shows what already exists and where things are
 
-4. [PHASE_EXECUTION_TEMPLATE.md](/C:/Fuel%20Management%20System/Docs/PHASE_EXECUTION_TEMPLATE.md)
+4. [PHASE_EXECUTION_TEMPLATE.md](PHASE_EXECUTION_TEMPLATE.md)
    - this is the template to execute one phase properly
 
 ## Current Recommended Next Step
 
 Start with:
 
-- `Phase 1 - Setup Hierarchy Foundation`
+- `Phase 2 - Operations Core`
 
 from:
 
-- [FINAL_PHASED_MASTER_ROADMAP.md](/C:/Fuel%20Management%20System/Docs/FINAL_PHASED_MASTER_ROADMAP.md)
+- [FINAL_PHASED_MASTER_ROADMAP.md](FINAL_PHASED_MASTER_ROADMAP.md)
+
+## Phase Status
+
+- `Phase 1 - Setup Hierarchy Foundation`: complete locally
+- next sequence: continue into `Phase 2 - Operations Core`
 
 ## Important Decision Already Made
 

@@ -64,6 +64,22 @@ The Flutter app is now beyond simple placeholders. It includes real workspaces f
 - notifications
 - settings
 
+### Phase Progress
+
+Current phased execution status:
+- `Phase 1 - Setup Hierarchy Foundation`: complete locally
+- `Phase 2 - Operations Core`: next in sequence
+
+Phase 1 completion now includes:
+- setup-foundation backend summary endpoints for organizations and stations
+- inheritance-aware branding and invoice identity resolution
+- auto-generated tank, dispenser, and nozzle naming/coding support
+- forecourt validation for tank/dispenser/nozzle/fuel mappings
+- onboarding review summary and single-station inheritance-first behavior
+- station setup checklist/progress guidance
+- invoice default-following UX and override path
+- targeted backend setup tests plus clean Flutter analyze/test validation
+
 ### Architecture Direction
 Current direction is:
 - local-first development
@@ -829,11 +845,11 @@ Expected purpose:
 ## 16. Recommended Next Steps
 
 ### For product work
-1. role-by-role real review pass in Flutter
-2. fix mismatches and rough edges
-3. keep tightening module-driven visibility
-4. continue visual upgrade where old CRUD-style screens remain
-5. start shaping backend endpoints for the future Node.js support console where needed
+1. execute `Phase 2 - Operations Core`
+2. reshape shift setup toward templates and question-based station operating rules
+3. continue moving fuel workflows from manual-entry patterns toward fact-led meter flows
+4. tighten cash, meter, and reconciliation behavior around the new operations model
+5. keep tightening module-driven visibility and remove remaining CRUD-first rough edges
 
 ### For deployment later
 1. finalize local product behavior
