@@ -242,6 +242,45 @@ def test_report_permissions_and_financial_reports(client):
     assert first_tank["sold_liters"] == 5
     assert first_tank["current_volume_liters"] == 115
 
+    profit_summary = test_client.get(
+        "/accounting/profit-summary",
+        params={"from_date": report_date, "to_date": "2100-01-01"},
+        headers=manager_headers,
+    )
+    assert profit_summary.status_code == 200, profit_summary.text
+    profit_json = profit_summary.json()
+    assert profit_json["station_id"] == data["station_a_id"]
+    assert profit_json["total_sales"] == 50
+    assert profit_json["total_purchase_cost"] == 100
+    assert profit_json["total_expenses"] == 15
+    assert profit_json["net_profit"] == -65
+
+    report_definition = test_client.post(
+        "/report-definitions/",
+        headers=manager_headers,
+        json={
+            "name": "Month End Ops",
+            "report_type": "profit_summary",
+            "station_id": data["station_a_id"],
+            "filters": {
+                "report_date": report_date,
+                "from_date": report_date,
+                "to_date": "2100-01-01",
+            },
+        },
+    )
+    assert report_definition.status_code == 200, report_definition.text
+    definition_json = report_definition.json()
+    assert definition_json["name"] == "Month End Ops"
+    assert definition_json["filters"]["report_date"] == report_date
+
+    report_definitions = test_client.get(
+        "/report-definitions/",
+        headers=manager_headers,
+    )
+    assert report_definitions.status_code == 200, report_definitions.text
+    assert any(item["id"] == definition_json["id"] for item in report_definitions.json())
+
 
 def test_head_office_reports_and_dashboard_are_organization_scoped(client):
     test_client, session_local = client

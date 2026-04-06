@@ -215,6 +215,62 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> getProfitSummary(
+    String accessToken, {
+    int? stationId,
+    int? organizationId,
+    String? fromDate,
+    String? toDate,
+  }) async {
+    final params = <String, String>{};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    if (organizationId != null) {
+      params['organization_id'] = '$organizationId';
+    }
+    if (fromDate != null && fromDate.isNotEmpty) {
+      params['from_date'] = fromDate;
+    }
+    if (toDate != null && toDate.isNotEmpty) {
+      params['to_date'] = toDate;
+    }
+    return _send(
+      'GET',
+      '/accounting/profit-summary',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<List<dynamic>> getReportDefinitions(
+    String accessToken, {
+    String? reportType,
+  }) async {
+    final params = <String, String>{};
+    if (reportType != null && reportType.isNotEmpty) {
+      params['report_type'] = reportType;
+    }
+    return _sendList(
+      'GET',
+      '/report-definitions/',
+      accessToken: accessToken,
+      queryParams: params.isEmpty ? null : params,
+    );
+  }
+
+  Future<Map<String, dynamic>> createReportDefinition(
+    String accessToken, {
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/report-definitions/',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> createReportExport(
     String accessToken, {
     required Map<String, dynamic> payload,

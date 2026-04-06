@@ -15,6 +15,20 @@ class _ReportsPageState extends State<ReportsPage> {
   final _reportDateController = TextEditingController(
     text: DateTime.now().toIso8601String().split('T').first,
   );
+  final _fromDateController = TextEditingController(
+    text: DateTime.now()
+        .subtract(const Duration(days: 30))
+        .toIso8601String()
+        .split('T')
+        .first,
+  );
+  final _toDateController = TextEditingController(
+    text: DateTime.now()
+        .add(const Duration(days: 1))
+        .toIso8601String()
+        .split('T')
+        .first,
+  );
 
   bool _isLoading = true;
   bool _isSubmitting = false;
@@ -25,7 +39,9 @@ class _ReportsPageState extends State<ReportsPage> {
   Map<String, dynamic>? _stockMovement;
   Map<String, dynamic>? _customerBalances;
   Map<String, dynamic>? _supplierBalances;
+  Map<String, dynamic>? _profitSummary;
   List<Map<String, dynamic>> _exports = const [];
+  List<Map<String, dynamic>> _definitions = const [];
 
   @override
   void initState() {
@@ -36,6 +52,8 @@ class _ReportsPageState extends State<ReportsPage> {
   @override
   void dispose() {
     _reportDateController.dispose();
+    _fromDateController.dispose();
+    _toDateController.dispose();
     super.dispose();
   }
 
@@ -55,8 +73,17 @@ class _ReportsPageState extends State<ReportsPage> {
           .fetchCustomerBalancesReport();
       final supplierBalances = await widget.sessionController
           .fetchSupplierBalancesReport();
+      final profitSummary = await widget.sessionController.fetchProfitSummary(
+        fromDate: _fromDateController.text.trim(),
+        toDate: _toDateController.text.trim(),
+      );
       final exports = List<Map<String, dynamic>>.from(
         (await widget.sessionController.fetchReportExports()).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
+      final definitions = List<Map<String, dynamic>>.from(
+        (await widget.sessionController.fetchReportDefinitions()).map(
           (item) => Map<String, dynamic>.from(item as Map),
         ),
       );
@@ -70,7 +97,9 @@ class _ReportsPageState extends State<ReportsPage> {
         _stockMovement = stockMovement;
         _customerBalances = customerBalances;
         _supplierBalances = supplierBalances;
+        _profitSummary = profitSummary;
         _exports = exports;
+        _definitions = definitions;
         _isLoading = false;
       });
     } on ApiException catch (error) {
@@ -94,6 +123,24 @@ class _ReportsPageState extends State<ReportsPage> {
             : null,
       });
       _feedbackMessage = 'Export job #${export['id']} created for $reportType.';
+      await _loadReports();
+    });
+  }
+
+  Future<void> _saveCurrentViews() async {
+    await _submitAction(() async {
+      final definition = await widget.sessionController.createReportDefinition({
+        'name': 'Reports ${DateTime.now().toIso8601String().split('T').first}',
+        'report_type': 'profit_summary',
+        'is_shared': true,
+        'filters': {
+          'report_date': _reportDateController.text.trim(),
+          'from_date': _fromDateController.text.trim(),
+          'to_date': _toDateController.text.trim(),
+        },
+      });
+      _feedbackMessage =
+          'Saved report definition ${definition['name']} for reuse.';
       await _loadReports();
     });
   }
@@ -188,6 +235,11 @@ class _ReportsPageState extends State<ReportsPage> {
                             : () => _createExport('daily_closing'),
                         icon: const Icon(Icons.download_outlined),
                         label: const Text('Export CSV'),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: _isSubmitting ? null : _saveCurrentViews,
+                        icon: const Icon(Icons.bookmark_add_outlined),
+                        label: const Text('Save View'),
                       ),
                     ],
                   ),
@@ -386,6 +438,80 @@ class _ReportsPageState extends State<ReportsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
+                    'Profit Summary',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      SizedBox(
+                        width: 220,
+                        child: TextField(
+                          controller: _fromDateController,
+                          decoration: const InputDecoration(
+                            labelText: 'From Date',
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 220,
+                        child: TextField(
+                          controller: _toDateController,
+                          decoration: const InputDecoration(
+                            labelText: 'To Date',
+                          ),
+                        ),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: _isSubmitting ? null : _loadReports,
+                        icon: const Icon(Icons.timeline_outlined),
+                        label: const Text('Refresh Profit'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      _MetricChip(
+                        label: 'Total Sales',
+                        value: _value(_profitSummary?['total_sales']),
+                      ),
+                      _MetricChip(
+                        label: 'Purchase Cost',
+                        value: _value(_profitSummary?['total_purchase_cost']),
+                      ),
+                      _MetricChip(
+                        label: 'Gross Margin',
+                        value: _value(_profitSummary?['gross_margin']),
+                      ),
+                      _MetricChip(
+                        label: 'Internal Fuel Cost',
+                        value: _value(
+                          _profitSummary?['total_internal_fuel_cost'],
+                        ),
+                      ),
+                      _MetricChip(
+                        label: 'Net Profit',
+                        value: _value(_profitSummary?['net_profit']),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     'Report Exports',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
@@ -402,6 +528,36 @@ class _ReportsPageState extends State<ReportsPage> {
                         ),
                         subtitle: Text(
                           'Status ${export['status']} • Created ${_displayTimestamp(export['created_at'])}',
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Saved Report Views',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_definitions.isEmpty)
+                    const Text('No saved report definitions yet.')
+                  else
+                    for (final definition in _definitions.take(10))
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.bookmark_outline),
+                        title: Text(
+                          definition['name'] as String? ?? 'Saved report',
+                        ),
+                        subtitle: Text(
+                          '${definition['report_type']} • shared ${definition['is_shared']}',
                         ),
                       ),
                 ],

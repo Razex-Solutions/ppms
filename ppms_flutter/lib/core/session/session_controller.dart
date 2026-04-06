@@ -189,6 +189,35 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> fetchProfitSummary({
+    String? fromDate,
+    String? toDate,
+  }) async {
+    return _apiClient.getProfitSummary(
+      await _validAccessToken(),
+      stationId: _currentUser?['station_id'] as int?,
+      organizationId: _currentUser?['organization_id'] as int?,
+      fromDate: fromDate,
+      toDate: toDate,
+    );
+  }
+
+  Future<List<dynamic>> fetchReportDefinitions({String? reportType}) async {
+    return _apiClient.getReportDefinitions(
+      await _validAccessToken(),
+      reportType: reportType,
+    );
+  }
+
+  Future<Map<String, dynamic>> createReportDefinition(
+    Map<String, dynamic> payload,
+  ) async {
+    return _apiClient.createReportDefinition(
+      await _validAccessToken(),
+      payload: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> createReportExport(
     Map<String, dynamic> payload,
   ) async {
@@ -808,9 +837,7 @@ class SessionController extends ChangeNotifier {
     return _apiClient.createTanker(await _validAccessToken(), payload: payload);
   }
 
-  Future<Map<String, dynamic>> fetchTankerSummary({
-    int? stationId,
-  }) async {
+  Future<Map<String, dynamic>> fetchTankerSummary({int? stationId}) async {
     return _apiClient.getTankerSummary(
       await _validAccessToken(),
       stationId: stationId,

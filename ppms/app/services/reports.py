@@ -7,6 +7,7 @@ from app.models.customer import Customer
 from app.models.customer_payment import CustomerPayment
 from app.models.expense import Expense
 from app.models.fuel_sale import FuelSale
+from app.models.internal_fuel_usage import InternalFuelUsage
 from app.models.nozzle import Nozzle
 from app.models.pos_sale import POSSale
 from app.models.purchase import Purchase
@@ -397,4 +398,100 @@ def build_tanker_expense_report(
         "count": len(items),
         "total_expenses": round(sum(item["amount"] for item in items), 2),
         "items": items,
+    }
+
+
+def build_profit_summary(
+    db: Session,
+    station_id: int | None,
+    organization_id: int | None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+) -> dict:
+    fuel_cash_sales_query = db.query(func.sum(FuelSale.total_amount)).filter(
+        FuelSale.sale_type == "cash",
+        FuelSale.is_reversed.is_(False),
+    )
+    fuel_credit_sales_query = db.query(func.sum(FuelSale.total_amount)).filter(
+        FuelSale.sale_type == "credit",
+        FuelSale.is_reversed.is_(False),
+    )
+    pos_sales_query = db.query(func.sum(POSSale.total_amount)).filter(
+        POSSale.is_reversed.is_(False),
+    )
+    purchases_query = db.query(func.sum(Purchase.total_amount)).filter(
+        Purchase.status == "approved",
+        Purchase.is_reversed.is_(False),
+    )
+    expenses_query = db.query(func.sum(Expense.amount)).filter(
+        Expense.status == "approved",
+    )
+    internal_usage_query = db.query(InternalFuelUsage).join(Tank, Tank.id == InternalFuelUsage.tank_id)
+
+    if station_id is not None:
+        fuel_cash_sales_query = fuel_cash_sales_query.filter(FuelSale.station_id == station_id)
+        fuel_credit_sales_query = fuel_credit_sales_query.filter(FuelSale.station_id == station_id)
+        pos_sales_query = pos_sales_query.filter(POSSale.station_id == station_id)
+        purchases_query = purchases_query.join(Tank, Tank.id == Purchase.tank_id).filter(Tank.station_id == station_id)
+        expenses_query = expenses_query.filter(Expense.station_id == station_id)
+        internal_usage_query = internal_usage_query.filter(InternalFuelUsage.station_id == station_id)
+    elif organization_id is not None:
+        fuel_cash_sales_query = fuel_cash_sales_query.join(Station, Station.id == FuelSale.station_id).filter(Station.organization_id == organization_id)
+        fuel_credit_sales_query = fuel_credit_sales_query.join(Station, Station.id == FuelSale.station_id).filter(Station.organization_id == organization_id)
+        pos_sales_query = pos_sales_query.join(Station, Station.id == POSSale.station_id).filter(Station.organization_id == organization_id)
+        purchases_query = purchases_query.join(Tank, Tank.id == Purchase.tank_id).join(Station, Station.id == Tank.station_id).filter(
+            Station.organization_id == organization_id
+        )
+        expenses_query = expenses_query.join(Station, Station.id == Expense.station_id).filter(Station.organization_id == organization_id)
+        internal_usage_query = internal_usage_query.join(Station, Station.id == InternalFuelUsage.station_id).filter(
+            Station.organization_id == organization_id
+        )
+
+    if from_date:
+        fuel_cash_sales_query = fuel_cash_sales_query.filter(FuelSale.created_at >= from_date)
+        fuel_credit_sales_query = fuel_credit_sales_query.filter(FuelSale.created_at >= from_date)
+        pos_sales_query = pos_sales_query.filter(POSSale.created_at >= from_date)
+        purchases_query = purchases_query.filter(Purchase.created_at >= from_date)
+        expenses_query = expenses_query.filter(Expense.created_at >= from_date)
+        internal_usage_query = internal_usage_query.filter(InternalFuelUsage.created_at >= from_date)
+    if to_date:
+        fuel_cash_sales_query = fuel_cash_sales_query.filter(FuelSale.created_at < to_date)
+        fuel_credit_sales_query = fuel_credit_sales_query.filter(FuelSale.created_at < to_date)
+        pos_sales_query = pos_sales_query.filter(POSSale.created_at < to_date)
+        purchases_query = purchases_query.filter(Purchase.created_at < to_date)
+        expenses_query = expenses_query.filter(Expense.created_at < to_date)
+        internal_usage_query = internal_usage_query.filter(InternalFuelUsage.created_at < to_date)
+
+    total_cash_sales = fuel_cash_sales_query.scalar() or 0.0
+    total_credit_sales = fuel_credit_sales_query.scalar() or 0.0
+    total_pos_sales = pos_sales_query.scalar() or 0.0
+    total_purchase_cost = purchases_query.scalar() or 0.0
+    total_expenses = expenses_query.scalar() or 0.0
+
+    internal_fuel_cost = 0.0
+    usage_items = internal_usage_query.all()
+    for usage in usage_items:
+        latest_purchase = db.query(Purchase).filter(
+            Purchase.tank_id == usage.tank_id,
+            Purchase.status == "approved",
+            Purchase.is_reversed.is_(False),
+        ).order_by(Purchase.created_at.desc(), Purchase.id.desc()).first()
+        rate = latest_purchase.rate_per_liter if latest_purchase else 0.0
+        internal_fuel_cost += (usage.quantity or 0.0) * (rate or 0.0)
+
+    total_sales = total_cash_sales + total_credit_sales + total_pos_sales
+    gross_margin = total_sales - total_purchase_cost
+    net_profit = gross_margin - total_expenses - internal_fuel_cost
+    return {
+        "station_id": station_id,
+        "organization_id": organization_id,
+        "total_cash_sales": round(total_cash_sales, 2),
+        "total_credit_sales": round(total_credit_sales, 2),
+        "total_pos_sales": round(total_pos_sales, 2),
+        "total_sales": round(total_sales, 2),
+        "total_purchase_cost": round(total_purchase_cost, 2),
+        "total_expenses": round(total_expenses, 2),
+        "total_internal_fuel_cost": round(internal_fuel_cost, 2),
+        "gross_margin": round(gross_margin, 2),
+        "net_profit": round(net_profit, 2),
     }
