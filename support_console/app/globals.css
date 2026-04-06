@@ -189,6 +189,11 @@ p {
   gap: 0.75rem;
 }
 
+.metric-row.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 22px;
@@ -207,7 +212,15 @@ p {
   gap: 0.7rem;
 }
 
+.support-list {
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
 .list-item {
+  display: grid;
+  gap: 0.45rem;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: white;

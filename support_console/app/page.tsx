@@ -72,6 +72,8 @@ export default function SupportConsolePage() {
   const [password, setPassword] = useState("master123");
   const [organizations, setOrganizations] = useState<ApiRecord[]>([]);
   const [stations, setStations] = useState<ApiRecord[]>([]);
+  const [users, setUsers] = useState<ApiRecord[]>([]);
+  const [employeeProfiles, setEmployeeProfiles] = useState<ApiRecord[]>([]);
   const [plans, setPlans] = useState<ApiRecord[]>([]);
   const [subscription, setSubscription] = useState<ApiRecord | null>(null);
   const [organizationModules, setOrganizationModules] = useState<ApiRecord[]>(
@@ -218,7 +220,13 @@ export default function SupportConsolePage() {
       Authorization: `Bearer ${activeSession.accessToken}`,
       "Content-Type": "application/json",
     };
-    const [stationResponse, subscriptionResponse, moduleResponse] =
+    const [
+      stationResponse,
+      subscriptionResponse,
+      moduleResponse,
+      userResponse,
+      employeeProfileResponse,
+    ] =
       await Promise.all([
         fetch(`/api/ppms/stations?organization_id=${organizationId}&limit=200`, {
           headers,
@@ -232,11 +240,30 @@ export default function SupportConsolePage() {
           headers,
           cache: "no-store",
         }),
+        fetch(`/api/ppms/users?organization_id=${organizationId}&limit=200`, {
+          headers,
+          cache: "no-store",
+        }),
+        fetch(
+          `/api/ppms/employee-profiles?organization_id=${organizationId}&limit=200`,
+          {
+            headers,
+            cache: "no-store",
+          },
+        ),
       ]);
-    const [stationJson, subscriptionJson, moduleJson] = await Promise.all([
+    const [
+      stationJson,
+      subscriptionJson,
+      moduleJson,
+      userJson,
+      employeeProfileJson,
+    ] = await Promise.all([
       readJson(stationResponse),
       readJson(subscriptionResponse),
       readJson(moduleResponse),
+      readJson(userResponse),
+      readJson(employeeProfileResponse),
     ]);
     if (!stationResponse.ok) {
       throw new Error(textValue(stationJson.detail, "Station load failed"));
@@ -247,11 +274,23 @@ export default function SupportConsolePage() {
     if (!moduleResponse.ok) {
       throw new Error(textValue(moduleJson.detail, "Module load failed"));
     }
+    if (!userResponse.ok) {
+      throw new Error(textValue(userJson.detail, "User load failed"));
+    }
+    if (!employeeProfileResponse.ok) {
+      throw new Error(
+        textValue(employeeProfileJson.detail, "Employee profile load failed"),
+      );
+    }
     const stationList = Array.isArray(stationJson) ? stationJson : [];
     const nextStationId = getId(stationList[0] ?? {}) || null;
     setStations(stationList);
     setSubscription(subscriptionJson);
     setOrganizationModules(Array.isArray(moduleJson) ? moduleJson : []);
+    setUsers(Array.isArray(userJson) ? userJson : []);
+    setEmployeeProfiles(
+      Array.isArray(employeeProfileJson) ? employeeProfileJson : [],
+    );
     setSelectedStationId(nextStationId);
     if (nextStationId) {
       await loadStationModules(nextStationId, activeSession);
@@ -344,6 +383,8 @@ export default function SupportConsolePage() {
     setSession(null);
     setOrganizations([]);
     setStations([]);
+    setUsers([]);
+    setEmployeeProfiles([]);
     setPlans([]);
     setSubscription(null);
     setOrganizationModules([]);
@@ -361,6 +402,18 @@ export default function SupportConsolePage() {
   const enabledStationModules = stationModules.filter((item) =>
     boolValue(item.is_enabled),
   ).length;
+  const activeUsers = users.filter((user) => boolValue(user.is_active)).length;
+  const loginEnabledProfiles = employeeProfiles.filter((profile) =>
+    boolValue(profile.can_login),
+  ).length;
+  const payrollEnabledProfiles = employeeProfiles.filter((profile) =>
+    boolValue(profile.payroll_enabled),
+  ).length;
+  const stationProfiles = selectedStationId
+    ? employeeProfiles.filter(
+        (profile) => numberValue(profile.station_id) === selectedStationId,
+      )
+    : employeeProfiles;
 
   if (!session) {
     return (
@@ -437,6 +490,7 @@ export default function SupportConsolePage() {
               <span className="chip">{organizations.length} organizations</span>
               <span className="chip">{plans.length} plans</span>
               <span className="chip">{stations.length} selected-org stations</span>
+              <span className="chip">{users.length} users in scope</span>
             </div>
           </div>
         </section>
@@ -494,6 +548,11 @@ export default function SupportConsolePage() {
                 <span>Station modules</span>
                 <strong>{enabledStationModules}</strong>
                 <small>{stationModules.length} configured</small>
+              </div>
+              <div className="metric">
+                <span>Users</span>
+                <strong>{activeUsers}</strong>
+                <small>{users.length} total accounts</small>
               </div>
             </div>
             <div className="chip-row">
@@ -563,6 +622,94 @@ export default function SupportConsolePage() {
               correction flows can be added here without overloading the tenant
               Flutter app.
             </p>
+          </div>
+
+          <div className="card span-6">
+            <p className="eyebrow">User inspection</p>
+            <h2>Login accounts</h2>
+            <div className="metric-row compact">
+              <div className="metric">
+                <span>Active users</span>
+                <strong>{activeUsers}</strong>
+                <small>{users.length} total</small>
+              </div>
+              <div className="metric">
+                <span>Platform users</span>
+                <strong>
+                  {
+                    users.filter((user) => boolValue(user.is_platform_user))
+                      .length
+                  }
+                </strong>
+                <small>Across this query</small>
+              </div>
+            </div>
+            <div className="list support-list">
+              {users.length === 0 ? (
+                <p>No user accounts found for this organization.</p>
+              ) : (
+                users.slice(0, 8).map((user) => (
+                  <div className="list-item" key={getId(user)}>
+                    <strong>{textValue(user.full_name)}</strong>
+                    <span className="muted">
+                      @{textValue(user.username)} - role #{textValue(user.role_id)}
+                    </span>
+                    <div className="chip-row">
+                      <span className="chip">
+                        {boolValue(user.is_active) ? "active" : "inactive"}
+                      </span>
+                      <span className="chip">{textValue(user.scope_level)}</span>
+                      <span className="chip">
+                        Station {textValue(user.station_id, "none")}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="card span-6">
+            <p className="eyebrow">Staff inspection</p>
+            <h2>Employee profiles</h2>
+            <div className="metric-row compact">
+              <div className="metric">
+                <span>Station staff</span>
+                <strong>{stationProfiles.length}</strong>
+                <small>Selected station scope</small>
+              </div>
+              <div className="metric">
+                <span>Payroll ready</span>
+                <strong>{payrollEnabledProfiles}</strong>
+                <small>{loginEnabledProfiles} can log in</small>
+              </div>
+            </div>
+            <div className="list support-list">
+              {stationProfiles.length === 0 ? (
+                <p>No employee profiles found for this station.</p>
+              ) : (
+                stationProfiles.slice(0, 8).map((profile) => (
+                  <div className="list-item" key={getId(profile)}>
+                    <strong>{textValue(profile.full_name)}</strong>
+                    <span className="muted">
+                      {textValue(profile.staff_type)} -{" "}
+                      {textValue(profile.employee_code, "no code")}
+                    </span>
+                    <div className="chip-row">
+                      <span className="chip">
+                        {boolValue(profile.is_active) ? "active" : "inactive"}
+                      </span>
+                      <span className="chip">
+                        payroll {boolValue(profile.payroll_enabled) ? "on" : "off"}
+                      </span>
+                      <span className="chip">
+                        login {boolValue(profile.can_login) ? "yes" : "no"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="card span-6">
