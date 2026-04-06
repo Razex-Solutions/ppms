@@ -29,7 +29,9 @@ class _ShiftPageState extends State<ShiftPage> {
 
   List<Map<String, dynamic>> _stations = const [];
   List<Map<String, dynamic>> _shifts = const [];
+  List<Map<String, dynamic>> _shiftTemplates = const [];
   int? _selectedStationId;
+  int? _selectedShiftTemplateId;
   String _statusFilter = 'all';
   int? _selectedShiftId;
 
@@ -78,6 +80,13 @@ class _ShiftPageState extends State<ShiftPage> {
                 status: _statusFilter == 'all' ? null : _statusFilter,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
+      final shiftTemplates = stationId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchStationShiftTemplates(
+                stationId: stationId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
 
       if (!mounted) {
         return;
@@ -87,6 +96,10 @@ class _ShiftPageState extends State<ShiftPage> {
         _stations = stations;
         _selectedStationId = stationId;
         _shifts = shifts;
+        _shiftTemplates = shiftTemplates;
+        _selectedShiftTemplateId = _resolveSelectedShiftTemplateId(
+          shiftTemplates,
+        );
         _selectedShiftId = _resolveSelectedShiftId(shifts);
         _isLoading = false;
       });
@@ -99,6 +112,24 @@ class _ShiftPageState extends State<ShiftPage> {
         _isLoading = false;
       });
     }
+  }
+
+  int? _resolveSelectedShiftTemplateId(List<Map<String, dynamic>> templates) {
+    if (_selectedShiftTemplateId != null &&
+        templates.any(
+          (template) => template['id'] == _selectedShiftTemplateId,
+        )) {
+      return _selectedShiftTemplateId;
+    }
+    for (final template in templates) {
+      if (template['is_active'] == true) {
+        return template['id'] as int;
+      }
+    }
+    if (templates.isNotEmpty) {
+      return templates.first['id'] as int;
+    }
+    return null;
   }
 
   int? _resolveSelectedShiftId(List<Map<String, dynamic>> shifts) {
@@ -137,6 +168,15 @@ class _ShiftPageState extends State<ShiftPage> {
     return null;
   }
 
+  Map<String, dynamic>? get _selectedShiftTemplate {
+    for (final template in _shiftTemplates) {
+      if (template['id'] == _selectedShiftTemplateId) {
+        return template;
+      }
+    }
+    return null;
+  }
+
   Map<String, dynamic>? get _currentOpenShift => _currentOpenShiftFrom(_shifts);
 
   Future<void> _changeStation(int? stationId) async {
@@ -167,6 +207,7 @@ class _ShiftPageState extends State<ShiftPage> {
       });
       return;
     }
+    final selectedTemplate = _selectedShiftTemplate;
 
     setState(() {
       _isOpening = true;
@@ -177,6 +218,8 @@ class _ShiftPageState extends State<ShiftPage> {
     try {
       final shift = await widget.sessionController.openShift({
         'station_id': stationId,
+        if (selectedTemplate != null)
+          'shift_template_id': selectedTemplate['id'] as int,
         'initial_cash': double.parse(_initialCashController.text.trim()),
         'notes': _emptyToNull(_openNotesController.text),
       });
@@ -191,9 +234,11 @@ class _ShiftPageState extends State<ShiftPage> {
       if (!mounted) {
         return;
       }
+      final shiftName = shift['shift_name'];
       setState(() {
-        _feedbackMessage =
-            'Shift #${shift['id']} opened successfully for station $stationId.';
+        _feedbackMessage = shiftName is String && shiftName.isNotEmpty
+            ? '$shiftName shift #${shift['id']} opened successfully for station $stationId.'
+            : 'Shift #${shift['id']} opened successfully for station $stationId.';
         _isOpening = false;
       });
     } on ApiException catch (error) {
@@ -344,6 +389,10 @@ class _ShiftPageState extends State<ShiftPage> {
     final canOpenShifts = _canOpenShifts;
     final canCloseShifts = _canCloseShifts;
     final canReadShifts = _canReadShifts;
+    final selectedTemplate = _selectedShiftTemplate;
+    final activeTemplateCount = _shiftTemplates
+        .where((template) => template['is_active'] == true)
+        .length;
     final sectionMeta = _sectionMeta(
       canOpenShifts: canOpenShifts,
       canCloseShifts: canCloseShifts,
@@ -440,8 +489,40 @@ class _ShiftPageState extends State<ShiftPage> {
                       ? 'Operational controls enabled'
                       : 'Review mode only',
                 ),
+                _buildStatusChip(
+                  context,
+                  Icons.schedule_send_outlined,
+                  activeTemplateCount == 0
+                      ? 'Shift setup pending'
+                      : '$activeTemplateCount active templates',
+                ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: 'Shift Setup',
+            subtitle:
+                'Phase 2 starts with station shift templates so openings follow a daily, hourly, or 24-hour setup path instead of ad-hoc shift names.',
+            child: _shiftTemplates.isEmpty
+                ? _buildPermissionNotice(
+                    context,
+                    'No shift templates are configured for this station yet. Create them from the admin shift setup flow before regular operations start.',
+                  )
+                : Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final template in _shiftTemplates)
+                        _buildStatusChip(
+                          context,
+                          template['is_active'] == true
+                              ? Icons.schedule_outlined
+                              : Icons.block_outlined,
+                          '${template['name']} • ${template['window_label']}',
+                        ),
+                    ],
+                  ),
           ),
           const SizedBox(height: 16),
           Row(
@@ -512,6 +593,48 @@ class _ShiftPageState extends State<ShiftPage> {
                                 _buildPermissionNotice(
                                   context,
                                   'Opening shifts is disabled for this role.',
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<int>(
+                                key: ValueKey<String>(
+                                  'shift-template-${_selectedShiftTemplateId ?? 'none'}',
+                                ),
+                                initialValue: _selectedShiftTemplateId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Shift Template',
+                                ),
+                                items: [
+                                  for (final template in _shiftTemplates)
+                                    DropdownMenuItem<int>(
+                                      value: template['id'] as int,
+                                      child: Text(
+                                        '${template['name']} (${template['window_label']})',
+                                      ),
+                                    ),
+                                ],
+                                onChanged:
+                                    canOpenShifts && _shiftTemplates.isNotEmpty
+                                    ? (value) {
+                                        setState(() {
+                                          _selectedShiftTemplateId = value;
+                                        });
+                                      }
+                                    : null,
+                              ),
+                              if (selectedTemplate != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  selectedTemplate['covers_full_day'] == true
+                                      ? 'This template is configured as a 24-hour shift.'
+                                      : 'Selected window: ${selectedTemplate['window_label']}',
+                                ),
+                              ],
+                              if (_shiftTemplates.isEmpty) ...[
+                                const SizedBox(height: 8),
+                                _buildPermissionNotice(
+                                  context,
+                                  'Openings still work without a template, but Phase 2 recommends setting up templates first.',
                                 ),
                               ],
                               const SizedBox(height: 12),
@@ -595,9 +718,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                   for (final shift in _shifts)
                                     DropdownMenuItem<int>(
                                       value: shift['id'] as int,
-                                      child: Text(
-                                        '#${shift['id']} • ${shift['status']} • ${_formatDateTime(shift['start_time'])}',
-                                      ),
+                                      child: Text(_formatShiftTitle(shift)),
                                     ),
                                 ],
                                 onChanged: canReadShifts
@@ -749,9 +870,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                     ? Icons.schedule_outlined
                                     : Icons.check_circle_outline,
                               ),
-                              title: Text(
-                                '#${shift['id']} • ${shift['status']} • ${_formatDateTime(shift['start_time'])}',
-                              ),
+                              title: Text(_formatShiftTitle(shift)),
                               subtitle: Text(
                                 'Expected ${_formatNumber(shift['expected_cash'])} • '
                                 'Cash ${_formatNumber(shift['total_sales_cash'])} • '
@@ -786,6 +905,7 @@ class _ShiftPageState extends State<ShiftPage> {
     BuildContext context,
     Map<String, dynamic> shift,
   ) {
+    final shiftName = shift['shift_name'];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -802,7 +922,9 @@ class _ShiftPageState extends State<ShiftPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Shift #${shift['id']} • Started ${_formatDateTime(shift['start_time'])}',
+            shiftName is String && shiftName.isNotEmpty
+                ? '$shiftName • Shift #${shift['id']} • Started ${_formatDateTime(shift['start_time'])}'
+                : 'Shift #${shift['id']} • Started ${_formatDateTime(shift['start_time'])}',
           ),
           const SizedBox(height: 4),
           Text(
@@ -812,6 +934,16 @@ class _ShiftPageState extends State<ShiftPage> {
         ],
       ),
     );
+  }
+
+  String _formatShiftTitle(Map<String, dynamic> shift) {
+    final shiftName = shift['shift_name'];
+    final baseTitle =
+        '#${shift['id']} • ${shift['status']} • ${_formatDateTime(shift['start_time'])}';
+    if (shiftName is String && shiftName.isNotEmpty) {
+      return '$shiftName • $baseTitle';
+    }
+    return baseTitle;
   }
 
   Widget _buildStatusChip(BuildContext context, IconData icon, String label) {

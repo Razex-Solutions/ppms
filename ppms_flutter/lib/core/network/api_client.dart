@@ -1388,6 +1388,17 @@ class ApiClient {
     );
   }
 
+  Future<List<dynamic>> getStationShiftTemplates(
+    String accessToken, {
+    required int stationId,
+  }) async {
+    return _sendList(
+      'GET',
+      '/stations/$stationId/shift-templates/',
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> openShift(
     String accessToken, {
     required Map<String, dynamic> payload,

@@ -545,3 +545,121 @@ def test_employee_profiles_follow_station_scope_and_allow_profile_only_staff(cli
         json={"can_login": True},
     )
     assert require_linked_user.status_code == 400
+
+
+def test_phase2_station_shift_templates_support_hourly_and_24h_setup(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
+
+    morning_template = test_client.post(
+        f"/stations/{data['station_a_id']}/shift-templates/",
+        headers=admin_headers,
+        json={
+            "name": "Morning",
+            "start_time": "00:00:00",
+            "end_time": "08:00:00",
+        },
+    )
+    assert morning_template.status_code == 200, morning_template.text
+    assert morning_template.json()["window_label"] == "00:00 - 08:00"
+    assert morning_template.json()["covers_full_day"] is False
+
+    daily_template = test_client.post(
+        f"/stations/{data['station_a_id']}/shift-templates/",
+        headers=admin_headers,
+        json={
+            "name": "Daily",
+            "start_time": "08:00:00",
+            "end_time": "08:00:00",
+        },
+    )
+    assert daily_template.status_code == 200, daily_template.text
+    assert daily_template.json()["covers_full_day"] is True
+    assert daily_template.json()["window_label"] == "08:00 - 08:00 (24h)"
+
+    duplicate_name = test_client.post(
+        f"/stations/{data['station_a_id']}/shift-templates/",
+        headers=admin_headers,
+        json={
+            "name": "Morning",
+            "start_time": "08:00:00",
+            "end_time": "16:00:00",
+        },
+    )
+    assert duplicate_name.status_code == 400
+
+    read_templates = test_client.get(
+        f"/stations/{data['station_a_id']}/shift-templates/",
+        headers=head_office_headers,
+    )
+    assert read_templates.status_code == 200, read_templates.text
+    assert [item["name"] for item in read_templates.json()] == ["Morning", "Daily"]
+
+    update_template = test_client.put(
+        f"/stations/{data['station_a_id']}/shift-templates/{morning_template.json()['id']}",
+        headers=admin_headers,
+        json={"name": "Night", "start_time": "22:00:00", "end_time": "06:00:00"},
+    )
+    assert update_template.status_code == 200, update_template.text
+    assert update_template.json()["name"] == "Night"
+    assert update_template.json()["window_label"] == "22:00 - 06:00"
+
+
+def test_phase2_runtime_shift_can_use_station_shift_template(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    operator_headers = login(test_client, "operator", "operator123")
+
+    template_response = test_client.post(
+        f"/stations/{data['station_a_id']}/shift-templates/",
+        headers=admin_headers,
+        json={
+            "name": "Evening",
+            "start_time": "16:00:00",
+            "end_time": "00:00:00",
+        },
+    )
+    assert template_response.status_code == 200, template_response.text
+    template_id = template_response.json()["id"]
+
+    open_shift = test_client.post(
+        "/shifts/",
+        headers=operator_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "shift_template_id": template_id,
+            "initial_cash": 150,
+            "notes": "Phase 2 test shift",
+        },
+    )
+    assert open_shift.status_code == 200, open_shift.text
+    assert open_shift.json()["shift_template_id"] == template_id
+    assert open_shift.json()["shift_name"] == "Evening"
+
+    delete_in_use_template = test_client.delete(
+        f"/stations/{data['station_a_id']}/shift-templates/{template_id}",
+        headers=admin_headers,
+    )
+    assert delete_in_use_template.status_code == 400
+    assert delete_in_use_template.json()["detail"] == "Cannot delete a shift template that is already linked to shifts"
+
+    close_shift = test_client.post(
+        f"/shifts/{open_shift.json()['id']}/close",
+        headers=operator_headers,
+        json={"actual_cash_collected": 150, "notes": "Closed for template validation"},
+    )
+    assert close_shift.status_code == 200, close_shift.text
+
+    wrong_station_template = test_client.post(
+        "/shifts/",
+        headers=operator_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "shift_template_id": 9999,
+            "initial_cash": 0,
+        },
+    )
+    assert wrong_station_template.status_code == 404

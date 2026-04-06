@@ -6,6 +6,7 @@ from app.core.time import utc_now
 from app.models.fuel_sale import FuelSale
 from app.models.shift import Shift
 from app.models.station import Station
+from app.models.station_shift_template import StationShiftTemplate
 from app.models.user import User
 from app.schemas.shift import ShiftCreate, ShiftUpdate
 from app.services.audit import log_audit_event
@@ -27,9 +28,22 @@ def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
 
+    shift_template = None
+    if data.shift_template_id is not None:
+        shift_template = db.query(StationShiftTemplate).filter(
+            StationShiftTemplate.id == data.shift_template_id,
+            StationShiftTemplate.station_id == data.station_id,
+        ).first()
+        if not shift_template:
+            raise HTTPException(status_code=404, detail="Shift template not found for this station")
+        if not shift_template.is_active:
+            raise HTTPException(status_code=400, detail="Selected shift template is inactive")
+
     shift = Shift(
         station_id=data.station_id,
         user_id=current_user.id,
+        shift_template_id=shift_template.id if shift_template else None,
+        shift_name=shift_template.name if shift_template else None,
         initial_cash=data.initial_cash,
         expected_cash=data.initial_cash,
         notes=data.notes,
@@ -46,7 +60,11 @@ def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
         entity_type="shift",
         entity_id=shift.id,
         station_id=shift.station_id,
-        details={"initial_cash": shift.initial_cash},
+        details={
+            "initial_cash": shift.initial_cash,
+            "shift_template_id": shift.shift_template_id,
+            "shift_name": shift.shift_name,
+        },
     )
     db.commit()
     db.refresh(shift)

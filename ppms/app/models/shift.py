@@ -11,6 +11,8 @@ class Shift(Base):
     id = Column(Integer, primary_key=True, index=True)
     station_id = Column(Integer, ForeignKey("stations.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    shift_template_id = Column(Integer, ForeignKey("station_shift_templates.id"), nullable=True)
+    shift_name = Column(String, nullable=True)
     
     start_time = Column(DateTime, default=utc_now)
     end_time = Column(DateTime, nullable=True)
@@ -28,4 +30,5 @@ class Shift(Base):
 
     station = relationship("Station")
     user = relationship("User")
+    shift_template = relationship("StationShiftTemplate", back_populates="shifts")
     fuel_sales = relationship("FuelSale", back_populates="shift")

@@ -1069,6 +1069,15 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<dynamic>> fetchStationShiftTemplates({
+    required int stationId,
+  }) async {
+    return _apiClient.getStationShiftTemplates(
+      await _validAccessToken(),
+      stationId: stationId,
+    );
+  }
+
   Future<Map<String, dynamic>> openShift(Map<String, dynamic> payload) async {
     return _apiClient.openShift(await _validAccessToken(), payload: payload);
   }

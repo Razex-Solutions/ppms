@@ -32,6 +32,7 @@ from app.models.expense import Expense
 from app.models.customer_payment import CustomerPayment
 from app.models.supplier_payment import SupplierPayment
 from app.models.shift import Shift
+from app.models.station_shift_template import StationShiftTemplate
 from app.models.tank_dip import TankDip
 from app.models.nozzle_reading import NozzleReading
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
