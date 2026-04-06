@@ -492,6 +492,75 @@ class _PartiesPageState extends State<PartiesPage> {
   bool get _canDeleteSuppliers => _hasAction('suppliers', 'delete');
   bool get _canReadLedger => _hasAction('ledger', 'read');
 
+  Map<String, dynamic>? get _selectedCustomer {
+    for (final customer in _customers) {
+      if (customer['id'] == _selectedCustomerId) {
+        return customer;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? get _selectedSupplier {
+    for (final supplier in _suppliers) {
+      if (supplier['id'] == _selectedSupplierId) {
+        return supplier;
+      }
+    }
+    return null;
+  }
+
+  String get _selectedStationLabel {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        final name = station['name'] as String? ?? 'Station';
+        final code = station['code'] as String? ?? '-';
+        return '$name ($code)';
+      }
+    }
+    return 'No station selected';
+  }
+
+  String get _currentFocusTitle {
+    switch (_section) {
+      case _PartySection.customers:
+        final customer = _selectedCustomer;
+        if (customer != null) {
+          return 'Customer ${customer['name']} is selected for review';
+        }
+        return _canManageCustomers
+            ? 'No customer selected yet'
+            : 'Customer review mode';
+      case _PartySection.suppliers:
+        final supplier = _selectedSupplier;
+        if (supplier != null) {
+          return 'Supplier ${supplier['name']} is selected for review';
+        }
+        return _canManageSuppliers
+            ? 'No supplier selected yet'
+            : 'Supplier review mode';
+    }
+  }
+
+  String get _currentFocusSubtitle {
+    switch (_section) {
+      case _PartySection.customers:
+        if (_selectedCustomer != null) {
+          return 'Review balance, contact details, and ledger movement before editing the customer record.';
+        }
+        return _canManageCustomers
+            ? 'Pick a customer from the list to review first, or use the form to create a new one for this station.'
+            : 'Pick a customer from the list to inspect balances and ledger movement.';
+      case _PartySection.suppliers:
+        if (_selectedSupplier != null) {
+          return 'Review payable exposure, contact details, and recent ledger movement before editing the supplier record.';
+        }
+        return _canManageSuppliers
+            ? 'Pick a supplier from the list to review first, or use the form to create a new supplier.'
+            : 'Pick a supplier from the list to inspect payable position and ledger movement.';
+    }
+  }
+
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
       width: double.infinity,
@@ -688,6 +757,8 @@ class _PartiesPageState extends State<PartiesPage> {
                     },
                   ),
                   const SizedBox(height: 20),
+                  _buildWorkspaceReview(context),
+                  const SizedBox(height: 20),
                   if (availableSections.isEmpty)
                     const SizedBox.shrink()
                   else if (_section == _PartySection.customers)
@@ -751,117 +822,265 @@ class _PartiesPageState extends State<PartiesPage> {
     return total;
   }
 
-  Widget _buildCustomers(BuildContext context) {
-    final canManageCustomers = _canManageCustomers;
-    final canDeleteCustomers = _canDeleteCustomers;
-    return ResponsiveSplit(
-      breakpoint: 1150,
-      primary: Column(
+  Widget _buildWorkspaceReview(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedSummary = _section == _PartySection.customers
+        ? _selectedCustomer
+        : _selectedSupplier;
+    final sectionCount = _section == _PartySection.customers
+        ? _customers.length
+        : _suppliers.length;
+    final canManageCurrentSection = _section == _PartySection.customers
+        ? _canManageCustomers
+        : _canManageSuppliers;
+    final countLabel = _section == _PartySection.customers
+        ? '$sectionCount customers visible in this station scope'
+        : '$sectionCount suppliers visible in this workspace';
+    final reviewLabel = selectedSummary == null
+        ? 'No record selected yet'
+        : '${selectedSummary['code'] ?? '-'} • ${selectedSummary['name'] ?? 'Selected record'}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _selectedCustomerId == null ? 'Create Customer' : 'Edit Customer',
+            'Review First',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _currentFocusTitle,
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          if (!canManageCustomers) ...[
-            const SizedBox(height: 12),
-            _buildPermissionNotice(
-              context,
-              'This role can review customers but cannot create or edit them.',
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerNameController,
-            enabled: canManageCustomers,
-            decoration: const InputDecoration(labelText: 'Name'),
+          const SizedBox(height: 6),
+          Text(
+            _currentFocusSubtitle,
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerCodeController,
-            enabled: canManageCustomers,
-            decoration: const InputDecoration(labelText: 'Code'),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            key: ValueKey<String>('customer-type-$_customerType'),
-            initialValue: _customerType,
-            decoration: const InputDecoration(labelText: 'Customer Type'),
-            items: const [
-              DropdownMenuItem(value: 'individual', child: Text('Individual')),
-              DropdownMenuItem(value: 'company', child: Text('Company')),
-              DropdownMenuItem(value: 'pump', child: Text('Pump')),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.store_outlined,
+                label: _selectedStationLabel,
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.visibility_outlined,
+                label: reviewLabel,
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.format_list_bulleted_outlined,
+                label: countLabel,
+              ),
+              _buildInfoChip(
+                context,
+                icon: canManageCurrentSection
+                    ? Icons.edit_note_outlined
+                    : Icons.lock_outline,
+                label: canManageCurrentSection
+                    ? 'This role can update this section'
+                    : 'This role can review only',
+              ),
             ],
-            onChanged: canManageCustomers
-                ? (value) {
-                    setState(() {
-                      _customerType = value ?? 'individual';
-                    });
-                  }
-                : null,
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerPhoneController,
-            enabled: canManageCustomers,
-            decoration: const InputDecoration(labelText: 'Phone'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerAddressController,
-            enabled: canManageCustomers,
-            decoration: const InputDecoration(labelText: 'Address'),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerCreditLimitController,
-            enabled: canManageCustomers,
-            decoration: const InputDecoration(labelText: 'Credit Limit'),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _isSubmitting || !canManageCustomers
-                ? null
-                : _saveCustomer,
-            icon: _isSubmitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.person_add_alt_1_outlined),
-            label: Text(
-              _selectedCustomerId == null ? 'Create Customer' : 'Save Customer',
-            ),
-          ),
-          if (_selectedCustomerId != null) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                FilledButton.tonal(
-                  onPressed: _isSubmitting
-                      ? null
-                      : () {
-                          setState(() {
-                            _resetCustomerForm();
-                            _feedbackMessage = 'Customer form cleared.';
-                          });
-                        },
-                  child: const Text('Cancel Edit'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomers(BuildContext context) {
+    final canManageCustomers = _canManageCustomers;
+    final canDeleteCustomers = _canDeleteCustomers;
+    final selectedCustomer = _selectedCustomer;
+    return ResponsiveSplit(
+      breakpoint: 1150,
+      primary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Customer Summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedCustomer == null)
+                _buildEmptyState(
+                  context,
+                  'No customer selected yet.',
+                  canManageCustomers
+                      ? 'Choose a customer from the list to review before editing, or use the form below to create a new one.'
+                      : 'Choose a customer from the list to inspect balances and contact details.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      '${selectedCustomer['code'] ?? '-'} - ${selectedCustomer['name'] ?? 'Customer'}',
+                  subtitle:
+                      '${selectedCustomer['customer_type'] ?? 'customer'} • Phone ${selectedCustomer['phone'] ?? '-'}',
                 ),
-                OutlinedButton(
-                  onPressed: _isSubmitting || !canDeleteCustomers
-                      ? null
-                      : _deleteCustomer,
-                  child: const Text('Delete Customer'),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _buildMetricChip(
+                      'Outstanding',
+                      _formatNumber(selectedCustomer['outstanding_balance']),
+                    ),
+                    _buildMetricChip(
+                      'Credit Limit',
+                      _formatNumber(selectedCustomer['credit_limit']),
+                    ),
+                    _buildMetricChip(
+                      'Address',
+                      (selectedCustomer['address'] as String?)?.isNotEmpty ==
+                              true
+                          ? selectedCustomer['address'] as String
+                          : '-',
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
-        ],
+              const SizedBox(height: 18),
+              Text(
+                _selectedCustomerId == null
+                    ? 'Create Customer'
+                    : 'Update Customer Details',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Use the form after reviewing the selected customer state and ledger snapshot.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (!canManageCustomers) ...[
+                const SizedBox(height: 12),
+                _buildPermissionNotice(
+                  context,
+                  'This role can review customers but cannot create or edit them.',
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerNameController,
+                enabled: canManageCustomers,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerCodeController,
+                enabled: canManageCustomers,
+                decoration: const InputDecoration(labelText: 'Code'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey<String>('customer-type-$_customerType'),
+                initialValue: _customerType,
+                decoration: const InputDecoration(labelText: 'Customer Type'),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'individual',
+                    child: Text('Individual'),
+                  ),
+                  DropdownMenuItem(value: 'company', child: Text('Company')),
+                  DropdownMenuItem(value: 'pump', child: Text('Pump')),
+                ],
+                onChanged: canManageCustomers
+                    ? (value) {
+                        setState(() {
+                          _customerType = value ?? 'individual';
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerPhoneController,
+                enabled: canManageCustomers,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerAddressController,
+                enabled: canManageCustomers,
+                decoration: const InputDecoration(labelText: 'Address'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerCreditLimitController,
+                enabled: canManageCustomers,
+                decoration: const InputDecoration(labelText: 'Credit Limit'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _isSubmitting || !canManageCustomers
+                    ? null
+                    : _saveCustomer,
+                icon: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.person_add_alt_1_outlined),
+                label: Text(
+                  _selectedCustomerId == null
+                      ? 'Create Customer'
+                      : 'Save Customer',
+                ),
+              ),
+              if (_selectedCustomerId != null) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.tonal(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () {
+                              setState(() {
+                                _resetCustomerForm();
+                                _feedbackMessage = 'Customer form cleared.';
+                              });
+                            },
+                      child: const Text('Cancel Edit'),
+                    ),
+                    OutlinedButton(
+                      onPressed: _isSubmitting || !canDeleteCustomers
+                          ? null
+                          : _deleteCustomer,
+                      child: const Text('Delete Customer'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
       secondary: Card(
         child: Padding(
@@ -870,6 +1089,11 @@ class _PartiesPageState extends State<PartiesPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Customers', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Review the station customer list first, then open the selected record for edits or ledger review.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _customerSearchController,
@@ -892,16 +1116,22 @@ class _PartiesPageState extends State<PartiesPage> {
               if (_filteredCustomers.isEmpty)
                 const Text('No customers found for this station yet.')
               else
-                for (final customer in _filteredCustomers)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    selected: customer['id'] == _selectedCustomerId,
-                    title: Text('${customer['code']} - ${customer['name']}'),
-                    subtitle: Text(
-                      '${customer['customer_type']} - Balance ${_formatNumber(customer['outstanding_balance'])} - Limit ${_formatNumber(customer['credit_limit'])}',
+                ..._filteredCustomers.map(
+                  (customer) => Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      selected: customer['id'] == _selectedCustomerId,
+                      title: Text('${customer['code']} - ${customer['name']}'),
+                      subtitle: Text(
+                        '${customer['customer_type']} • Balance ${_formatNumber(customer['outstanding_balance'])} • Limit ${_formatNumber(customer['credit_limit'])}',
+                      ),
+                      trailing: customer['id'] == _selectedCustomerId
+                          ? const Icon(Icons.check_circle_outline)
+                          : null,
+                      onTap: () => _selectCustomer(customer),
                     ),
-                    onTap: () => _selectCustomer(customer),
                   ),
+                ),
               if (_canReadLedger && _selectedCustomerLedgerSummary != null) ...[
                 const Divider(height: 24),
                 Text(
@@ -927,89 +1157,150 @@ class _PartiesPageState extends State<PartiesPage> {
   Widget _buildSuppliers(BuildContext context) {
     final canManageSuppliers = _canManageSuppliers;
     final canDeleteSuppliers = _canDeleteSuppliers;
+    final selectedSupplier = _selectedSupplier;
     return ResponsiveSplit(
       breakpoint: 1150,
-      primary: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _selectedSupplierId == null ? 'Create Supplier' : 'Edit Supplier',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          if (!canManageSuppliers) ...[
-            const SizedBox(height: 12),
-            _buildPermissionNotice(
-              context,
-              'This role can review suppliers but cannot create or edit them.',
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _supplierNameController,
-            enabled: canManageSuppliers,
-            decoration: const InputDecoration(labelText: 'Name'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _supplierCodeController,
-            enabled: canManageSuppliers,
-            decoration: const InputDecoration(labelText: 'Code'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _supplierPhoneController,
-            enabled: canManageSuppliers,
-            decoration: const InputDecoration(labelText: 'Phone'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _supplierAddressController,
-            enabled: canManageSuppliers,
-            decoration: const InputDecoration(labelText: 'Address'),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _isSubmitting || !canManageSuppliers
-                ? null
-                : _saveSupplier,
-            icon: _isSubmitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add_business_outlined),
-            label: Text(
-              _selectedSupplierId == null ? 'Create Supplier' : 'Save Supplier',
-            ),
-          ),
-          if (_selectedSupplierId != null) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                FilledButton.tonal(
-                  onPressed: _isSubmitting
-                      ? null
-                      : () {
-                          setState(() {
-                            _resetSupplierForm();
-                            _feedbackMessage = 'Supplier form cleared.';
-                          });
-                        },
-                  child: const Text('Cancel Edit'),
+      primary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Supplier Summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedSupplier == null)
+                _buildEmptyState(
+                  context,
+                  'No supplier selected yet.',
+                  canManageSuppliers
+                      ? 'Choose a supplier from the list to review before editing, or use the form below to create a new supplier.'
+                      : 'Choose a supplier from the list to inspect payable position and contact details.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      '${selectedSupplier['code'] ?? '-'} - ${selectedSupplier['name'] ?? 'Supplier'}',
+                  subtitle: 'Phone ${selectedSupplier['phone'] ?? '-'}',
                 ),
-                OutlinedButton(
-                  onPressed: _isSubmitting || !canDeleteSuppliers
-                      ? null
-                      : _deleteSupplier,
-                  child: const Text('Delete Supplier'),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _buildMetricChip(
+                      'Payable',
+                      _formatNumber(selectedSupplier['payable_balance']),
+                    ),
+                    _buildMetricChip(
+                      'Address',
+                      (selectedSupplier['address'] as String?)?.isNotEmpty ==
+                              true
+                          ? selectedSupplier['address'] as String
+                          : '-',
+                    ),
+                    _buildMetricChip(
+                      'Phone',
+                      (selectedSupplier['phone'] as String?)?.isNotEmpty == true
+                          ? selectedSupplier['phone'] as String
+                          : '-',
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
-        ],
+              const SizedBox(height: 18),
+              Text(
+                _selectedSupplierId == null
+                    ? 'Create Supplier'
+                    : 'Update Supplier Details',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Use the form after reviewing supplier balance and recent ledger movement.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (!canManageSuppliers) ...[
+                const SizedBox(height: 12),
+                _buildPermissionNotice(
+                  context,
+                  'This role can review suppliers but cannot create or edit them.',
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _supplierNameController,
+                enabled: canManageSuppliers,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _supplierCodeController,
+                enabled: canManageSuppliers,
+                decoration: const InputDecoration(labelText: 'Code'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _supplierPhoneController,
+                enabled: canManageSuppliers,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _supplierAddressController,
+                enabled: canManageSuppliers,
+                decoration: const InputDecoration(labelText: 'Address'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _isSubmitting || !canManageSuppliers
+                    ? null
+                    : _saveSupplier,
+                icon: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_business_outlined),
+                label: Text(
+                  _selectedSupplierId == null
+                      ? 'Create Supplier'
+                      : 'Save Supplier',
+                ),
+              ),
+              if (_selectedSupplierId != null) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.tonal(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () {
+                              setState(() {
+                                _resetSupplierForm();
+                                _feedbackMessage = 'Supplier form cleared.';
+                              });
+                            },
+                      child: const Text('Cancel Edit'),
+                    ),
+                    OutlinedButton(
+                      onPressed: _isSubmitting || !canDeleteSuppliers
+                          ? null
+                          : _deleteSupplier,
+                      child: const Text('Delete Supplier'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
       secondary: Card(
         child: Padding(
@@ -1018,6 +1309,11 @@ class _PartiesPageState extends State<PartiesPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Suppliers', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                'Review supplier exposure first, then open the selected record for edits or ledger review.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _supplierSearchController,
@@ -1040,16 +1336,22 @@ class _PartiesPageState extends State<PartiesPage> {
               if (_filteredSuppliers.isEmpty)
                 const Text('No suppliers found yet.')
               else
-                for (final supplier in _filteredSuppliers)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    selected: supplier['id'] == _selectedSupplierId,
-                    title: Text('${supplier['code']} - ${supplier['name']}'),
-                    subtitle: Text(
-                      'Payable ${_formatNumber(supplier['payable_balance'])}',
+                ..._filteredSuppliers.map(
+                  (supplier) => Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      selected: supplier['id'] == _selectedSupplierId,
+                      title: Text('${supplier['code']} - ${supplier['name']}'),
+                      subtitle: Text(
+                        'Payable ${_formatNumber(supplier['payable_balance'])} • ${supplier['phone'] ?? 'No phone'}',
+                      ),
+                      trailing: supplier['id'] == _selectedSupplierId
+                          ? const Icon(Icons.check_circle_outline)
+                          : null,
+                      onTap: () => _selectSupplier(supplier),
                     ),
-                    onTap: () => _selectSupplier(supplier),
                   ),
+                ),
               if (_canReadLedger && _selectedSupplierLedgerSummary != null) ...[
                 const Divider(height: 24),
                 Text(
@@ -1146,6 +1448,72 @@ class _PartiesPageState extends State<PartiesPage> {
           Text(label, style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 4),
           Text(value, style: Theme.of(context).textTheme.titleSmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryBanner(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, String title, String subtitle) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
     );
