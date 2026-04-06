@@ -100,6 +100,9 @@ export default function SupportConsolePage() {
   const [recentDispatches, setRecentDispatches] = useState<ApiRecord[]>([]);
   const [plans, setPlans] = useState<ApiRecord[]>([]);
   const [subscription, setSubscription] = useState<ApiRecord | null>(null);
+  const [profitSummary, setProfitSummary] = useState<ApiRecord | null>(null);
+  const [reportDefinitions, setReportDefinitions] = useState<ApiRecord[]>([]);
+  const [reportExports, setReportExports] = useState<ApiRecord[]>([]);
   const [organizationModules, setOrganizationModules] = useState<ApiRecord[]>(
     [],
   );
@@ -334,6 +337,9 @@ export default function SupportConsolePage() {
     const [
       stationResponse,
       subscriptionResponse,
+      profitSummaryResponse,
+      reportDefinitionResponse,
+      reportExportResponse,
       moduleResponse,
       userResponse,
       employeeProfileResponse,
@@ -344,6 +350,21 @@ export default function SupportConsolePage() {
           cache: "no-store",
         }),
         fetch(`/api/ppms/saas/organizations/${organizationId}/subscription`, {
+          headers,
+          cache: "no-store",
+        }),
+        fetch(
+          `/api/ppms/accounting/profit-summary?organization_id=${organizationId}`,
+          {
+            headers,
+            cache: "no-store",
+          },
+        ),
+        fetch("/api/ppms/report-definitions/", {
+          headers,
+          cache: "no-store",
+        }),
+        fetch("/api/ppms/report-exports/?limit=20", {
           headers,
           cache: "no-store",
         }),
@@ -366,12 +387,18 @@ export default function SupportConsolePage() {
     const [
       stationJson,
       subscriptionJson,
+      profitSummaryJson,
+      reportDefinitionJson,
+      reportExportJson,
       moduleJson,
       userJson,
       employeeProfileJson,
     ] = await Promise.all([
       readJson(stationResponse),
       readJson(subscriptionResponse),
+      readJson(profitSummaryResponse),
+      readJson(reportDefinitionResponse),
+      readJson(reportExportResponse),
       readJson(moduleResponse),
       readJson(userResponse),
       readJson(employeeProfileResponse),
@@ -381,6 +408,17 @@ export default function SupportConsolePage() {
     }
     if (!subscriptionResponse.ok) {
       throw new Error(textValue(subscriptionJson.detail, "Subscription load failed"));
+    }
+    if (!profitSummaryResponse.ok) {
+      throw new Error(textValue(profitSummaryJson.detail, "Profit summary load failed"));
+    }
+    if (!reportDefinitionResponse.ok) {
+      throw new Error(
+        textValue(reportDefinitionJson.detail, "Report definition load failed"),
+      );
+    }
+    if (!reportExportResponse.ok) {
+      throw new Error(textValue(reportExportJson.detail, "Report export load failed"));
     }
     if (!moduleResponse.ok) {
       throw new Error(textValue(moduleJson.detail, "Module load failed"));
@@ -397,6 +435,29 @@ export default function SupportConsolePage() {
     const nextStationId = getId(stationList[0] ?? {}) || null;
     setStations(stationList);
     setSubscription(subscriptionJson);
+    setProfitSummary(profitSummaryJson);
+    setReportDefinitions(
+      (Array.isArray(reportDefinitionJson) ? reportDefinitionJson : []).filter(
+        (definition) =>
+          numberValue(definition.organization_id) === organizationId ||
+          stationList.some(
+            (station) =>
+              getId(station) === numberValue(definition.station_id) &&
+              numberValue(station.organization_id) === organizationId,
+          ),
+      ),
+    );
+    setReportExports(
+      (Array.isArray(reportExportJson) ? reportExportJson : []).filter(
+        (job) =>
+          numberValue(job.organization_id) === organizationId ||
+          stationList.some(
+            (station) =>
+              getId(station) === numberValue(job.station_id) &&
+              numberValue(station.organization_id) === organizationId,
+          ),
+      ),
+    );
     setOrganizationModules(Array.isArray(moduleJson) ? moduleJson : []);
     setUsers(Array.isArray(userJson) ? userJson : []);
     setEmployeeProfiles(
@@ -738,6 +799,9 @@ export default function SupportConsolePage() {
     setRecentDispatches([]);
     setPlans([]);
     setSubscription(null);
+    setProfitSummary(null);
+    setReportDefinitions([]);
+    setReportExports([]);
     setOrganizationModules([]);
     setStationModules([]);
     window.localStorage.removeItem("ppms-support-session");
@@ -776,6 +840,12 @@ export default function SupportConsolePage() {
   );
   const failedDocumentDispatches = numberValue(documentDiagnostics?.failed);
   const pendingDocumentDispatches = numberValue(documentDiagnostics?.pending);
+  const completedReportExports = reportExports.filter(
+    (job) => textValue(job.status) === "completed",
+  ).length;
+  const failedReportExports = reportExports.filter(
+    (job) => textValue(job.status) === "failed",
+  ).length;
 
   if (!session) {
     return (
@@ -1438,6 +1508,89 @@ export default function SupportConsolePage() {
               disabled={isBusy || !selectedStationId}
               onToggle={updateStationModule}
             />
+          </div>
+
+          <div className="card span-12">
+            <p className="eyebrow">Support reporting</p>
+            <h2>Tenant report and profit review</h2>
+            <p>
+              Use this support-only review to understand whether the tenant has
+              saved reporting views, export activity, and a reasonable profit
+              snapshot before support changes setup or billing controls.
+            </p>
+            <div className="metric-row">
+              <div className="metric">
+                <span>Total sales</span>
+                <strong>{textValue(profitSummary?.total_sales, "0")}</strong>
+                <small>
+                  Cash {textValue(profitSummary?.total_cash_sales, "0")}
+                </small>
+              </div>
+              <div className="metric">
+                <span>Net profit</span>
+                <strong>{textValue(profitSummary?.net_profit, "0")}</strong>
+                <small>
+                  Margin {textValue(profitSummary?.gross_margin, "0")}
+                </small>
+              </div>
+              <div className="metric">
+                <span>Saved views</span>
+                <strong>{reportDefinitions.length}</strong>
+                <small>Shared and tenant scoped</small>
+              </div>
+              <div className="metric">
+                <span>Report exports</span>
+                <strong>{reportExports.length}</strong>
+                <small>
+                  {completedReportExports} completed, {failedReportExports} failed
+                </small>
+              </div>
+            </div>
+            <div className="grid nested-grid">
+              <div className="span-6">
+                <h3>Saved report views</h3>
+                <div className="list support-list">
+                  {reportDefinitions.length === 0 ? (
+                    <p>No saved report views found for this tenant.</p>
+                  ) : (
+                    reportDefinitions.slice(0, 8).map((definition) => (
+                      <div className="list-item" key={getId(definition)}>
+                        <strong>{textValue(definition.name)}</strong>
+                        <span className="muted">
+                          {textValue(definition.report_type)} -{" "}
+                          {boolValue(definition.is_shared) ? "shared" : "private"}
+                        </span>
+                        <span className="muted">
+                          Station {textValue(definition.station_id, "all")} -
+                          updated {textValue(definition.updated_at, "unknown")}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="span-6">
+                <h3>Recent report exports</h3>
+                <div className="list support-list">
+                  {reportExports.length === 0 ? (
+                    <p>No report export jobs found for this tenant.</p>
+                  ) : (
+                    reportExports.slice(0, 8).map((job) => (
+                      <div className="list-item" key={getId(job)}>
+                        <strong>{textValue(job.report_type)}</strong>
+                        <span className="muted">
+                          {textValue(job.format)} - {textValue(job.status)}
+                        </span>
+                        <span className="muted">
+                          {textValue(job.file_name, "no file yet")} -{" "}
+                          {textValue(job.created_at, "created time unknown")}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="card span-12">
