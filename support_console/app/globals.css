@@ -155,6 +155,11 @@ p {
   gap: 1rem;
 }
 
+.nested-grid {
+  box-shadow: none;
+  margin-top: 1rem;
+}
+
 .span-4 {
   grid-column: span 4;
 }

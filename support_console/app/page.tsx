@@ -74,6 +74,16 @@ export default function SupportConsolePage() {
   const [stations, setStations] = useState<ApiRecord[]>([]);
   const [users, setUsers] = useState<ApiRecord[]>([]);
   const [employeeProfiles, setEmployeeProfiles] = useState<ApiRecord[]>([]);
+  const [notificationSummary, setNotificationSummary] =
+    useState<ApiRecord | null>(null);
+  const [notificationDiagnostics, setNotificationDiagnostics] =
+    useState<ApiRecord | null>(null);
+  const [documentDiagnostics, setDocumentDiagnostics] =
+    useState<ApiRecord | null>(null);
+  const [recentNotifications, setRecentNotifications] = useState<ApiRecord[]>(
+    [],
+  );
+  const [recentDispatches, setRecentDispatches] = useState<ApiRecord[]>([]);
   const [plans, setPlans] = useState<ApiRecord[]>([]);
   const [subscription, setSubscription] = useState<ApiRecord | null>(null);
   const [organizationModules, setOrganizationModules] = useState<ApiRecord[]>(
@@ -164,7 +174,16 @@ export default function SupportConsolePage() {
         Authorization: `Bearer ${activeSession.accessToken}`,
         "Content-Type": "application/json",
       };
-      const [meResponse, organizationResponse, planResponse] =
+      const [
+        meResponse,
+        organizationResponse,
+        planResponse,
+        notificationSummaryResponse,
+        notificationDiagnosticsResponse,
+        documentDiagnosticsResponse,
+        notificationResponse,
+        dispatchResponse,
+      ] =
         await Promise.all([
           fetch("/api/ppms/auth/me", { headers, cache: "no-store" }),
           fetch("/api/ppms/organizations?limit=200", {
@@ -172,17 +191,75 @@ export default function SupportConsolePage() {
             cache: "no-store",
           }),
           fetch("/api/ppms/saas/plans", { headers, cache: "no-store" }),
+          fetch("/api/ppms/notifications/summary", {
+            headers,
+            cache: "no-store",
+          }),
+          fetch("/api/ppms/notifications/deliveries/diagnostics", {
+            headers,
+            cache: "no-store",
+          }),
+          fetch("/api/ppms/financial-documents/dispatches/diagnostics", {
+            headers,
+            cache: "no-store",
+          }),
+          fetch("/api/ppms/notifications?limit=8", {
+            headers,
+            cache: "no-store",
+          }),
+          fetch("/api/ppms/financial-documents/dispatches?limit=8", {
+            headers,
+            cache: "no-store",
+          }),
         ]);
-      const [me, organizationJson, planJson] = await Promise.all([
+      const [
+        me,
+        organizationJson,
+        planJson,
+        notificationSummaryJson,
+        notificationDiagnosticsJson,
+        documentDiagnosticsJson,
+        notificationJson,
+        dispatchJson,
+      ] = await Promise.all([
         readJson(meResponse),
         readJson(organizationResponse),
         readJson(planResponse),
+        readJson(notificationSummaryResponse),
+        readJson(notificationDiagnosticsResponse),
+        readJson(documentDiagnosticsResponse),
+        readJson(notificationResponse),
+        readJson(dispatchResponse),
       ]);
       if (!meResponse.ok) throw new Error(textValue(me.detail, "Session failed"));
       if (!organizationResponse.ok) {
         throw new Error(textValue(organizationJson.detail, "Organization load failed"));
       }
       if (!planResponse.ok) throw new Error(textValue(planJson.detail, "Plan load failed"));
+      if (!notificationSummaryResponse.ok) {
+        throw new Error(
+          textValue(notificationSummaryJson.detail, "Notification summary failed"),
+        );
+      }
+      if (!notificationDiagnosticsResponse.ok) {
+        throw new Error(
+          textValue(
+            notificationDiagnosticsJson.detail,
+            "Notification diagnostics failed",
+          ),
+        );
+      }
+      if (!documentDiagnosticsResponse.ok) {
+        throw new Error(
+          textValue(documentDiagnosticsJson.detail, "Document diagnostics failed"),
+        );
+      }
+      if (!notificationResponse.ok) {
+        throw new Error(textValue(notificationJson.detail, "Notification list failed"));
+      }
+      if (!dispatchResponse.ok) {
+        throw new Error(textValue(dispatchJson.detail, "Dispatch list failed"));
+      }
 
       const organizationList = Array.isArray(organizationJson)
         ? organizationJson
@@ -199,6 +276,11 @@ export default function SupportConsolePage() {
       );
       setOrganizations(organizationList);
       setPlans(planList);
+      setNotificationSummary(notificationSummaryJson);
+      setNotificationDiagnostics(notificationDiagnosticsJson);
+      setDocumentDiagnostics(documentDiagnosticsJson);
+      setRecentNotifications(Array.isArray(notificationJson) ? notificationJson : []);
+      setRecentDispatches(Array.isArray(dispatchJson) ? dispatchJson : []);
       setSelectedOrganizationId(nextOrganizationId || null);
 
       if (nextOrganizationId) {
@@ -385,6 +467,11 @@ export default function SupportConsolePage() {
     setStations([]);
     setUsers([]);
     setEmployeeProfiles([]);
+    setNotificationSummary(null);
+    setNotificationDiagnostics(null);
+    setDocumentDiagnostics(null);
+    setRecentNotifications([]);
+    setRecentDispatches([]);
     setPlans([]);
     setSubscription(null);
     setOrganizationModules([]);
@@ -414,6 +501,14 @@ export default function SupportConsolePage() {
         (profile) => numberValue(profile.station_id) === selectedStationId,
       )
     : employeeProfiles;
+  const failedNotificationDeliveries = numberValue(
+    notificationDiagnostics?.failed,
+  );
+  const pendingNotificationDeliveries = numberValue(
+    notificationDiagnostics?.pending,
+  );
+  const failedDocumentDispatches = numberValue(documentDiagnostics?.failed);
+  const pendingDocumentDispatches = numberValue(documentDiagnostics?.pending);
 
   if (!session) {
     return (
@@ -730,6 +825,86 @@ export default function SupportConsolePage() {
               disabled={isBusy || !selectedStationId}
               onToggle={updateStationModule}
             />
+          </div>
+
+          <div className="card span-12">
+            <p className="eyebrow">Communications health</p>
+            <h2>Notifications and document dispatch</h2>
+            <p>
+              Review delivery pressure before support starts changing tenant
+              settings. Retry and process-due controls can stay in a later
+              audited support slice.
+            </p>
+            <div className="metric-row">
+              <div className="metric">
+                <span>Unread</span>
+                <strong>{textValue(notificationSummary?.unread_count, "0")}</strong>
+                <small>{textValue(notificationSummary?.total_count, "0")} total</small>
+              </div>
+              <div className="metric">
+                <span>Pending notification</span>
+                <strong>{pendingNotificationDeliveries}</strong>
+                <small>{failedNotificationDeliveries} failed</small>
+              </div>
+              <div className="metric">
+                <span>Pending documents</span>
+                <strong>{pendingDocumentDispatches}</strong>
+                <small>{failedDocumentDispatches} failed</small>
+              </div>
+              <div className="metric">
+                <span>Recent activity</span>
+                <strong>{recentNotifications.length + recentDispatches.length}</strong>
+                <small>Support-visible rows</small>
+              </div>
+            </div>
+            <div className="grid nested-grid">
+              <div className="span-6">
+                <h3>Recent notifications</h3>
+                <div className="list support-list">
+                  {recentNotifications.length === 0 ? (
+                    <p>No recent notifications found.</p>
+                  ) : (
+                    recentNotifications.map((notification) => (
+                      <div className="list-item" key={getId(notification)}>
+                        <strong>{textValue(notification.title)}</strong>
+                        <span className="muted">
+                          {textValue(notification.event_type)} -{" "}
+                          {boolValue(notification.is_read) ? "read" : "unread"}
+                        </span>
+                        <span className="muted">
+                          {textValue(notification.created_at, "created time unknown")}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="span-6">
+                <h3>Recent document dispatches</h3>
+                <div className="list support-list">
+                  {recentDispatches.length === 0 ? (
+                    <p>No recent document dispatches found.</p>
+                  ) : (
+                    recentDispatches.map((dispatch) => (
+                      <div className="list-item" key={getId(dispatch)}>
+                        <strong>
+                          {textValue(dispatch.document_type, "Document")} #{
+                            textValue(dispatch.id)
+                          }
+                        </strong>
+                        <span className="muted">
+                          {textValue(dispatch.channel)} -{" "}
+                          {textValue(dispatch.status)}
+                        </span>
+                        <span className="muted">
+                          {textValue(dispatch.recipient_contact, "no recipient")}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
