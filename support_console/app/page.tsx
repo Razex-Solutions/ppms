@@ -564,6 +564,43 @@ export default function SupportConsolePage() {
     }
   }
 
+  async function submitSubscriptionCorrection(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!selectedOrganizationId) return;
+    const formData = new FormData(event.currentTarget);
+    setIsBusy(true);
+    setStatus(null);
+    try {
+      const updatedSubscription = (await apiFetch(
+        `/saas/organizations/${selectedOrganizationId}/subscription`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            plan_id: optionalNumber(formData.get("plan_id")),
+            status: optionalText(formData.get("status")) ?? "inactive",
+            billing_cycle:
+              optionalText(formData.get("billing_cycle")) ?? "monthly",
+            auto_renew: formData.get("auto_renew") === "on",
+            price_override: optionalNumber(formData.get("price_override")),
+            notes: optionalText(formData.get("notes")),
+          }),
+        },
+      )) as ApiRecord;
+      setSubscription(updatedSubscription);
+      setStatus("Subscription support controls saved.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Subscription correction failed",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   function logout() {
     setSession(null);
     setOrganizations([]);
@@ -586,6 +623,9 @@ export default function SupportConsolePage() {
     (item) => getId(item) === selectedOrganizationId,
   );
   const selectedStation = stations.find((item) => getId(item) === selectedStationId);
+  const selectedPlan = plans.find(
+    (item) => getId(item) === numberValue(subscription?.plan_id),
+  );
   const enabledOrganizationModules = organizationModules.filter((item) =>
     boolValue(item.is_enabled),
   ).length;
@@ -735,7 +775,11 @@ export default function SupportConsolePage() {
               <div className="metric">
                 <span>Subscription</span>
                 <strong>{textValue(subscription?.status, "-")}</strong>
-                <small>Plan #{textValue(subscription?.plan_id, "not assigned")}</small>
+                <small>
+                  {selectedPlan
+                    ? textValue(selectedPlan.name)
+                    : `Plan #${textValue(subscription?.plan_id, "not assigned")}`}
+                </small>
               </div>
               <div className="metric">
                 <span>Org modules</span>
@@ -1160,6 +1204,96 @@ export default function SupportConsolePage() {
                 ))
               )}
             </div>
+          </div>
+
+          <div className="card span-6">
+            <p className="eyebrow">Subscription controls</p>
+            <h2>Package and billing state</h2>
+            <p>
+              Use this support-only form for package corrections before changing
+              module visibility. Keep tenant setup edits separate from SaaS
+              billing state.
+            </p>
+            <form
+              className="form-grid"
+              key={`subscription-correction-${selectedOrganizationId ?? "none"}-${textValue(subscription?.id, "new")}`}
+              onSubmit={submitSubscriptionCorrection}
+            >
+              <label>
+                Subscription plan
+                <select
+                  defaultValue={textValue(subscription?.plan_id, "")}
+                  name="plan_id"
+                >
+                  <option value="">No plan assigned</option>
+                  {plans.map((plan) => (
+                    <option key={getId(plan)} value={getId(plan)}>
+                      {textValue(plan.name)} - {textValue(plan.billing_cycle)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="two-column">
+                <label>
+                  Status
+                  <select
+                    defaultValue={textValue(subscription?.status, "inactive")}
+                    name="status"
+                  >
+                    <option value="inactive">Inactive</option>
+                    <option value="trial">Trial</option>
+                    <option value="active">Active</option>
+                    <option value="past_due">Past due</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </label>
+                <label>
+                  Billing cycle
+                  <select
+                    defaultValue={textValue(
+                      subscription?.billing_cycle,
+                      "monthly",
+                    )}
+                    name="billing_cycle"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="annual">Annual</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                Price override
+                <input
+                  defaultValue={textValue(subscription?.price_override, "")}
+                  min="0"
+                  name="price_override"
+                  step="0.01"
+                  type="number"
+                />
+              </label>
+              <label>
+                Support notes
+                <textarea
+                  defaultValue={textValue(subscription?.notes, "")}
+                  name="notes"
+                  rows={3}
+                />
+              </label>
+              <label className="inline-check">
+                <input
+                  defaultChecked={boolValue(subscription?.auto_renew)}
+                  name="auto_renew"
+                  type="checkbox"
+                />
+                Auto renew subscription
+              </label>
+              <button disabled={isBusy || !selectedOrganizationId} type="submit">
+                Save subscription controls
+              </button>
+            </form>
           </div>
 
           <div className="card span-6">
