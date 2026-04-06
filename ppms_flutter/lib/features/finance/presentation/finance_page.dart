@@ -83,6 +83,44 @@ class _FinancePageState extends State<FinancePage> {
       _canCreateCustomerPayments || _canReverseCustomerPayments;
   bool get _canReadSupplierPayments =>
       _canCreateSupplierPayments || _canReverseSupplierPayments;
+  Map<String, dynamic>? get _selectedPurchase {
+    for (final purchase in _purchases) {
+      if (purchase['id'] == _selectedPurchaseId) {
+        return purchase;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? get _selectedCustomerPayment {
+    for (final payment in _customerPayments) {
+      if (payment['id'] == _selectedCustomerPaymentId) {
+        return payment;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? get _selectedSupplierPayment {
+    for (final payment in _supplierPayments) {
+      if (payment['id'] == _selectedSupplierPaymentId) {
+        return payment;
+      }
+    }
+    return null;
+  }
+
+  String get _selectedStationLabel {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        final name = station['name'] as String? ?? 'Station';
+        final code = station['code'] as String? ?? '-';
+        return '$name ($code)';
+      }
+    }
+    return 'No station selected';
+  }
+
   bool get _showPurchases => _capabilities.featureVisible(
     platformFeature: false,
     modules: const ['purchases'],
@@ -959,6 +997,8 @@ class _FinancePageState extends State<FinancePage> {
                     },
                   ),
                   const SizedBox(height: 20),
+                  _buildWorkspaceReview(context),
+                  const SizedBox(height: 20),
                   _buildSectionContent(context),
                   if (_errorMessage != null || _feedbackMessage != null)
                     const SizedBox(height: 16),
@@ -996,371 +1036,624 @@ class _FinancePageState extends State<FinancePage> {
     }
   }
 
-  Widget _buildPurchaseSection(BuildContext context) {
-    return ResponsiveSplit(
-      breakpoint: 1150,
-      primary: Column(
+  Widget _buildWorkspaceReview(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedLabel = switch (_section) {
+      _FinanceSection.purchases =>
+        _selectedPurchase == null
+            ? 'No purchase selected yet'
+            : 'Purchase #${_selectedPurchase!['id']} selected',
+      _FinanceSection.customerPayments =>
+        _selectedCustomerPayment == null
+            ? 'No customer payment selected yet'
+            : 'Customer payment #${_selectedCustomerPayment!['id']} selected',
+      _FinanceSection.supplierPayments =>
+        _selectedSupplierPayment == null
+            ? 'No supplier payment selected yet'
+            : 'Supplier payment #${_selectedSupplierPayment!['id']} selected',
+    };
+    final nextAction = switch (_section) {
+      _FinanceSection.purchases =>
+        _canCreatePurchases
+            ? 'Review supplier, tank, and latest purchase context first, then record the next stock inflow.'
+            : 'Review purchase history and reversal state for the selected station.',
+      _FinanceSection.customerPayments =>
+        _canCreateCustomerPayments
+            ? 'Review the selected customer ledger first, then post the incoming receipt.'
+            : 'Review customer receipts and their reversal state for the selected station.',
+      _FinanceSection.supplierPayments =>
+        _canCreateSupplierPayments
+            ? 'Review the selected supplier payable balance first, then post the settlement.'
+            : 'Review supplier payment history and reversal state for the selected station.',
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!_canCreatePurchases) ...[
-            _buildPermissionNotice(
-              'This role can review purchase records here but cannot create new purchases.',
-            ),
-            const SizedBox(height: 12),
-          ],
           Text(
-            'Create Purchase',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          if (_suppliers.isEmpty || _tanks.isEmpty) ...[
-            _buildHintBanner(
+            'Review First',
+            style: Theme.of(
               context,
-              'Purchases need both a supplier and a tank. Add missing setup first if these lists are empty.',
-            ),
-            const SizedBox(height: 12),
-          ],
-          DropdownButtonFormField<int>(
-            key: ValueKey<String>(
-              'purchase-supplier-${_selectedSupplierId ?? 'none'}',
-            ),
-            initialValue: _selectedSupplierId,
-            decoration: const InputDecoration(labelText: 'Supplier'),
-            items: [
-              for (final supplier in _suppliers)
-                DropdownMenuItem<int>(
-                  value: supplier['id'] as int,
-                  child: Text('${supplier['code']} - ${supplier['name']}'),
-                ),
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(selectedLabel, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.store_outlined,
+                label: _selectedStationLabel,
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.inventory_2_outlined,
+                label: 'Purchases ${_purchases.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Customer receipts ${_customerPayments.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.payments_outlined,
+                label: 'Supplier payments ${_supplierPayments.length}',
+              ),
             ],
-            onChanged: _canCreatePurchases
-                ? (value) {
-                    setState(() {
-                      _selectedSupplierId = value;
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            key: ValueKey<String>('purchase-tank-${_selectedTankId ?? 'none'}'),
-            initialValue: _selectedTankId,
-            decoration: const InputDecoration(labelText: 'Tank'),
-            items: [
-              for (final tank in _tanks)
-                DropdownMenuItem<int>(
-                  value: tank['id'] as int,
-                  child: Text('${tank['code']} - ${tank['name']}'),
-                ),
-            ],
-            onChanged: _canCreatePurchases
-                ? (value) {
-                    setState(() {
-                      _selectedTankId = value;
-                      final match = _tanks
-                          .cast<Map<String, dynamic>?>()
-                          .firstWhere(
-                            (tank) => tank?['id'] == value,
-                            orElse: () => null,
-                          );
-                      _selectedFuelTypeId = match?['fuel_type_id'] as int?;
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            key: ValueKey<String>(
-              'purchase-fuel-${_selectedFuelTypeId ?? 'none'}',
-            ),
-            initialValue: _selectedFuelTypeId,
-            decoration: const InputDecoration(labelText: 'Fuel Type'),
-            items: [
-              for (final fuelType in _fuelTypes)
-                DropdownMenuItem<int>(
-                  value: fuelType['id'] as int,
-                  child: Text(fuelType['name'] as String? ?? 'Fuel'),
-                ),
-            ],
-            onChanged: _canCreatePurchases
-                ? (value) {
-                    setState(() {
-                      _selectedFuelTypeId = value;
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _purchaseQuantityController,
-            enabled: _canCreatePurchases,
-            decoration: const InputDecoration(
-              labelText: 'Quantity',
-              helperText: 'Total liters received in this purchase.',
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _purchaseRateController,
-            enabled: _canCreatePurchases,
-            decoration: const InputDecoration(
-              labelText: 'Rate Per Liter',
-              helperText: 'Purchase price per liter.',
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _purchaseReferenceController,
-            enabled: _canCreatePurchases,
-            decoration: const InputDecoration(labelText: 'Reference No'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _purchaseNotesController,
-            enabled: _canCreatePurchases,
-            decoration: const InputDecoration(labelText: 'Notes'),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: !_canCreatePurchases || _isSubmitting
-                ? null
-                : _submitPurchase,
-            icon: _isSubmitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add_business_outlined),
-            label: const Text('Create Purchase'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPurchaseSection(BuildContext context) {
+    final selectedPurchase = _selectedPurchase;
+    return ResponsiveSplit(
+      breakpoint: 1150,
+      primary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Purchase Summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedPurchase == null)
+                _buildEmptyState(
+                  context,
+                  'No purchase selected yet.',
+                  _canCreatePurchases
+                      ? 'Review the purchase list first, then record the next delivery into the selected tank.'
+                      : 'Review purchase history and reversal state for this station.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      'Purchase #${selectedPurchase['id']} • ${_formatNumber(selectedPurchase['total_amount'])}',
+                  subtitle:
+                      '${selectedPurchase['status']} • ${_formatDateTime(selectedPurchase['created_at'])}',
+                ),
+                const SizedBox(height: 12),
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Supplier',
+                    _lookupName(_suppliers, selectedPurchase['supplier_id']),
+                  ),
+                  _buildDetailItem(
+                    'Tank',
+                    _lookupName(_tanks, selectedPurchase['tank_id']),
+                  ),
+                  _buildDetailItem(
+                    'Quantity',
+                    _formatNumber(selectedPurchase['quantity']),
+                  ),
+                  _buildDetailItem(
+                    'Rate',
+                    _formatNumber(selectedPurchase['rate_per_liter']),
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 18),
+              if (!_canCreatePurchases) ...[
+                _buildPermissionNotice(
+                  'This role can review purchase records here but cannot create new purchases.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                'Create Purchase',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Use the form after confirming supplier, tank, and fuel context for the selected station.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              if (_suppliers.isEmpty || _tanks.isEmpty) ...[
+                _buildHintBanner(
+                  context,
+                  'Purchases need both a supplier and a tank. Add missing setup first if these lists are empty.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'purchase-supplier-${_selectedSupplierId ?? 'none'}',
+                ),
+                initialValue: _selectedSupplierId,
+                decoration: const InputDecoration(labelText: 'Supplier'),
+                items: [
+                  for (final supplier in _suppliers)
+                    DropdownMenuItem<int>(
+                      value: supplier['id'] as int,
+                      child: Text('${supplier['code']} - ${supplier['name']}'),
+                    ),
+                ],
+                onChanged: _canCreatePurchases
+                    ? (value) {
+                        setState(() {
+                          _selectedSupplierId = value;
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'purchase-tank-${_selectedTankId ?? 'none'}',
+                ),
+                initialValue: _selectedTankId,
+                decoration: const InputDecoration(labelText: 'Tank'),
+                items: [
+                  for (final tank in _tanks)
+                    DropdownMenuItem<int>(
+                      value: tank['id'] as int,
+                      child: Text('${tank['code']} - ${tank['name']}'),
+                    ),
+                ],
+                onChanged: _canCreatePurchases
+                    ? (value) {
+                        setState(() {
+                          _selectedTankId = value;
+                          final match = _tanks
+                              .cast<Map<String, dynamic>?>()
+                              .firstWhere(
+                                (tank) => tank?['id'] == value,
+                                orElse: () => null,
+                              );
+                          _selectedFuelTypeId = match?['fuel_type_id'] as int?;
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'purchase-fuel-${_selectedFuelTypeId ?? 'none'}',
+                ),
+                initialValue: _selectedFuelTypeId,
+                decoration: const InputDecoration(labelText: 'Fuel Type'),
+                items: [
+                  for (final fuelType in _fuelTypes)
+                    DropdownMenuItem<int>(
+                      value: fuelType['id'] as int,
+                      child: Text(fuelType['name'] as String? ?? 'Fuel'),
+                    ),
+                ],
+                onChanged: _canCreatePurchases
+                    ? (value) {
+                        setState(() {
+                          _selectedFuelTypeId = value;
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _purchaseQuantityController,
+                enabled: _canCreatePurchases,
+                decoration: const InputDecoration(
+                  labelText: 'Quantity',
+                  helperText: 'Total liters received in this purchase.',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _purchaseRateController,
+                enabled: _canCreatePurchases,
+                decoration: const InputDecoration(
+                  labelText: 'Rate Per Liter',
+                  helperText: 'Purchase price per liter.',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _purchaseReferenceController,
+                enabled: _canCreatePurchases,
+                decoration: const InputDecoration(labelText: 'Reference No'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _purchaseNotesController,
+                enabled: _canCreatePurchases,
+                decoration: const InputDecoration(labelText: 'Notes'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: !_canCreatePurchases || _isSubmitting
+                    ? null
+                    : _submitPurchase,
+                icon: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_business_outlined),
+                label: const Text('Create Purchase'),
+              ),
+            ],
+          ),
+        ),
       ),
       secondary: _buildPurchaseList(context),
     );
   }
 
   Widget _buildCustomerPaymentSection(BuildContext context) {
+    final selectedPayment = _selectedCustomerPayment;
     return ResponsiveSplit(
       breakpoint: 1150,
-      primary: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!_canCreateCustomerPayments) ...[
-            _buildPermissionNotice(
-              'This role can review customer receipts here but cannot create new customer payments.',
-            ),
-            const SizedBox(height: 12),
-          ],
-          Text(
-            'Customer Receipt',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          if (_customers.isEmpty) ...[
-            _buildHintBanner(
-              context,
-              'No customers found for this station yet. Add one in the Parties workspace to post receipts.',
-            ),
-            const SizedBox(height: 12),
-          ],
-          DropdownButtonFormField<int>(
-            key: ValueKey<String>(
-              'customer-payment-customer-${_selectedCustomerId ?? 'none'}',
-            ),
-            initialValue: _selectedCustomerId,
-            decoration: const InputDecoration(labelText: 'Customer'),
-            items: [
-              for (final customer in _customers)
-                DropdownMenuItem<int>(
-                  value: customer['id'] as int,
-                  child: Text('${customer['code']} - ${customer['name']}'),
+      primary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Customer Receipt Summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedPayment == null)
+                _buildEmptyState(
+                  context,
+                  'No customer payment selected yet.',
+                  _canCreateCustomerPayments
+                      ? 'Review the latest receipt history, then post the next customer collection.'
+                      : 'Review posted customer receipts and reversal status for this station.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      'Receipt #${selectedPayment['id']} • ${_formatNumber(selectedPayment['amount'])}',
+                  subtitle:
+                      '${selectedPayment['payment_method']} • ${_formatDateTime(selectedPayment['created_at'])}',
                 ),
+                const SizedBox(height: 12),
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Customer',
+                    _lookupName(_customers, selectedPayment['customer_id']),
+                  ),
+                  _buildDetailItem(
+                    'Reference',
+                    selectedPayment['reference_no'] as String? ?? '-',
+                  ),
+                  _buildDetailItem(
+                    'Reversal',
+                    selectedPayment['reversal_request_status'] as String? ??
+                        (selectedPayment['is_reversed'] == true
+                            ? 'reversed'
+                            : 'none'),
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 18),
+              if (!_canCreateCustomerPayments) ...[
+                _buildPermissionNotice(
+                  'This role can review customer receipts here but cannot create new customer payments.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                'Customer Receipt',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Use the form after checking the customer ledger position and selected receipt context.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              if (_customers.isEmpty) ...[
+                _buildHintBanner(
+                  context,
+                  'No customers found for this station yet. Add one in the Parties workspace to post receipts.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'customer-payment-customer-${_selectedCustomerId ?? 'none'}',
+                ),
+                initialValue: _selectedCustomerId,
+                decoration: const InputDecoration(labelText: 'Customer'),
+                items: [
+                  for (final customer in _customers)
+                    DropdownMenuItem<int>(
+                      value: customer['id'] as int,
+                      child: Text('${customer['code']} - ${customer['name']}'),
+                    ),
+                ],
+                onChanged: _canCreateCustomerPayments
+                    ? (value) {
+                        setState(() {
+                          _selectedCustomerId = value;
+                        });
+                        _loadLedgerSummaries();
+                      }
+                    : null,
+              ),
+              if (_canReadLedger && _selectedCustomerLedgerSummary != null) ...[
+                const SizedBox(height: 12),
+                _buildLedgerSummaryBanner(_selectedCustomerLedgerSummary!),
+              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey<String>(
+                  'customer-payment-method-$_customerPaymentMethod',
+                ),
+                initialValue: _customerPaymentMethod,
+                decoration: const InputDecoration(labelText: 'Payment Method'),
+                items: const [
+                  DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'bank', child: Text('Bank')),
+                  DropdownMenuItem(value: 'card', child: Text('Card')),
+                ],
+                onChanged: _canCreateCustomerPayments
+                    ? (value) {
+                        setState(() {
+                          _customerPaymentMethod = value ?? 'cash';
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerAmountController,
+                enabled: _canCreateCustomerPayments,
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  helperText: 'Received amount for the selected customer.',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerReferenceController,
+                enabled: _canCreateCustomerPayments,
+                decoration: const InputDecoration(labelText: 'Reference No'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customerNotesController,
+                enabled: _canCreateCustomerPayments,
+                decoration: const InputDecoration(labelText: 'Notes'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: !_canCreateCustomerPayments || _isSubmitting
+                    ? null
+                    : _submitCustomerPayment,
+                icon: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Save Customer Payment'),
+              ),
             ],
-            onChanged: _canCreateCustomerPayments
-                ? (value) {
-                    setState(() {
-                      _selectedCustomerId = value;
-                    });
-                    _loadLedgerSummaries();
-                  }
-                : null,
           ),
-          if (_canReadLedger && _selectedCustomerLedgerSummary != null) ...[
-            const SizedBox(height: 12),
-            _buildLedgerSummaryBanner(_selectedCustomerLedgerSummary!),
-          ],
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            key: ValueKey<String>(
-              'customer-payment-method-$_customerPaymentMethod',
-            ),
-            initialValue: _customerPaymentMethod,
-            decoration: const InputDecoration(labelText: 'Payment Method'),
-            items: const [
-              DropdownMenuItem(value: 'cash', child: Text('Cash')),
-              DropdownMenuItem(value: 'bank', child: Text('Bank')),
-              DropdownMenuItem(value: 'card', child: Text('Card')),
-            ],
-            onChanged: _canCreateCustomerPayments
-                ? (value) {
-                    setState(() {
-                      _customerPaymentMethod = value ?? 'cash';
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerAmountController,
-            enabled: _canCreateCustomerPayments,
-            decoration: const InputDecoration(
-              labelText: 'Amount',
-              helperText: 'Received amount for the selected customer.',
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerReferenceController,
-            enabled: _canCreateCustomerPayments,
-            decoration: const InputDecoration(labelText: 'Reference No'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _customerNotesController,
-            enabled: _canCreateCustomerPayments,
-            decoration: const InputDecoration(labelText: 'Notes'),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: !_canCreateCustomerPayments || _isSubmitting
-                ? null
-                : _submitCustomerPayment,
-            icon: _isSubmitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.account_balance_wallet_outlined),
-            label: const Text('Save Customer Payment'),
-          ),
-        ],
+        ),
       ),
       secondary: _buildCustomerPaymentList(context),
     );
   }
 
   Widget _buildSupplierPaymentSection(BuildContext context) {
+    final selectedPayment = _selectedSupplierPayment;
     return ResponsiveSplit(
       breakpoint: 1150,
-      primary: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!_canCreateSupplierPayments) ...[
-            _buildPermissionNotice(
-              'This role can review supplier payments here but cannot create new supplier payments.',
-            ),
-            const SizedBox(height: 12),
-          ],
-          Text(
-            'Supplier Payment',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          if (_suppliers.isEmpty) ...[
-            _buildHintBanner(
-              context,
-              'No suppliers found yet. Add one in the Parties workspace to post supplier payments.',
-            ),
-            const SizedBox(height: 12),
-          ],
-          DropdownButtonFormField<int>(
-            key: ValueKey<String>(
-              'supplier-payment-supplier-${_selectedSupplierId ?? 'none'}',
-            ),
-            initialValue: _selectedSupplierId,
-            decoration: const InputDecoration(labelText: 'Supplier'),
-            items: [
-              for (final supplier in _suppliers)
-                DropdownMenuItem<int>(
-                  value: supplier['id'] as int,
-                  child: Text('${supplier['code']} - ${supplier['name']}'),
+      primary: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Supplier Payment Summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedPayment == null)
+                _buildEmptyState(
+                  context,
+                  'No supplier payment selected yet.',
+                  _canCreateSupplierPayments
+                      ? 'Review the latest settlement history, then post the next supplier payment.'
+                      : 'Review supplier payments and reversal status for this station.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      'Supplier payment #${selectedPayment['id']} • ${_formatNumber(selectedPayment['amount'])}',
+                  subtitle:
+                      '${selectedPayment['payment_method']} • ${_formatDateTime(selectedPayment['created_at'])}',
                 ),
+                const SizedBox(height: 12),
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Supplier',
+                    _lookupName(_suppliers, selectedPayment['supplier_id']),
+                  ),
+                  _buildDetailItem(
+                    'Reference',
+                    selectedPayment['reference_no'] as String? ?? '-',
+                  ),
+                  _buildDetailItem(
+                    'Reversal',
+                    selectedPayment['reversal_request_status'] as String? ??
+                        (selectedPayment['is_reversed'] == true
+                            ? 'reversed'
+                            : 'none'),
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 18),
+              if (!_canCreateSupplierPayments) ...[
+                _buildPermissionNotice(
+                  'This role can review supplier payments here but cannot create new supplier payments.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                'Supplier Payment',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Use the form after checking supplier payable position and selected payment context.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              if (_suppliers.isEmpty) ...[
+                _buildHintBanner(
+                  context,
+                  'No suppliers found yet. Add one in the Parties workspace to post supplier payments.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              DropdownButtonFormField<int>(
+                key: ValueKey<String>(
+                  'supplier-payment-supplier-${_selectedSupplierId ?? 'none'}',
+                ),
+                initialValue: _selectedSupplierId,
+                decoration: const InputDecoration(labelText: 'Supplier'),
+                items: [
+                  for (final supplier in _suppliers)
+                    DropdownMenuItem<int>(
+                      value: supplier['id'] as int,
+                      child: Text('${supplier['code']} - ${supplier['name']}'),
+                    ),
+                ],
+                onChanged: _canCreateSupplierPayments
+                    ? (value) {
+                        setState(() {
+                          _selectedSupplierId = value;
+                        });
+                        _loadLedgerSummaries();
+                      }
+                    : null,
+              ),
+              if (_canReadLedger && _selectedSupplierLedgerSummary != null) ...[
+                const SizedBox(height: 12),
+                _buildLedgerSummaryBanner(_selectedSupplierLedgerSummary!),
+              ],
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey<String>(
+                  'supplier-payment-method-$_supplierPaymentMethod',
+                ),
+                initialValue: _supplierPaymentMethod,
+                decoration: const InputDecoration(labelText: 'Payment Method'),
+                items: const [
+                  DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'bank', child: Text('Bank')),
+                  DropdownMenuItem(value: 'card', child: Text('Card')),
+                ],
+                onChanged: _canCreateSupplierPayments
+                    ? (value) {
+                        setState(() {
+                          _supplierPaymentMethod = value ?? 'cash';
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _supplierAmountController,
+                enabled: _canCreateSupplierPayments,
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  helperText: 'Paid amount for the selected supplier.',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _supplierReferenceController,
+                enabled: _canCreateSupplierPayments,
+                decoration: const InputDecoration(labelText: 'Reference No'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _supplierNotesController,
+                enabled: _canCreateSupplierPayments,
+                decoration: const InputDecoration(labelText: 'Notes'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: !_canCreateSupplierPayments || _isSubmitting
+                    ? null
+                    : _submitSupplierPayment,
+                icon: _isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.payments_outlined),
+                label: const Text('Save Supplier Payment'),
+              ),
             ],
-            onChanged: _canCreateSupplierPayments
-                ? (value) {
-                    setState(() {
-                      _selectedSupplierId = value;
-                    });
-                    _loadLedgerSummaries();
-                  }
-                : null,
           ),
-          if (_canReadLedger && _selectedSupplierLedgerSummary != null) ...[
-            const SizedBox(height: 12),
-            _buildLedgerSummaryBanner(_selectedSupplierLedgerSummary!),
-          ],
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            key: ValueKey<String>(
-              'supplier-payment-method-$_supplierPaymentMethod',
-            ),
-            initialValue: _supplierPaymentMethod,
-            decoration: const InputDecoration(labelText: 'Payment Method'),
-            items: const [
-              DropdownMenuItem(value: 'cash', child: Text('Cash')),
-              DropdownMenuItem(value: 'bank', child: Text('Bank')),
-              DropdownMenuItem(value: 'card', child: Text('Card')),
-            ],
-            onChanged: _canCreateSupplierPayments
-                ? (value) {
-                    setState(() {
-                      _supplierPaymentMethod = value ?? 'cash';
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _supplierAmountController,
-            enabled: _canCreateSupplierPayments,
-            decoration: const InputDecoration(
-              labelText: 'Amount',
-              helperText: 'Paid amount for the selected supplier.',
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _supplierReferenceController,
-            enabled: _canCreateSupplierPayments,
-            decoration: const InputDecoration(labelText: 'Reference No'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _supplierNotesController,
-            enabled: _canCreateSupplierPayments,
-            decoration: const InputDecoration(labelText: 'Notes'),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: !_canCreateSupplierPayments || _isSubmitting
-                ? null
-                : _submitSupplierPayment,
-            icon: _isSubmitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.payments_outlined),
-            label: const Text('Save Supplier Payment'),
-          ),
-        ],
+        ),
       ),
       secondary: _buildSupplierPaymentList(context),
     );
@@ -1807,6 +2100,51 @@ class _FinancePageState extends State<FinancePage> {
           const SizedBox(height: 4),
           Text(value, style: Theme.of(context).textTheme.titleSmall),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryBanner(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
       ),
     );
   }
