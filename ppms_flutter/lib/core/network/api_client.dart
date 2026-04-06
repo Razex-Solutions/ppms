@@ -116,11 +116,23 @@ class ApiClient {
     );
   }
 
-  Future<List<dynamic>> getNotificationDeliveries(String accessToken) async {
+  Future<List<dynamic>> getNotificationDeliveries(
+    String accessToken, {
+    String? status,
+    String? channel,
+  }) async {
+    final params = <String, String>{};
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    if (channel != null && channel.isNotEmpty) {
+      params['channel'] = channel;
+    }
     return _sendList(
       'GET',
       '/notifications/deliveries',
       accessToken: accessToken,
+      queryParams: params.isEmpty ? null : params,
     );
   }
 
@@ -131,6 +143,29 @@ class ApiClient {
       'GET',
       '/notifications/deliveries/diagnostics',
       accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> retryNotificationDelivery(
+    String accessToken, {
+    required int deliveryId,
+  }) async {
+    return _send(
+      'POST',
+      '/notifications/deliveries/$deliveryId/retry',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> processDueNotificationDeliveries(
+    String accessToken, {
+    int limit = 100,
+  }) async {
+    return _send(
+      'POST',
+      '/notifications/deliveries/process-due',
+      accessToken: accessToken,
+      queryParams: {'limit': '$limit'},
     );
   }
 
@@ -285,6 +320,59 @@ class ApiClient {
 
   Future<List<dynamic>> getReportExports(String accessToken) async {
     return _sendList('GET', '/report-exports/', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getFinancialDocumentDispatches(
+    String accessToken, {
+    String? status,
+    String? channel,
+  }) async {
+    final params = <String, String>{};
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    if (channel != null && channel.isNotEmpty) {
+      params['channel'] = channel;
+    }
+    return _sendList(
+      'GET',
+      '/financial-documents/dispatches',
+      accessToken: accessToken,
+      queryParams: params.isEmpty ? null : params,
+    );
+  }
+
+  Future<Map<String, dynamic>> getFinancialDocumentDispatchDiagnostics(
+    String accessToken,
+  ) async {
+    return _send(
+      'GET',
+      '/financial-documents/dispatches/diagnostics',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> retryFinancialDocumentDispatch(
+    String accessToken, {
+    required int dispatchId,
+  }) async {
+    return _send(
+      'POST',
+      '/financial-documents/dispatches/$dispatchId/retry',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> processDueFinancialDocumentDispatches(
+    String accessToken, {
+    int limit = 100,
+  }) async {
+    return _send(
+      'POST',
+      '/financial-documents/dispatches/process-due',
+      accessToken: accessToken,
+      queryParams: {'limit': '$limit'},
+    );
   }
 
   Future<String> downloadReportExportText(
@@ -1853,16 +1941,6 @@ class ApiClient {
       '/financial-documents/supplier-payments/$paymentId/send',
       accessToken: accessToken,
       body: payload,
-    );
-  }
-
-  Future<List<dynamic>> getFinancialDocumentDispatches(
-    String accessToken,
-  ) async {
-    return _sendList(
-      'GET',
-      '/financial-documents/dispatches',
-      accessToken: accessToken,
     );
   }
 

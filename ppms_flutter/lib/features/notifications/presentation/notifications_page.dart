@@ -24,6 +24,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
   List<Map<String, dynamic>> _notifications = const [];
   List<Map<String, dynamic>> _preferences = const [];
   List<Map<String, dynamic>> _deliveries = const [];
+  String _deliveryStatusFilter = 'all';
+  String _deliveryChannelFilter = 'all';
 
   SessionCapabilities get _capabilities =>
       SessionCapabilities(widget.sessionController);
@@ -62,8 +64,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
           : const <Map<String, dynamic>>[];
       final deliveries = _showNotificationsWorkspace
           ? List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchNotificationDeliveries())
-                  .map((item) => Map<String, dynamic>.from(item as Map)),
+              (await widget.sessionController.fetchNotificationDeliveries(
+                status: _deliveryStatusFilter == 'all'
+                    ? null
+                    : _deliveryStatusFilter,
+                channel: _deliveryChannelFilter == 'all'
+                    ? null
+                    : _deliveryChannelFilter,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
             )
           : const <Map<String, dynamic>>[];
 
@@ -128,6 +136,27 @@ class _NotificationsPageState extends State<NotificationsPage> {
         payload: payload,
       );
       _feedbackMessage = 'Preference updated for ${preference['event_type']}.';
+      await _loadNotifications();
+    });
+  }
+
+  Future<void> _retryDelivery(int deliveryId) async {
+    await _submitAction(() async {
+      final result = await widget.sessionController.retryNotificationDelivery(
+        deliveryId: deliveryId,
+      );
+      _feedbackMessage =
+          'Notification delivery ${result['id']} retried with status ${result['status']}.';
+      await _loadNotifications();
+    });
+  }
+
+  Future<void> _processDueDeliveries() async {
+    await _submitAction(() async {
+      final result = await widget.sessionController
+          .processDueNotificationDeliveries();
+      _feedbackMessage =
+          'Processed ${result['processed_count'] ?? result['processed'] ?? 0} due notification deliveries.';
       await _loadNotifications();
     });
   }
@@ -432,6 +461,80 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 180,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _deliveryStatusFilter,
+                          decoration: const InputDecoration(
+                            labelText: 'Status filter',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'all', child: Text('All')),
+                            DropdownMenuItem(
+                              value: 'sent',
+                              child: Text('Sent'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'failed',
+                              child: Text('Failed'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'retrying',
+                              child: Text('Retrying'),
+                            ),
+                          ],
+                          onChanged: (value) async {
+                            setState(() {
+                              _deliveryStatusFilter = value ?? 'all';
+                            });
+                            await _loadNotifications();
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 180,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _deliveryChannelFilter,
+                          decoration: const InputDecoration(
+                            labelText: 'Channel filter',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'all', child: Text('All')),
+                            DropdownMenuItem(
+                              value: 'email',
+                              child: Text('Email'),
+                            ),
+                            DropdownMenuItem(value: 'sms', child: Text('SMS')),
+                            DropdownMenuItem(
+                              value: 'whatsapp',
+                              child: Text('WhatsApp'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'in_app',
+                              child: Text('In-app'),
+                            ),
+                          ],
+                          onChanged: (value) async {
+                            setState(() {
+                              _deliveryChannelFilter = value ?? 'all';
+                            });
+                            await _loadNotifications();
+                          },
+                        ),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: _isSubmitting ? null : _processDueDeliveries,
+                        icon: const Icon(Icons.sync_outlined),
+                        label: const Text('Process Due'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   if (_deliveries.isEmpty)
                     const Text('No notification deliveries found.')
                   else
@@ -447,7 +550,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         ),
                         isThreeLine: true,
                         trailing: delivery['status'] == 'failed'
-                            ? const Chip(label: Text('Retry from backend'))
+                            ? TextButton(
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : () =>
+                                          _retryDelivery(delivery['id'] as int),
+                                child: const Text('Retry'),
+                              )
                             : null,
                       ),
                 ],

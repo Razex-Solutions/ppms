@@ -35,6 +35,9 @@ class _DocumentsPageState extends State<DocumentsPage> {
   List<Map<String, dynamic>> _supplierPayments = const [];
   List<Map<String, dynamic>> _reportExports = const [];
   List<Map<String, dynamic>> _dispatches = const [];
+  Map<String, dynamic>? _dispatchDiagnostics;
+  String _dispatchStatusFilter = 'all';
+  String _dispatchChannelFilter = 'all';
 
   Map<String, dynamic>? _selectedDocument;
   String? _selectedExportPreview;
@@ -62,14 +65,13 @@ class _DocumentsPageState extends State<DocumentsPage> {
 
   bool get _canViewFuelSaleDocs =>
       _showFuelSaleDocs &&
-      (_hasAction('fuel_sales', 'create') || _hasAction('fuel_sales', 'reverse'));
+      (_hasAction('fuel_sales', 'create') ||
+          _hasAction('fuel_sales', 'reverse'));
   bool get _canViewCustomerPaymentDocs =>
-      _showCustomerPaymentDocs &&
-      _hasAction('customer_payments', 'create') ||
+      _showCustomerPaymentDocs && _hasAction('customer_payments', 'create') ||
       _hasAction('customer_payments', 'reverse');
   bool get _canViewSupplierPaymentDocs =>
-      _showSupplierPaymentDocs &&
-      _hasAction('supplier_payments', 'create') ||
+      _showSupplierPaymentDocs && _hasAction('supplier_payments', 'create') ||
       _hasAction('supplier_payments', 'reverse');
   bool get _canViewReportExports => _hasAction('reports', 'read');
   bool get _showFuelSaleDocs => _capabilities.featureVisible(
@@ -137,11 +139,20 @@ class _DocumentsPageState extends State<DocumentsPage> {
           : const <Map<String, dynamic>>[];
       final dispatches = _canViewAnyDocuments
           ? List<Map<String, dynamic>>.from(
-              (await widget.sessionController
-                      .fetchFinancialDocumentDispatches())
-                  .map((item) => Map<String, dynamic>.from(item as Map)),
+              (await widget.sessionController.fetchFinancialDocumentDispatches(
+                status: _dispatchStatusFilter == 'all'
+                    ? null
+                    : _dispatchStatusFilter,
+                channel: _dispatchChannelFilter == 'all'
+                    ? null
+                    : _dispatchChannelFilter,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
             )
           : const <Map<String, dynamic>>[];
+      final dispatchDiagnostics = _canViewAnyDocuments
+          ? await widget.sessionController
+                .fetchFinancialDocumentDispatchDiagnostics()
+          : null;
 
       if (!mounted) {
         return;
@@ -153,6 +164,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
         _supplierPayments = supplierPayments;
         _reportExports = reportExports;
         _dispatches = dispatches;
+        _dispatchDiagnostics = dispatchDiagnostics;
         _isLoading = false;
       });
     } on ApiException catch (error) {
@@ -335,6 +347,64 @@ class _DocumentsPageState extends State<DocumentsPage> {
     }
   }
 
+  Future<void> _retryDispatch(int dispatchId) async {
+    setState(() {
+      _isSubmitting = true;
+      _feedbackMessage = null;
+      _errorMessage = null;
+    });
+    try {
+      final result = await widget.sessionController
+          .retryFinancialDocumentDispatch(dispatchId: dispatchId);
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Dispatch ${result['id']} retried with status ${result['status']}.';
+      });
+      await _loadDocumentCenter();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _processDueDispatches() async {
+    setState(() {
+      _isSubmitting = true;
+      _feedbackMessage = null;
+      _errorMessage = null;
+    });
+    try {
+      final result = await widget.sessionController
+          .processDueFinancialDocumentDispatches();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage =
+            'Processed ${result['processed_count'] ?? result['processed'] ?? 0} due document dispatches.';
+      });
+      await _loadDocumentCenter();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_canViewAnyDocuments) {
@@ -369,6 +439,8 @@ class _DocumentsPageState extends State<DocumentsPage> {
     final canViewReportExports = _canViewReportExports;
     final canViewAnyDocuments = _canViewAnyDocuments;
     final colorScheme = Theme.of(context).colorScheme;
+    final deadLetterDispatches = _dispatchDiagnostics?['dead_letter'] ?? 0;
+    final dispatchRetrying = _dispatchDiagnostics?['retrying'] ?? 0;
 
     return RefreshIndicator(
       onRefresh: _loadDocumentCenter,
@@ -445,6 +517,13 @@ class _DocumentsPageState extends State<DocumentsPage> {
                     icon: Icons.table_chart_outlined,
                     tint: colorScheme.secondary,
                   ),
+                DashboardMetricTile(
+                  label: 'Dispatch dead-letter',
+                  value: '$deadLetterDispatches',
+                  caption: '$dispatchRetrying retrying',
+                  icon: Icons.outbox_outlined,
+                  tint: colorScheme.errorContainer,
+                ),
               ],
             ),
           ),
@@ -686,6 +765,86 @@ class _DocumentsPageState extends State<DocumentsPage> {
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: 170,
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _dispatchStatusFilter,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Status filter',
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'all',
+                                      child: Text('All'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'sent',
+                                      child: Text('Sent'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'failed',
+                                      child: Text('Failed'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'retrying',
+                                      child: Text('Retrying'),
+                                    ),
+                                  ],
+                                  onChanged: (value) async {
+                                    setState(() {
+                                      _dispatchStatusFilter = value ?? 'all';
+                                    });
+                                    await _loadDocumentCenter();
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 170,
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _dispatchChannelFilter,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Channel filter',
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'all',
+                                      child: Text('All'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'email',
+                                      child: Text('Email'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'sms',
+                                      child: Text('SMS'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'whatsapp',
+                                      child: Text('WhatsApp'),
+                                    ),
+                                  ],
+                                  onChanged: (value) async {
+                                    setState(() {
+                                      _dispatchChannelFilter = value ?? 'all';
+                                    });
+                                    await _loadDocumentCenter();
+                                  },
+                                ),
+                              ),
+                              FilledButton.tonalIcon(
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : _processDueDispatches,
+                                icon: const Icon(Icons.sync_outlined),
+                                label: const Text('Process Due'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
                           if (!canViewAnyDocuments)
                             const Text(
                               'No dispatch-history access for this role.',
@@ -702,8 +861,18 @@ class _DocumentsPageState extends State<DocumentsPage> {
                                   '${dispatch['document_type']} • ${dispatch['channel']}',
                                 ),
                                 subtitle: Text(
-                                  '${dispatch['status']} • ${_displayTimestamp(dispatch['created_at'])}',
+                                  '${dispatch['status']} • attempts ${dispatch['attempts_count']} • ${_displayTimestamp(dispatch['created_at'])}',
                                 ),
+                                trailing: dispatch['status'] == 'failed'
+                                    ? TextButton(
+                                        onPressed: _isSubmitting
+                                            ? null
+                                            : () => _retryDispatch(
+                                                dispatch['id'] as int,
+                                              ),
+                                        child: const Text('Retry'),
+                                      )
+                                    : null,
                               ),
                         ],
                       ),
@@ -774,10 +943,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
       spacing: 12,
       runSpacing: 12,
       children: [
-        _buildInfoChip(
-          'Title',
-          document['title']?.toString() ?? 'Document',
-        ),
+        _buildInfoChip('Title', document['title']?.toString() ?? 'Document'),
         _buildInfoChip(
           'Document #',
           document['document_number']?.toString() ?? '-',
@@ -787,10 +953,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
           document['recipient_name']?.toString() ?? '-',
         ),
         if (document['total_amount'] != null)
-          _buildInfoChip(
-            'Total',
-            _formatNumber(document['total_amount']),
-          ),
+          _buildInfoChip('Total', _formatNumber(document['total_amount'])),
       ],
     );
   }
@@ -800,9 +963,9 @@ class _DocumentsPageState extends State<DocumentsPage> {
       constraints: const BoxConstraints(minWidth: 150),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.35,
-        ),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(

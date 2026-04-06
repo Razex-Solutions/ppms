@@ -144,13 +144,38 @@ class SessionController extends ChangeNotifier {
     );
   }
 
-  Future<List<dynamic>> fetchNotificationDeliveries() async {
-    return _apiClient.getNotificationDeliveries(await _validAccessToken());
+  Future<List<dynamic>> fetchNotificationDeliveries({
+    String? status,
+    String? channel,
+  }) async {
+    return _apiClient.getNotificationDeliveries(
+      await _validAccessToken(),
+      status: status,
+      channel: channel,
+    );
   }
 
   Future<Map<String, dynamic>> fetchNotificationDeliveryDiagnostics() async {
     return _apiClient.getNotificationDeliveryDiagnostics(
       await _validAccessToken(),
+    );
+  }
+
+  Future<Map<String, dynamic>> retryNotificationDelivery({
+    required int deliveryId,
+  }) async {
+    return _apiClient.retryNotificationDelivery(
+      await _validAccessToken(),
+      deliveryId: deliveryId,
+    );
+  }
+
+  Future<Map<String, dynamic>> processDueNotificationDeliveries({
+    int limit = 100,
+  }) async {
+    return _apiClient.processDueNotificationDeliveries(
+      await _validAccessToken(),
+      limit: limit,
     );
   }
 
@@ -1390,8 +1415,40 @@ class SessionController extends ChangeNotifier {
     );
   }
 
-  Future<List<dynamic>> fetchFinancialDocumentDispatches() async {
-    return _apiClient.getFinancialDocumentDispatches(await _validAccessToken());
+  Future<List<dynamic>> fetchFinancialDocumentDispatches({
+    String? status,
+    String? channel,
+  }) async {
+    return _apiClient.getFinancialDocumentDispatches(
+      await _validAccessToken(),
+      status: status,
+      channel: channel,
+    );
+  }
+
+  Future<Map<String, dynamic>>
+  fetchFinancialDocumentDispatchDiagnostics() async {
+    return _apiClient.getFinancialDocumentDispatchDiagnostics(
+      await _validAccessToken(),
+    );
+  }
+
+  Future<Map<String, dynamic>> retryFinancialDocumentDispatch({
+    required int dispatchId,
+  }) async {
+    return _apiClient.retryFinancialDocumentDispatch(
+      await _validAccessToken(),
+      dispatchId: dispatchId,
+    );
+  }
+
+  Future<Map<String, dynamic>> processDueFinancialDocumentDispatches({
+    int limit = 100,
+  }) async {
+    return _apiClient.processDueFinancialDocumentDispatches(
+      await _validAccessToken(),
+      limit: limit,
+    );
   }
 
   Future<void> _refreshCurrentUser() async {
