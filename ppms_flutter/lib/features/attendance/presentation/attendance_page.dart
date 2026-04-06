@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
+import 'package:ppms_flutter/features/dashboard/presentation/dashboard_widgets.dart';
 
 class AttendancePage extends StatefulWidget {
   const AttendancePage({super.key, required this.sessionController});
@@ -218,12 +219,111 @@ class _AttendancePageState extends State<AttendancePage> {
 
     final todayOpenRecord = _todayOpenRecord;
     final canManualCreate = _users.isNotEmpty;
+    final today = DateTime.now().toIso8601String().split('T').first;
+    final todayRecords = _attendance.where((record) {
+      return record['attendance_date'].toString() == today;
+    }).toList();
+    final openRecordCount = _attendance.where((record) {
+      return record['check_in_at'] != null && record['check_out_at'] == null;
+    }).length;
+    final presentCount = _attendance.where((record) {
+      return record['status']?.toString() == 'present';
+    }).length;
+    final selectedManualUserName = _selectedManualUserName();
+    final stationId =
+        widget.sessionController.currentUser?['station_id'] as int?;
 
     return RefreshIndicator(
       onRefresh: _loadAttendance,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          DashboardHeroCard(
+            eyebrow: 'Attendance',
+            title: 'Attendance Review',
+            subtitle:
+                'Review the current attendance state first, then use check-in, check-out, or manual correction only when the context is clear.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                DashboardMetricTile(
+                  label: 'Today',
+                  value: '${todayRecords.length}',
+                  caption: today,
+                  icon: Icons.today_outlined,
+                  tint: Theme.of(context).colorScheme.primaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Open',
+                  value: '$openRecordCount',
+                  caption: 'Not checked out',
+                  icon: Icons.timer_outlined,
+                  tint: Theme.of(context).colorScheme.tertiaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Present',
+                  value: '$presentCount',
+                  caption: 'Visible records',
+                  icon: Icons.task_alt_outlined,
+                  tint: Theme.of(context).colorScheme.secondaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Manual Users',
+                  value: '${_users.length}',
+                  caption: canManualCreate ? 'Available' : 'No access',
+                  icon: Icons.groups_outlined,
+                  tint: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: 'Workspace Focus',
+            subtitle:
+                'Keep self-service attendance and manager corrections separated so the next action stays safe and obvious.',
+            icon: Icons.fact_check_outlined,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _buildInfoChip(
+                  context,
+                  icon: Icons.store_outlined,
+                  label: stationId == null
+                      ? 'No station assigned'
+                      : 'Station #$stationId',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: todayOpenRecord == null
+                      ? Icons.login_outlined
+                      : Icons.logout_outlined,
+                  label: todayOpenRecord == null
+                      ? 'Next: check in'
+                      : 'Next: check out record #${todayOpenRecord['id']}',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.person_search_outlined,
+                  label: selectedManualUserName == null
+                      ? 'No manual user selected'
+                      : 'Manual: $selectedManualUserName',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: canManualCreate
+                      ? Icons.edit_calendar_outlined
+                      : Icons.lock_outline,
+                  label: canManualCreate
+                      ? 'Manual corrections enabled'
+                      : 'Self-service only',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 16,
             runSpacing: 16,
@@ -451,5 +551,32 @@ class _AttendancePageState extends State<AttendancePage> {
     }
     final text = value.toString().replaceFirst('T', ' ');
     return text.length >= 19 ? text.substring(0, 19) : text;
+  }
+
+  String? _selectedManualUserName() {
+    for (final user in _users) {
+      if (user['id'] == _selectedUserId) {
+        return user['full_name']?.toString() ?? user['username']?.toString();
+      }
+    }
+    return null;
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
   }
 }
