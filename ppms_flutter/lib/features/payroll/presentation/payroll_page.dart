@@ -279,6 +279,25 @@ class _PayrollPageState extends State<PayrollPage> {
     return null;
   }
 
+  double get _selectedNetTotal => _selectedLines.fold<double>(
+    0,
+    (total, line) => total + ((line['net_amount'] as num?)?.toDouble() ?? 0),
+  );
+
+  double get _adjustmentAdditions => _salaryAdjustments.fold<double>(
+    0,
+    (total, adjustment) => adjustment['impact'] == 'addition'
+        ? total + ((adjustment['amount'] as num?)?.toDouble() ?? 0)
+        : total,
+  );
+
+  double get _adjustmentDeductions => _salaryAdjustments.fold<double>(
+    0,
+    (total, adjustment) => adjustment['impact'] == 'deduction'
+        ? total + ((adjustment['amount'] as num?)?.toDouble() ?? 0)
+        : total,
+  );
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading && _payrollRuns.isEmpty && _salaryAdjustments.isEmpty) {
@@ -298,6 +317,8 @@ class _PayrollPageState extends State<PayrollPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          _buildWorkspaceReview(context, selectedRun: selectedRun),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 16,
             runSpacing: 16,
@@ -514,6 +535,16 @@ class _PayrollPageState extends State<PayrollPage> {
                               ? 'Select a payroll run from the list to inspect its lines and finalize it.'
                               : 'Selected run #${selectedRun['id']} | status ${selectedRun['status']} | net ${_formatNumber(selectedRun['total_net_amount'])}',
                         ),
+                        if (selectedRun != null) ...[
+                          const SizedBox(height: 12),
+                          _buildSummaryBanner(
+                            context,
+                            title:
+                                'Run #${selectedRun['id']} • ${selectedRun['period_start']} to ${selectedRun['period_end']}',
+                            subtitle:
+                                'Staff ${selectedRun['total_staff']} • Net ${_formatNumber(selectedRun['total_net_amount'])} • Status ${selectedRun['status']}',
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         TextField(
                           controller: _finalizeNotesController,
@@ -669,6 +700,128 @@ class _PayrollPageState extends State<PayrollPage> {
       }
     }
     return 'User #$userId';
+  }
+
+  Widget _buildWorkspaceReview(
+    BuildContext context, {
+    required Map<String, dynamic>? selectedRun,
+  }) {
+    final selectedTitle = selectedRun == null
+        ? 'No payroll run selected yet'
+        : 'Payroll run #${selectedRun['id']} is selected';
+    final nextAction = selectedRun == null
+        ? 'Create a payroll run for the period, or choose an existing run to review staff lines before finalizing.'
+        : selectedRun['status'] == 'draft'
+        ? 'Review net pay, additions, deductions, and attendance impact before finalizing this draft run.'
+        : 'Review finalized payroll totals and line detail before starting the next period.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Payroll Review',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(selectedTitle, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.payments_outlined,
+                label: 'Runs ${_payrollRuns.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.groups_outlined,
+                label: 'Staff ${_stationUsers.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.receipt_long_outlined,
+                label: 'Selected net ${_formatNumber(_selectedNetTotal)}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.add_circle_outline,
+                label: 'Adds ${_formatNumber(_adjustmentAdditions)}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.remove_circle_outline,
+                label: 'Deductions ${_formatNumber(_adjustmentDeductions)}',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryBanner(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
+    );
   }
 
   String _formatNumber(dynamic value) {
