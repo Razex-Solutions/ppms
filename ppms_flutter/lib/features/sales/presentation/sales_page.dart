@@ -646,6 +646,24 @@ class _SalesPageState extends State<SalesPage> {
     return null;
   }
 
+  Map<String, dynamic>? get _selectedSale {
+    if (_recentSales.isEmpty) {
+      return null;
+    }
+    return _recentSales.first;
+  }
+
+  String get _selectedStationLabel {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        final name = station['name'] as String? ?? 'Station';
+        final code = station['code'] as String? ?? '-';
+        return '$name ($code)';
+      }
+    }
+    return 'No station selected';
+  }
+
   String _fuelTypeName(int fuelTypeId) {
     final match = _fuelTypes.where((fuelType) => fuelType['id'] == fuelTypeId);
     if (match.isEmpty) {
@@ -724,6 +742,86 @@ class _SalesPageState extends State<SalesPage> {
       }
     }
     return total;
+  }
+
+  Widget _buildWorkspaceReview(
+    BuildContext context, {
+    required bool canCreateSales,
+    required Map<String, dynamic>? selectedNozzle,
+  }) {
+    final selectedSale = _selectedSale;
+    final nextAction = canCreateSales
+        ? 'Review nozzle meter and current price first, then post the next forecourt sale.'
+        : 'Review the latest station sales, invoice actions, and pricing context for this station.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Review First',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            selectedNozzle == null
+                ? 'No nozzle selected yet'
+                : '${selectedNozzle['code']} - ${selectedNozzle['name']} is selected',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.store_outlined,
+                label: _selectedStationLabel,
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.local_gas_station_outlined,
+                label: selectedNozzle == null
+                    ? 'No nozzle context'
+                    : 'Meter ${_formatNumber(selectedNozzle['meter_reading'])}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.water_drop_outlined,
+                label: selectedNozzle == null
+                    ? 'No fuel selected'
+                    : _fuelTypeName(selectedNozzle['fuel_type_id'] as int),
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.receipt_long_outlined,
+                label: selectedSale == null
+                    ? 'No recent sale yet'
+                    : 'Latest sale #${selectedSale['id']}',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -842,6 +940,12 @@ class _SalesPageState extends State<SalesPage> {
             ),
           ),
           const SizedBox(height: 16),
+          _buildWorkspaceReview(
+            context,
+            canCreateSales: canCreateSales,
+            selectedNozzle: selectedNozzle,
+          ),
+          const SizedBox(height: 16),
           ResponsiveSplit(
             breakpoint: 1150,
             primary: Card(
@@ -864,6 +968,16 @@ class _SalesPageState extends State<SalesPage> {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 20),
+                      if (selectedNozzle != null) ...[
+                        _buildSummaryBanner(
+                          context,
+                          title:
+                              '${selectedNozzle['code']} - ${selectedNozzle['name']}',
+                          subtitle:
+                              '${_fuelTypeName(selectedNozzle['fuel_type_id'] as int)} • Meter ${_formatNumber(selectedNozzle['meter_reading'])} • Segment ${_formatNumber(selectedNozzle['current_segment_start_reading'])}',
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       if (!canCreateSales) ...[
                         _buildHintBanner(
                           context,
@@ -1155,7 +1269,16 @@ class _SalesPageState extends State<SalesPage> {
                         'No sales access for this role.',
                         'Ask an administrator to grant fuel sales read access if this screen should show station sales.',
                       )
-                    else if (_recentSales.isEmpty)
+                    else if (_selectedSale != null) ...[
+                      _buildSummaryBanner(
+                        context,
+                        title:
+                            'Latest sale #${_selectedSale!['id']} • ${_formatNumber(_selectedSale!['total_amount'])}',
+                        subtitle:
+                            '${_formatNumber(_selectedSale!['quantity'])}L • ${_selectedSale!['sale_type']} • ${_formatDateTime(_selectedSale!['created_at'])}',
+                      ),
+                      const SizedBox(height: 16),
+                    ] else if (_recentSales.isEmpty)
                       _buildEmptyState(
                         context,
                         'No fuel sales found for this station yet.',
@@ -1266,6 +1389,31 @@ class _SalesPageState extends State<SalesPage> {
         children: [
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryBanner(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
           Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
