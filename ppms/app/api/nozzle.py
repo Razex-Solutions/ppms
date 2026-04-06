@@ -12,8 +12,10 @@ from app.models.nozzle import Nozzle
 from app.models.nozzle_reading import NozzleReading
 from app.models.tank import Tank
 from app.schemas.meter_adjustment_event import MeterAdjustmentEventResponse, MeterAdjustmentRequest
+from app.schemas.meter_segment import MeterSegmentResponse
 from app.schemas.nozzle import NozzleCreate, NozzleUpdate, NozzleResponse
 from app.schemas.nozzle_reading import NozzleReadingResponse
+from app.services.meter_segments import build_nozzle_meter_segments
 from app.services.nozzle_meter import adjust_nozzle_meter
 
 router = APIRouter(prefix="/nozzles", tags=["Nozzles"])
@@ -233,3 +235,18 @@ def get_meter_adjustments(
         .limit(limit)
         .all()
     )
+
+
+@router.get("/{nozzle_id}/segments", response_model=list[MeterSegmentResponse])
+def get_meter_segments(
+    nozzle_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_permission(current_user, "nozzles", "read_meter_history", detail="You do not have permission to view nozzle meter history")
+    nozzle = db.query(Nozzle).filter(Nozzle.id == nozzle_id).first()
+    if not nozzle:
+        raise HTTPException(status_code=404, detail="Nozzle not found")
+
+    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    return build_nozzle_meter_segments(db, nozzle)

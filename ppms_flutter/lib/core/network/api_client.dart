@@ -715,6 +715,17 @@ class ApiClient {
     );
   }
 
+  Future<List<dynamic>> getNozzleSegments(
+    String accessToken, {
+    required int nozzleId,
+  }) async {
+    return _sendList(
+      'GET',
+      '/nozzles/$nozzleId/segments',
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> adjustNozzleMeter(
     String accessToken, {
     required int nozzleId,

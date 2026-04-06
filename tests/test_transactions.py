@@ -477,6 +477,23 @@ def test_meter_adjustment_starts_new_sales_segment_without_breaking_tank_deducti
     assert len(adjustments.json()) == 1
     assert adjustments.json()[0]["reason"] == "Meter reset after maintenance"
 
+    segments = test_client.get(
+        f"/nozzles/{data['nozzle_id']}/segments",
+        headers=accountant_headers,
+    )
+    assert segments.status_code == 200, segments.text
+    payload = segments.json()
+    assert len(payload) == 2
+    assert payload[0]["start_reading"] == 1000
+    assert payload[0]["end_reading"] == 1080
+    assert payload[0]["sales_quantity"] == 80
+    assert payload[0]["status"] == "closed"
+    assert payload[0]["adjustment_reason"] == "Meter reset after maintenance"
+    assert payload[1]["start_reading"] == 600
+    assert payload[1]["end_reading"] == 670
+    assert payload[1]["sales_quantity"] == 70
+    assert payload[1]["status"] == "open"
+
     db = session_local()
     try:
         nozzle = db.query(Nozzle).filter(Nozzle.id == data["nozzle_id"]).first()

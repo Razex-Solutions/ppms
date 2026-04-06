@@ -39,6 +39,7 @@ class _HardwarePageState extends State<HardwarePage> {
   List<Map<String, dynamic>> _devices = const [];
   List<Map<String, dynamic>> _events = const [];
   List<Map<String, dynamic>> _adjustments = const [];
+  List<Map<String, dynamic>> _segments = const [];
 
   int? _selectedStationId;
   int? _selectedDeviceId;
@@ -132,6 +133,13 @@ class _HardwarePageState extends State<HardwarePage> {
                 nozzleId: nozzleId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
+      final segments = !_showHardwareWorkspace || nozzleId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchNozzleSegments(
+                nozzleId: nozzleId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
 
       if (!mounted) return;
 
@@ -148,6 +156,7 @@ class _HardwarePageState extends State<HardwarePage> {
         _selectedTankId = _selectedTankId ?? _firstId(tanks);
         _selectedNozzleId = nozzleId;
         _adjustments = adjustments;
+        _segments = segments;
         _isLoading = false;
       });
     } on ApiException catch (error) {
@@ -1012,10 +1021,39 @@ class _HardwarePageState extends State<HardwarePage> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(
-                      '${_formatNumber(adjustment['old_reading'])} → ${_formatNumber(adjustment['new_reading'])}',
+                      '${_formatNumber(adjustment['old_reading'])} -> ${_formatNumber(adjustment['new_reading'])}',
                     ),
                     subtitle: Text(
-                      '${adjustment['reason']} • ${_formatDateTime(adjustment['adjusted_at'])}',
+                      '${adjustment['reason']} ? ${_formatDateTime(adjustment['adjusted_at'])}',
+                    ),
+                  ),
+              const SizedBox(height: 20),
+              Text(
+                'Meter Segments',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (!canReadMeterHistory)
+                const Text('No meter-segment access for this role.')
+              else if (_segments.isEmpty)
+                const Text('No meter segments found for this nozzle yet.')
+              else
+                for (final segment in _segments.reversed)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      segment['status'] == 'open'
+                          ? Icons.timeline_outlined
+                          : Icons.history_toggle_off_outlined,
+                    ),
+                    title: Text(
+                      '${_formatNumber(segment['start_reading'])} -> ${_formatNumber(segment['end_reading'])}',
+                    ),
+                    subtitle: Text(
+                      '${segment['status']} ? sales ${_formatNumber(segment['sales_quantity'])} ? ${segment['adjustment_reason'] ?? 'No adjustment boundary'}',
+                    ),
+                    trailing: Chip(
+                      label: Text('${segment['sales_count'] ?? 0} sales'),
                     ),
                   ),
             ],

@@ -539,6 +539,13 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<dynamic>> fetchNozzleSegments({required int nozzleId}) async {
+    return _apiClient.getNozzleSegments(
+      await _validAccessToken(),
+      nozzleId: nozzleId,
+    );
+  }
+
   Future<Map<String, dynamic>> adjustNozzleMeter({
     required int nozzleId,
     required Map<String, dynamic> payload,
