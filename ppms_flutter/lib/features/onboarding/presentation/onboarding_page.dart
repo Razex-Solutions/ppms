@@ -33,6 +33,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   bool _isSubmitting = false;
   bool _inheritBranding = true;
   bool _createHeadOfficeAccount = true;
+  bool _singleStationUsesOrganizationDetails = true;
   String? _errorMessage;
   String? _feedbackMessage;
   int? _selectedBrandId;
@@ -132,8 +133,32 @@ class _OnboardingPageState extends State<OnboardingPage> {
       _stationCount = count;
       if (_stationDrafts.isNotEmpty) {
         _stationDrafts.first.isHeadOffice = true;
+        _stationDrafts.first.useOrganizationBranding = _inheritBranding;
       }
     });
+  }
+
+  bool get _isSingleStationFlow => _stationCount == 1;
+
+  String _resolvedStationName(_StationDraft draft) {
+    if (_isSingleStationFlow && _singleStationUsesOrganizationDetails) {
+      return _organizationNameController.text.trim();
+    }
+    return draft.nameController.text.trim();
+  }
+
+  String _resolvedStationCode(_StationDraft draft) {
+    if (_isSingleStationFlow && _singleStationUsesOrganizationDetails) {
+      return _organizationCodeController.text.trim();
+    }
+    return draft.codeController.text.trim();
+  }
+
+  String? _resolvedStationDisplayName(_StationDraft draft) {
+    if (_isSingleStationFlow && _singleStationUsesOrganizationDetails) {
+      return _emptyToNull(_organizationNameController.text);
+    }
+    return _emptyToNull(draft.displayNameController.text);
   }
 
   Future<void> _submitOnboarding() async {
@@ -145,8 +170,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
     for (final draft in _stationDrafts) {
-      if (draft.nameController.text.trim().isEmpty ||
-          draft.codeController.text.trim().isEmpty) {
+      if (_resolvedStationName(draft).isEmpty ||
+          _resolvedStationCode(draft).isEmpty) {
         setState(() {
           _errorMessage = 'Every station needs a name and code.';
         });
@@ -206,13 +231,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
       for (var i = 0; i < _stationDrafts.length; i++) {
         final draft = _stationDrafts[i];
         final station = await widget.sessionController.createStation({
-          'name': draft.nameController.text.trim(),
-          'code': draft.codeController.text.trim(),
+          'name': _resolvedStationName(draft),
+          'code': _resolvedStationCode(draft),
           'address': _emptyToNull(draft.addressController.text),
           'city': _emptyToNull(draft.cityController.text),
           'organization_id': organizationId,
           'is_head_office': draft.isHeadOffice,
-          'display_name': _emptyToNull(draft.displayNameController.text),
+          'display_name': _resolvedStationDisplayName(draft),
           'logo_url': _emptyToNull(draft.logoUrlController.text),
           'use_organization_branding': draft.useOrganizationBranding,
           'setup_status': 'draft',
@@ -296,6 +321,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             as int?;
     _inheritBranding = true;
     _createHeadOfficeAccount = true;
+    _singleStationUsesOrganizationDetails = true;
     _latestSetupFoundation = null;
     _syncStationDraftCount(1);
     for (final draft in _stationDrafts) {
@@ -492,14 +518,40 @@ class _OnboardingPageState extends State<OnboardingPage> {
           onChanged: (value) {
             setState(() {
               _inheritBranding = value;
+              if (_stationDrafts.isNotEmpty) {
+                _stationDrafts.first.useOrganizationBranding = value;
+              }
             });
           },
         ),
+        if (_isSingleStationFlow)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _singleStationUsesOrganizationDetails,
+            title: const Text('Use organization details for this station'),
+            subtitle: const Text(
+              'For single-station businesses, keep the first station aligned with the organization by default.',
+            ),
+            onChanged: (value) {
+              setState(() {
+                _singleStationUsesOrganizationDetails = value;
+              });
+            },
+          ),
         const SizedBox(height: 24),
         Text('Stations', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         for (var index = 0; index < _stationDrafts.length; index++)
-          _StationDraftCard(index: index, draft: _stationDrafts[index]),
+          _StationDraftCard(
+            index: index,
+            draft: _stationDrafts[index],
+            inheritFromOrganization:
+                _isSingleStationFlow &&
+                index == 0 &&
+                _singleStationUsesOrganizationDetails,
+            inheritedStationName: _organizationNameController.text.trim(),
+            inheritedStationCode: _organizationCodeController.text.trim(),
+          ),
         const SizedBox(height: 24),
         Text(
           'Initial Head Office Login',
@@ -586,6 +638,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
             const Text('1. Organization identity and branding'),
             const Text('2. Initial station list and setup flags'),
             const Text('3. First HeadOffice login for the tenant'),
+            const SizedBox(height: 16),
+            Text(
+              'Current setup outcome',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text('Stations to create: $_stationCount'),
+            Text(
+              _isSingleStationFlow && _singleStationUsesOrganizationDetails
+                  ? 'Single station will inherit organization name and code.'
+                  : 'Stations will use their own entered details.',
+            ),
             if (_latestSetupFoundation != null) ...[
               const Divider(height: 28),
               Text(
@@ -623,10 +687,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
 }
 
 class _StationDraftCard extends StatefulWidget {
-  const _StationDraftCard({required this.index, required this.draft});
+  const _StationDraftCard({
+    required this.index,
+    required this.draft,
+    required this.inheritFromOrganization,
+    required this.inheritedStationName,
+    required this.inheritedStationCode,
+  });
 
   final int index;
   final _StationDraft draft;
+  final bool inheritFromOrganization;
+  final String inheritedStationName;
+  final String inheritedStationCode;
 
   @override
   State<_StationDraftCard> createState() => _StationDraftCardState();
@@ -648,19 +721,70 @@ class _StationDraftCardState extends State<_StationDraftCard> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
+            if (widget.inheritFromOrganization) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Using organization details',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.inheritedStationName.isEmpty
+                          ? 'Station name will follow the organization name.'
+                          : 'Station name: ${widget.inheritedStationName}',
+                    ),
+                    Text(
+                      widget.inheritedStationCode.isEmpty
+                          ? 'Station code will follow the organization code.'
+                          : 'Station code: ${widget.inheritedStationCode}',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextFormField(
               controller: draft.nameController,
-              decoration: const InputDecoration(labelText: 'Station Name'),
+              enabled: !widget.inheritFromOrganization,
+              decoration: InputDecoration(
+                labelText: 'Station Name',
+                helperText: widget.inheritFromOrganization
+                    ? 'Auto-filled from the organization for this single-station setup.'
+                    : null,
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: draft.codeController,
-              decoration: const InputDecoration(labelText: 'Station Code'),
+              enabled: !widget.inheritFromOrganization,
+              decoration: InputDecoration(
+                labelText: 'Station Code',
+                helperText: widget.inheritFromOrganization
+                    ? 'Auto-filled from the organization for this single-station setup.'
+                    : null,
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: draft.displayNameController,
-              decoration: const InputDecoration(labelText: 'Display Name'),
+              enabled: !widget.inheritFromOrganization,
+              decoration: InputDecoration(
+                labelText: 'Display Name',
+                helperText: widget.inheritFromOrganization
+                    ? 'The app display name will also follow the organization unless you turn inheritance off.'
+                    : null,
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
