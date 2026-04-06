@@ -683,6 +683,44 @@ class _InventoryPageState extends State<InventoryPage> {
     hideWhenModulesOff: true,
   );
 
+  Map<String, dynamic>? get _selectedTank {
+    for (final tank in _tanks) {
+      if (tank['id'] == _selectedTankId) {
+        return tank;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? get _selectedDispenser {
+    for (final dispenser in _dispensers) {
+      if (dispenser['id'] == _selectedDispenserId) {
+        return dispenser;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? get _selectedNozzle {
+    for (final nozzle in _nozzles) {
+      if (nozzle['id'] == _selectedNozzleId) {
+        return nozzle;
+      }
+    }
+    return null;
+  }
+
+  String get _selectedStationLabel {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        final name = station['name'] as String? ?? 'Station';
+        final code = station['code'] as String? ?? '-';
+        return '$name ($code)';
+      }
+    }
+    return 'No station selected';
+  }
+
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
       width: double.infinity,
@@ -809,6 +847,8 @@ class _InventoryPageState extends State<InventoryPage> {
             ),
             const SizedBox(height: 12),
           ],
+          _buildWorkspaceReview(context),
+          const SizedBox(height: 12),
           if (_feedbackMessage != null) ...[
             Text(
               _feedbackMessage!,
@@ -835,6 +875,89 @@ class _InventoryPageState extends State<InventoryPage> {
     );
   }
 
+  Widget _buildWorkspaceReview(BuildContext context) {
+    final selectedTitle = switch (_section) {
+      _InventorySection.tanks =>
+        _selectedTank == null
+            ? 'No tank selected yet'
+            : 'Tank ${_selectedTank!['name']} is selected',
+      _InventorySection.dispensers =>
+        _selectedDispenser == null
+            ? 'No dispenser selected yet'
+            : 'Dispenser ${_selectedDispenser!['name']} is selected',
+      _InventorySection.nozzles =>
+        _selectedNozzle == null
+            ? 'No nozzle selected yet'
+            : 'Nozzle ${_selectedNozzle!['name']} is selected',
+    };
+    final nextAction = switch (_section) {
+      _InventorySection.tanks =>
+        'Review tank volume, fuel type, and low-stock limits before editing or recording internal usage.',
+      _InventorySection.dispensers =>
+        'Review the selected dispenser location and attached nozzles before editing.',
+      _InventorySection.nozzles =>
+        'Review the selected nozzle tank, dispenser, and meter context before editing.',
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Review First',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(selectedTitle, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.store_outlined,
+                label: _selectedStationLabel,
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.storage_outlined,
+                label: 'Tanks ${_tanks.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.local_gas_station_outlined,
+                label: 'Dispensers ${_dispensers.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.tune_outlined,
+                label: 'Nozzles ${_nozzles.length}',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTanks() {
     final canManageTanks = _canManageTanks;
     final canDeleteTanks = _canDeleteTanks;
@@ -849,10 +972,7 @@ class _InventoryPageState extends State<InventoryPage> {
         )
         .toList();
 
-    final selectedTank = _tanks.cast<Map<String, dynamic>?>().firstWhere(
-      (tank) => tank?['id'] == _selectedTankId,
-      orElse: () => null,
-    );
+    final selectedTank = _selectedTank;
     final selectedTankUsage = selectedTank == null
         ? const <Map<String, dynamic>>[]
         : _internalUsageRecords
@@ -866,8 +986,42 @@ class _InventoryPageState extends State<InventoryPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _selectedTankId == null ? 'Create Tank' : 'Edit Tank',
+                'Tank Summary',
                 style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedTank == null)
+                _buildEmptyState(
+                  context,
+                  'No tank selected yet.',
+                  canManageTanks
+                      ? 'Choose a tank from the list to review before editing, or use the form below to create a new one.'
+                      : 'Choose a tank from the list to inspect inventory position and usage history.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      '${selectedTank['code'] ?? '-'} - ${selectedTank['name'] ?? 'Tank'}',
+                  subtitle:
+                      '${_lookupName(_fuelTypes, selectedTank['fuel_type_id'])} • ${_formatNumber(selectedTank['current_volume'] as num?)} / ${_formatNumber(selectedTank['capacity'] as num?)}',
+                ),
+                const SizedBox(height: 12),
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Low Stock',
+                    _formatNumber(selectedTank['low_stock_threshold'] as num?),
+                  ),
+                  _buildDetailItem(
+                    'Location',
+                    selectedTank['location'] as String? ?? '-',
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 18),
+              Text(
+                _selectedTankId == null ? 'Create Tank' : 'Edit Tank',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               if (!canManageTanks) ...[
                 const SizedBox(height: 12),
@@ -1152,12 +1306,7 @@ class _InventoryPageState extends State<InventoryPage> {
   Widget _buildDispensers() {
     final canManageDispensers = _canManageDispensers;
     final canDeleteDispensers = _canDeleteDispensers;
-    final selectedDispenser = _dispensers
-        .cast<Map<String, dynamic>?>()
-        .firstWhere(
-          (dispenser) => dispenser?['id'] == _selectedDispenserId,
-          orElse: () => null,
-        );
+    final selectedDispenser = _selectedDispenser;
     return ResponsiveSplit(
       primary: Card(
         child: Padding(
@@ -1166,10 +1315,40 @@ class _InventoryPageState extends State<InventoryPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
+                'Dispenser Summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedDispenser == null)
+                _buildEmptyState(
+                  context,
+                  'No dispenser selected yet.',
+                  canManageDispensers
+                      ? 'Choose a dispenser from the list to review before editing, or use the form below to create a new one.'
+                      : 'Choose a dispenser from the list to inspect location and attached nozzle count.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      '${selectedDispenser['code'] ?? '-'} - ${selectedDispenser['name'] ?? 'Dispenser'}',
+                  subtitle:
+                      '${selectedDispenser['location'] ?? 'No location'} • ${_nozzles.where((nozzle) => nozzle['dispenser_id'] == selectedDispenser['id']).length} attached nozzles',
+                ),
+                const SizedBox(height: 12),
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Station',
+                    _lookupName(_stations, selectedDispenser['station_id']),
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 18),
+              Text(
                 _selectedDispenserId == null
                     ? 'Create Dispenser'
                     : 'Edit Dispenser',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               if (!canManageDispensers) ...[
                 const SizedBox(height: 12),
@@ -1352,10 +1531,7 @@ class _InventoryPageState extends State<InventoryPage> {
         )
         .toList();
 
-    final selectedNozzle = _nozzles.cast<Map<String, dynamic>?>().firstWhere(
-      (nozzle) => nozzle?['id'] == _selectedNozzleId,
-      orElse: () => null,
-    );
+    final selectedNozzle = _selectedNozzle;
     return ResponsiveSplit(
       primary: Card(
         child: Padding(
@@ -1364,8 +1540,48 @@ class _InventoryPageState extends State<InventoryPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _selectedNozzleId == null ? 'Create Nozzle' : 'Edit Nozzle',
+                'Nozzle Summary',
                 style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (selectedNozzle == null)
+                _buildEmptyState(
+                  context,
+                  'No nozzle selected yet.',
+                  canManageNozzles
+                      ? 'Choose a nozzle from the list to review before editing, or use the form below to create a new one.'
+                      : 'Choose a nozzle from the list to inspect fuel mapping and meter context.',
+                )
+              else ...[
+                _buildSummaryBanner(
+                  context,
+                  title:
+                      '${selectedNozzle['code'] ?? '-'} - ${selectedNozzle['name'] ?? 'Nozzle'}',
+                  subtitle:
+                      '${_lookupName(_fuelTypes, selectedNozzle['fuel_type_id'])} • Meter ${_formatNumber(selectedNozzle['meter_reading'] as num?)}',
+                ),
+                const SizedBox(height: 12),
+                _buildDetailWrap([
+                  _buildDetailItem(
+                    'Tank',
+                    _lookupName(_tanks, selectedNozzle['tank_id']),
+                  ),
+                  _buildDetailItem(
+                    'Dispenser',
+                    _lookupName(_dispensers, selectedNozzle['dispenser_id']),
+                  ),
+                  _buildDetailItem(
+                    'Status',
+                    selectedNozzle['is_active'] == false
+                        ? 'inactive'
+                        : 'active',
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 18),
+              Text(
+                _selectedNozzleId == null ? 'Create Nozzle' : 'Edit Nozzle',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               if (!canManageNozzles) ...[
                 const SizedBox(height: 12),
@@ -1614,6 +1830,72 @@ class _InventoryPageState extends State<InventoryPage> {
           const SizedBox(height: 4),
           Text(value, style: Theme.of(context).textTheme.titleSmall),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryBanner(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, String title, String subtitle) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
       ),
     );
   }
