@@ -222,6 +222,116 @@ def test_customer_and_supplier_payments_have_detail_and_reverse_flows(client):
     assert supplier_payment_approve.json()["is_reversed"] is True
 
 
+def test_customer_and_supplier_ledger_summaries_reflect_transactions(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+    accountant_headers = login(test_client, "accountant", "accountant123")
+
+    db = session_local()
+    try:
+        supplier = db.query(Supplier).filter(Supplier.code == "SUP-A").first()
+        supplier_id = supplier.id
+    finally:
+        db.close()
+
+    sale_response = test_client.post(
+        "/fuel-sales/",
+        headers=operator_headers,
+        json={
+            "nozzle_id": data["nozzle_id"],
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "customer_id": data["customer_id"],
+            "closing_meter": 1005,
+            "rate_per_liter": 10,
+            "sale_type": "credit",
+        },
+    )
+    assert sale_response.status_code == 200, sale_response.text
+
+    customer_payment = test_client.post(
+        "/customer-payments/",
+        headers=operator_headers,
+        json={
+            "customer_id": data["customer_id"],
+            "station_id": data["station_a_id"],
+            "amount": 20,
+            "payment_method": "cash",
+        },
+    )
+    assert customer_payment.status_code == 200, customer_payment.text
+
+    purchase_response = test_client.post(
+        "/purchases/",
+        headers=operator_headers,
+        json={
+            "supplier_id": supplier_id,
+            "tank_id": data["tank_id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "quantity": 20,
+            "rate_per_liter": 5,
+        },
+    )
+    assert purchase_response.status_code == 200, purchase_response.text
+    purchase_id = purchase_response.json()["id"]
+
+    purchase_approval = test_client.post(
+        f"/purchases/{purchase_id}/approve",
+        headers=login(test_client, "headoffice", "headoffice123"),
+        json={"reason": "Approved delivery"},
+    )
+    assert purchase_approval.status_code == 200, purchase_approval.text
+
+    supplier_payment = test_client.post(
+        "/supplier-payments/",
+        headers=operator_headers,
+        json={
+            "supplier_id": supplier_id,
+            "station_id": data["station_a_id"],
+            "amount": 40,
+            "payment_method": "cash",
+        },
+    )
+    assert supplier_payment.status_code == 200, supplier_payment.text
+
+    customer_summary = test_client.get(
+        f"/ledger/customer/{data['customer_id']}/summary",
+        headers=accountant_headers,
+    )
+    assert customer_summary.status_code == 200, customer_summary.text
+    assert customer_summary.json()["party_type"] == "customer"
+    assert customer_summary.json()["current_balance"] == 30
+    assert customer_summary.json()["total_charges"] == 50
+    assert customer_summary.json()["total_payments"] == 20
+
+    customer_ledger = test_client.get(
+        f"/ledger/customer/{data['customer_id']}",
+        headers=accountant_headers,
+    )
+    assert customer_ledger.status_code == 200, customer_ledger.text
+    assert len(customer_ledger.json()["ledger"]) == 2
+    assert customer_ledger.json()["ledger"][-1]["balance"] == 30
+
+    supplier_summary = test_client.get(
+        f"/ledger/supplier/{supplier_id}/summary?station_id={data['station_a_id']}",
+        headers=accountant_headers,
+    )
+    assert supplier_summary.status_code == 200, supplier_summary.text
+    assert supplier_summary.json()["party_type"] == "supplier"
+    assert supplier_summary.json()["current_balance"] == 60
+    assert supplier_summary.json()["total_charges"] == 100
+    assert supplier_summary.json()["total_payments"] == 40
+
+    supplier_ledger = test_client.get(
+        f"/ledger/supplier/{supplier_id}?station_id={data['station_a_id']}",
+        headers=accountant_headers,
+    )
+    assert supplier_ledger.status_code == 200, supplier_ledger.text
+    assert len(supplier_ledger.json()["ledger"]) == 2
+    assert supplier_ledger.json()["ledger"][-1]["balance"] == 60
+
+
 def test_purchase_reverse_updates_payables_dashboard(client):
     test_client, session_local = client
     data = seed_base_data(session_local)

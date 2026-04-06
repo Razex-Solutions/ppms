@@ -735,6 +735,28 @@ class ApiClient {
     return _send('DELETE', '/customers/$customerId', accessToken: accessToken);
   }
 
+  Future<Map<String, dynamic>> getCustomerLedgerSummary(
+    String accessToken, {
+    required int customerId,
+  }) async {
+    return _send(
+      'GET',
+      '/ledger/customer/$customerId/summary',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> getCustomerLedger(
+    String accessToken, {
+    required int customerId,
+  }) async {
+    return _send(
+      'GET',
+      '/ledger/customer/$customerId',
+      accessToken: accessToken,
+    );
+  }
+
   Future<List<dynamic>> getNozzleAdjustments(
     String accessToken, {
     required int nozzleId,
@@ -832,6 +854,40 @@ class ApiClient {
     required int supplierId,
   }) async {
     return _send('DELETE', '/suppliers/$supplierId', accessToken: accessToken);
+  }
+
+  Future<Map<String, dynamic>> getSupplierLedgerSummary(
+    String accessToken, {
+    required int supplierId,
+    int? stationId,
+  }) async {
+    final params = <String, String>{};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _send(
+      'GET',
+      '/ledger/supplier/$supplierId/summary',
+      accessToken: accessToken,
+      queryParams: params,
+    );
+  }
+
+  Future<Map<String, dynamic>> getSupplierLedger(
+    String accessToken, {
+    required int supplierId,
+    int? stationId,
+  }) async {
+    final params = <String, String>{};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _send(
+      'GET',
+      '/ledger/supplier/$supplierId',
+      accessToken: accessToken,
+      queryParams: params,
+    );
   }
 
   Future<List<dynamic>> getTanks(String accessToken, {int? stationId}) async {

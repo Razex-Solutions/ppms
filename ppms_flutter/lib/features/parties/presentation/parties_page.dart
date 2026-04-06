@@ -37,6 +37,10 @@ class _PartiesPageState extends State<PartiesPage> {
   List<Map<String, dynamic>> _stations = const [];
   List<Map<String, dynamic>> _customers = const [];
   List<Map<String, dynamic>> _suppliers = const [];
+  Map<String, dynamic>? _selectedCustomerLedgerSummary;
+  Map<String, dynamic>? _selectedCustomerLedger;
+  Map<String, dynamic>? _selectedSupplierLedgerSummary;
+  Map<String, dynamic>? _selectedSupplierLedger;
   int? _selectedStationId;
   int? _selectedCustomerId;
   int? _selectedSupplierId;
@@ -103,8 +107,15 @@ class _PartiesPageState extends State<PartiesPage> {
         _selectedStationId = stationId;
         _customers = customers;
         _suppliers = suppliers;
+        _selectedCustomerId ??= customers.isNotEmpty
+            ? customers.first['id'] as int
+            : null;
+        _selectedSupplierId ??= suppliers.isNotEmpty
+            ? suppliers.first['id'] as int
+            : null;
         _isLoading = false;
       });
+      await _loadSelectedLedgerData();
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -119,9 +130,63 @@ class _PartiesPageState extends State<PartiesPage> {
     setState(() {
       _selectedStationId = stationId;
       _selectedCustomerId = null;
+      _selectedSupplierId = null;
+      _selectedCustomerLedgerSummary = null;
+      _selectedCustomerLedger = null;
+      _selectedSupplierLedgerSummary = null;
+      _selectedSupplierLedger = null;
     });
     _resetCustomerForm();
     await _loadWorkspace();
+  }
+
+  Future<void> _loadSelectedLedgerData() async {
+    if (!_canReadLedger) {
+      return;
+    }
+    try {
+      final customerId = _selectedCustomerId;
+      final supplierId = _selectedSupplierId;
+      final stationId = _selectedStationId;
+      final customerSummary = customerId == null
+          ? null
+          : await widget.sessionController.fetchCustomerLedgerSummary(
+              customerId: customerId,
+            );
+      final customerLedger = customerId == null
+          ? null
+          : await widget.sessionController.fetchCustomerLedger(
+              customerId: customerId,
+            );
+      final supplierSummary = supplierId == null
+          ? null
+          : await widget.sessionController.fetchSupplierLedgerSummary(
+              supplierId: supplierId,
+              stationId: stationId,
+            );
+      final supplierLedger = supplierId == null
+          ? null
+          : await widget.sessionController.fetchSupplierLedger(
+              supplierId: supplierId,
+              stationId: stationId,
+            );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedCustomerLedgerSummary = customerSummary;
+        _selectedCustomerLedger = customerLedger;
+        _selectedSupplierLedgerSummary = supplierSummary;
+        _selectedSupplierLedger = supplierLedger;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    }
   }
 
   Future<void> _saveCustomer() async {
@@ -332,6 +397,7 @@ class _PartiesPageState extends State<PartiesPage> {
       _feedbackMessage = 'Editing customer ${customer['name']}.';
       _errorMessage = null;
     });
+    _loadSelectedLedgerData();
   }
 
   void _selectSupplier(Map<String, dynamic> supplier) {
@@ -344,6 +410,7 @@ class _PartiesPageState extends State<PartiesPage> {
       _feedbackMessage = 'Editing supplier ${supplier['name']}.';
       _errorMessage = null;
     });
+    _loadSelectedLedgerData();
   }
 
   void _resetCustomerForm() {
@@ -423,6 +490,7 @@ class _PartiesPageState extends State<PartiesPage> {
   bool get _canManageSuppliers =>
       _hasAction('suppliers', 'create') || _hasAction('suppliers', 'update');
   bool get _canDeleteSuppliers => _hasAction('suppliers', 'delete');
+  bool get _canReadLedger => _hasAction('ledger', 'read');
 
   Widget _buildPermissionNotice(BuildContext context, String message) {
     return Container(
@@ -506,14 +574,17 @@ class _PartiesPageState extends State<PartiesPage> {
                   DashboardMetricTile(
                     label: 'Suppliers',
                     value: _suppliers.length.toString(),
-                    caption: 'Suppliers available to finance and purchase flows',
+                    caption:
+                        'Suppliers available to finance and purchase flows',
                     icon: Icons.local_shipping_outlined,
                     tint: colorScheme.tertiary,
                   ),
                 if (_canReadCustomers)
                   DashboardMetricTile(
                     label: 'Customer exposure',
-                    value: _formatNumber(_sumOf(_customers, 'outstanding_balance')),
+                    value: _formatNumber(
+                      _sumOf(_customers, 'outstanding_balance'),
+                    ),
                     caption: 'Visible outstanding customer balance',
                     icon: Icons.account_balance_wallet_outlined,
                     tint: colorScheme.error,
@@ -831,6 +902,21 @@ class _PartiesPageState extends State<PartiesPage> {
                     ),
                     onTap: () => _selectCustomer(customer),
                   ),
+              if (_canReadLedger && _selectedCustomerLedgerSummary != null) ...[
+                const Divider(height: 24),
+                Text(
+                  'Ledger Snapshot',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                _buildLedgerSummaryCard(
+                  summary: _selectedCustomerLedgerSummary!,
+                  entries: List<Map<String, dynamic>>.from(
+                    (_selectedCustomerLedger?['ledger'] as List? ?? const [])
+                        .map((item) => Map<String, dynamic>.from(item as Map)),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -964,9 +1050,103 @@ class _PartiesPageState extends State<PartiesPage> {
                     ),
                     onTap: () => _selectSupplier(supplier),
                   ),
+              if (_canReadLedger && _selectedSupplierLedgerSummary != null) ...[
+                const Divider(height: 24),
+                Text(
+                  'Ledger Snapshot',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                _buildLedgerSummaryCard(
+                  summary: _selectedSupplierLedgerSummary!,
+                  entries: List<Map<String, dynamic>>.from(
+                    (_selectedSupplierLedger?['ledger'] as List? ?? const [])
+                        .map((item) => Map<String, dynamic>.from(item as Map)),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLedgerSummaryCard({
+    required Map<String, dynamic> summary,
+    required List<Map<String, dynamic>> entries,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildMetricChip(
+              'Current Balance',
+              _formatNumber(summary['current_balance']),
+            ),
+            _buildMetricChip(
+              'Charges',
+              _formatNumber(summary['total_charges']),
+            ),
+            _buildMetricChip(
+              'Payments',
+              _formatNumber(summary['total_payments']),
+            ),
+            _buildMetricChip(
+              'Transactions',
+              '${summary['transaction_count'] ?? 0}',
+            ),
+          ],
+        ),
+        if ((summary['last_activity_at'] as String?)?.isNotEmpty == true) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Last activity: ${_formatDateTime(summary['last_activity_at'])}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        const SizedBox(height: 12),
+        if (entries.isEmpty)
+          const Text('No ledger entries found yet.')
+        else
+          for (final entry in entries.take(5))
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(
+                (entry['amount'] as num? ?? 0) < 0
+                    ? Icons.south_west_outlined
+                    : Icons.north_east_outlined,
+              ),
+              title: Text(entry['description'] as String? ?? 'Ledger entry'),
+              subtitle: Text(_formatDateTime(entry['date'])),
+              trailing: Text(_formatNumber(entry['balance'])),
+            ),
+      ],
+    );
+  }
+
+  Widget _buildMetricChip(String label, String value) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 110),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.titleSmall),
+        ],
       ),
     );
   }
@@ -976,5 +1156,12 @@ class _PartiesPageState extends State<PartiesPage> {
       return value.toStringAsFixed(2);
     }
     return '0.00';
+  }
+
+  String _formatDateTime(dynamic value) {
+    if (value is! String || value.isEmpty) {
+      return 'Unknown';
+    }
+    return value.replaceFirst('T', ' ').substring(0, 16);
   }
 }

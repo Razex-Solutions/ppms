@@ -613,6 +613,24 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> fetchCustomerLedgerSummary({
+    required int customerId,
+  }) async {
+    return _apiClient.getCustomerLedgerSummary(
+      await _validAccessToken(),
+      customerId: customerId,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchCustomerLedger({
+    required int customerId,
+  }) async {
+    return _apiClient.getCustomerLedger(
+      await _validAccessToken(),
+      customerId: customerId,
+    );
+  }
+
   Future<Map<String, dynamic>> approveCustomerCreditOverride({
     required int customerId,
     required Map<String, dynamic> payload,
@@ -663,6 +681,28 @@ class SessionController extends ChangeNotifier {
     return _apiClient.deleteSupplier(
       await _validAccessToken(),
       supplierId: supplierId,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchSupplierLedgerSummary({
+    required int supplierId,
+    int? stationId,
+  }) async {
+    return _apiClient.getSupplierLedgerSummary(
+      await _validAccessToken(),
+      supplierId: supplierId,
+      stationId: stationId,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchSupplierLedger({
+    required int supplierId,
+    int? stationId,
+  }) async {
+    return _apiClient.getSupplierLedger(
+      await _validAccessToken(),
+      supplierId: supplierId,
+      stationId: stationId,
     );
   }
 

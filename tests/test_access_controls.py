@@ -214,6 +214,24 @@ def test_operator_cannot_approve_credit_overrides(client):
     assert approve_response.status_code == 403
 
 
+def test_operator_cannot_read_ledgers(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    customer_response = test_client.get(
+        f"/ledger/customer/{data['customer_id']}",
+        headers=operator_headers,
+    )
+    assert customer_response.status_code == 403
+
+    supplier_response = test_client.get(
+        "/ledger/supplier/1",
+        headers=operator_headers,
+    )
+    assert supplier_response.status_code == 403
+
+
 def test_operator_cannot_create_customer_or_tanker_master_data(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
