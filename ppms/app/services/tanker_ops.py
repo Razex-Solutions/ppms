@@ -60,6 +60,17 @@ def _ensure_trip_access(trip: TankerTrip, current_user: User) -> None:
         raise HTTPException(status_code=403, detail="Not authorized for this trip")
 
 
+def apply_tanker_scope(query, model, current_user: User):
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
+        return query, None
+    if current_user.role.name == "HeadOffice":
+        user_organization_id = current_user.station.organization_id if current_user.station else None
+        if model is Tanker:
+            return query.join(Tanker.station).filter(Tanker.station.has(organization_id=user_organization_id)), None
+        return query.join(TankerTrip.station).filter(TankerTrip.station.has(organization_id=user_organization_id)), None
+    return query, current_user.station_id
+
+
 def _recompute_trip_financials(trip: TankerTrip) -> None:
     trip.total_quantity = round(sum(delivery.quantity for delivery in trip.deliveries), 2)
     effective_loaded_quantity = trip.loaded_quantity or trip.total_quantity
@@ -84,6 +95,54 @@ def _recompute_trip_financials(trip: TankerTrip) -> None:
         trip.settlement_status = "partial"
     else:
         trip.settlement_status = "unpaid"
+
+
+def build_tanker_workspace_summary(
+    db: Session,
+    current_user: User,
+    station_id: int | None = None,
+) -> dict[str, object]:
+    tanker_query = db.query(Tanker)
+    tanker_query, scoped_station_id = apply_tanker_scope(tanker_query, Tanker, current_user)
+    trip_query = db.query(TankerTrip)
+    trip_query, scoped_trip_station_id = apply_tanker_scope(trip_query, TankerTrip, current_user)
+    station_id = station_id or scoped_station_id or scoped_trip_station_id
+    if station_id is not None:
+        tanker_query = tanker_query.filter(Tanker.station_id == station_id)
+        trip_query = trip_query.filter(TankerTrip.station_id == station_id)
+
+    tankers = tanker_query.all()
+    trips = trip_query.all()
+    ownership_breakdown: dict[str, int] = {}
+    for tanker in tankers:
+        ownership_key = tanker.ownership_type or "unknown"
+        ownership_breakdown[ownership_key] = ownership_breakdown.get(ownership_key, 0) + 1
+
+    def _sum(field: str) -> float:
+        total = 0.0
+        for trip in trips:
+            total += float(getattr(trip, field) or 0)
+        return round(total, 2)
+
+    return {
+        "station_id": station_id,
+        "tanker_count": len(tankers),
+        "active_tanker_count": sum(1 for tanker in tankers if tanker.status == "active"),
+        "in_progress_trip_count": sum(1 for trip in trips if trip.status != "completed"),
+        "completed_trip_count": sum(1 for trip in trips if trip.status == "completed"),
+        "supplier_to_station_trip_count": sum(1 for trip in trips if trip.trip_type == "supplier_to_station"),
+        "supplier_to_customer_trip_count": sum(1 for trip in trips if trip.trip_type == "supplier_to_customer"),
+        "total_loaded_quantity": _sum("loaded_quantity"),
+        "total_delivered_quantity": _sum("total_quantity"),
+        "total_leftover_quantity": _sum("leftover_quantity"),
+        "total_transferred_quantity": _sum("transferred_quantity"),
+        "total_purchase_value": _sum("purchase_total"),
+        "total_fuel_revenue": _sum("fuel_revenue"),
+        "total_delivery_revenue": _sum("delivery_revenue"),
+        "total_expense_value": _sum("expense_total"),
+        "total_net_profit": _sum("net_profit"),
+        "ownership_breakdown": ownership_breakdown,
+    }
 
 
 def _build_compartment_plan(trip: TankerTrip) -> list[dict[str, object]]:

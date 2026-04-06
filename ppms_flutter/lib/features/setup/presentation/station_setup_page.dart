@@ -344,6 +344,13 @@ class _StationSetupPageState extends State<StationSetupPage> {
     return 'Phase 1 setup basics are in place for this station.';
   }
 
+  String get _tankerReadinessMessage {
+    if (!_hasTankers) {
+      return 'Tanker operations are off for this station, so the guided setup can stay focused on forecourt work.';
+    }
+    return 'Tanker operations are enabled. After Phase 1 forecourt basics, move into the tanker workspace to register vehicles, define compartments, and record trip summaries.';
+  }
+
   Future<void> _changeOrganization(int? organizationId) async {
     if (organizationId == null) return;
     setState(() {
@@ -1108,6 +1115,28 @@ class _StationSetupPageState extends State<StationSetupPage> {
                   .trim()
                   .isNotEmpty,
             ),
+            if (_hasTankers) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Phase 4 Tanker Path',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(_tankerReadinessMessage),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

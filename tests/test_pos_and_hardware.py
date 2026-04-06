@@ -392,6 +392,16 @@ def test_tanker_module_workflows_and_station_toggle(client):
     assert completed_trip["net_profit"] == -10
     assert completed_trip["compartment_plan"][0]["quantity"] == 20
 
+    station_summary = test_client.get(
+        f"/tankers/summary?station_id={data['station_a_id']}",
+        headers=manager_headers,
+    )
+    assert station_summary.status_code == 200, station_summary.text
+    station_summary_json = station_summary.json()
+    assert station_summary_json["tanker_count"] == 1
+    assert station_summary_json["ownership_breakdown"]["owned"] == 1
+    assert station_summary_json["supplier_to_station_trip_count"] == 1
+
     db = session_local()
     try:
         from app.models.customer import Customer
@@ -486,6 +496,16 @@ def test_tanker_module_workflows_and_station_toggle(client):
     assert complete_direct_trip.json()["leftover_quantity"] == 5
     assert complete_direct_trip.json()["transferred_quantity"] == 5
     assert complete_direct_trip.json()["fuel_transfers"][0]["tank_id"] == data["foreign_tank_id"]
+
+    foreign_summary = test_client.get(
+        f"/tankers/summary?station_id={data['station_c_id']}",
+        headers=foreign_manager_headers,
+    )
+    assert foreign_summary.status_code == 200, foreign_summary.text
+    foreign_summary_json = foreign_summary.json()
+    assert foreign_summary_json["supplier_to_customer_trip_count"] == 1
+    assert foreign_summary_json["total_leftover_quantity"] == 5
+    assert foreign_summary_json["total_transferred_quantity"] == 5
 
     db = session_local()
     try:

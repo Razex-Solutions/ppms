@@ -808,6 +808,15 @@ class SessionController extends ChangeNotifier {
     return _apiClient.createTanker(await _validAccessToken(), payload: payload);
   }
 
+  Future<Map<String, dynamic>> fetchTankerSummary({
+    int? stationId,
+  }) async {
+    return _apiClient.getTankerSummary(
+      await _validAccessToken(),
+      stationId: stationId,
+    );
+  }
+
   Future<List<dynamic>> fetchTankerTrips({
     int? stationId,
     String? tripType,

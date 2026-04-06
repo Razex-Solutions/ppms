@@ -1047,6 +1047,22 @@ class ApiClient {
     return _send('POST', '/tankers/', accessToken: accessToken, body: payload);
   }
 
+  Future<Map<String, dynamic>> getTankerSummary(
+    String accessToken, {
+    int? stationId,
+  }) async {
+    final params = <String, String>{};
+    if (stationId != null) {
+      params['station_id'] = '$stationId';
+    }
+    return _send(
+      'GET',
+      '/tankers/summary',
+      accessToken: accessToken,
+      queryParams: params.isEmpty ? null : params,
+    );
+  }
+
   Future<List<dynamic>> getTankerTrips(
     String accessToken, {
     int? stationId,

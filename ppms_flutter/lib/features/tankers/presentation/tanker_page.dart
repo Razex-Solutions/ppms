@@ -51,6 +51,7 @@ class _TankerPageState extends State<TankerPage> {
   List<Map<String, dynamic>> _tanks = const [];
   List<Map<String, dynamic>> _tankers = const [];
   List<Map<String, dynamic>> _trips = const [];
+  Map<String, dynamic>? _summary;
 
   int? _selectedStationId;
   int? _selectedTankerId;
@@ -161,6 +162,11 @@ class _TankerPageState extends State<TankerPage> {
                 status: _tripStatusFilter == 'all' ? null : _tripStatusFilter,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
+      final summary = !_showTankerWorkspace || stationId == null
+          ? null
+          : await widget.sessionController.fetchTankerSummary(
+              stationId: stationId,
+            );
 
       if (!mounted) return;
 
@@ -199,6 +205,7 @@ class _TankerPageState extends State<TankerPage> {
         _tanks = tanks;
         _tankers = tankers;
         _trips = trips;
+        _summary = summary;
         _selectedStationId = stationId;
         _selectedTankerId = selectedTankerId;
         _selectedTripId = selectedTripId;
@@ -664,13 +671,32 @@ class _TankerPageState extends State<TankerPage> {
     final activeTrips = _trips.where((trip) {
       return trip['status']?.toString() != 'completed';
     }).length;
-    final totalQuantity = _trips.fold<double>(
-      0,
-      (sum, trip) => sum + ((trip['total_quantity'] as num?)?.toDouble() ?? 0),
-    );
-    final totalProfit = _trips.fold<double>(
-      0,
-      (sum, trip) => sum + ((trip['net_profit'] as num?)?.toDouble() ?? 0),
+    final totalQuantity =
+        (_summary?['total_delivered_quantity'] as num?)?.toDouble() ??
+        _trips.fold<double>(
+          0,
+          (sum, trip) =>
+              sum + ((trip['total_quantity'] as num?)?.toDouble() ?? 0),
+        );
+    final totalProfit =
+        (_summary?['total_net_profit'] as num?)?.toDouble() ??
+        _trips.fold<double>(
+          0,
+          (sum, trip) => sum + ((trip['net_profit'] as num?)?.toDouble() ?? 0),
+        );
+    final totalLeftover =
+        (_summary?['total_leftover_quantity'] as num?)?.toDouble() ?? 0;
+    final totalTransferred =
+        (_summary?['total_transferred_quantity'] as num?)?.toDouble() ?? 0;
+    final tankerCount =
+        (_summary?['tanker_count'] as num?)?.toInt() ?? _tankers.length;
+    final completedTrips =
+        (_summary?['completed_trip_count'] as num?)?.toInt() ??
+        _trips
+            .where((trip) => trip['status']?.toString() == 'completed')
+            .length;
+    final ownershipBreakdown = Map<String, dynamic>.from(
+      _summary?['ownership_breakdown'] as Map? ?? const {},
     );
 
     return RefreshIndicator(
@@ -688,15 +714,17 @@ class _TankerPageState extends State<TankerPage> {
               children: [
                 DashboardMetricTile(
                   label: 'Tankers',
-                  value: '${_tankers.length}',
-                  caption: 'Fleet records',
+                  value: '$tankerCount',
+                  caption:
+                      '${(_summary?['active_tanker_count'] as num?)?.toInt() ?? _tankers.length} active vehicles',
                   icon: Icons.local_shipping_outlined,
                   tint: Theme.of(context).colorScheme.primaryContainer,
                 ),
                 DashboardMetricTile(
                   label: 'Trips',
-                  value: '${_trips.length}',
-                  caption: '$activeTrips active',
+                  value:
+                      '${_summary?['completed_trip_count'] ?? _trips.length}',
+                  caption: '$activeTrips active / $completedTrips completed',
                   icon: Icons.route_outlined,
                   tint: Theme.of(context).colorScheme.secondaryContainer,
                 ),
@@ -747,6 +775,57 @@ class _TankerPageState extends State<TankerPage> {
                   label: _canManageTankers
                       ? 'Managed workspace'
                       : 'Review-first',
+                ),
+                if (ownershipBreakdown.isNotEmpty)
+                  _buildInfoChip(
+                    context,
+                    icon: Icons.inventory_2_outlined,
+                    label: ownershipBreakdown.entries
+                        .map((entry) => '${entry.key}:${entry.value}')
+                        .join('  '),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          DashboardSectionCard(
+            title: 'Manager Summary',
+            subtitle:
+                'Review fleet makeup, delivered fuel, leftovers, and transfer behavior before opening the detailed forms.',
+            icon: Icons.assessment_outlined,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                DashboardMetricTile(
+                  label: 'Loaded',
+                  value: _formatNumber(_summary?['total_loaded_quantity']),
+                  caption: 'Trip load entered',
+                  icon: Icons.local_shipping_outlined,
+                  tint: Theme.of(context).colorScheme.primaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Delivered',
+                  value: _formatNumber(totalQuantity),
+                  caption: 'Customer and station deliveries',
+                  icon: Icons.water_drop_outlined,
+                  tint: Theme.of(context).colorScheme.secondaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Leftover',
+                  value: _formatNumber(totalLeftover),
+                  caption: _formatNumber(totalTransferred) == '0.00'
+                      ? 'Awaiting transfer or closeout'
+                      : '${_formatNumber(totalTransferred)} moved to tanks',
+                  icon: Icons.swap_horiz_outlined,
+                  tint: Theme.of(context).colorScheme.tertiaryContainer,
+                ),
+                DashboardMetricTile(
+                  label: 'Purchase Value',
+                  value: _formatNumber(_summary?['total_purchase_value']),
+                  caption: 'Based on trip purchase rates',
+                  icon: Icons.receipt_long_outlined,
+                  tint: Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
               ],
             ),

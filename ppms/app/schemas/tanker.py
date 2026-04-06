@@ -179,3 +179,23 @@ class TankerTripResponse(BaseModel):
     compartment_plan: list[TankerCompartmentLoadResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TankerWorkspaceSummaryResponse(BaseModel):
+    station_id: int | None = None
+    tanker_count: int
+    active_tanker_count: int
+    in_progress_trip_count: int
+    completed_trip_count: int
+    supplier_to_station_trip_count: int
+    supplier_to_customer_trip_count: int
+    total_loaded_quantity: float
+    total_delivered_quantity: float
+    total_leftover_quantity: float
+    total_transferred_quantity: float
+    total_purchase_value: float
+    total_fuel_revenue: float
+    total_delivery_revenue: float
+    total_expense_value: float
+    total_net_profit: float
+    ownership_breakdown: dict[str, int]
