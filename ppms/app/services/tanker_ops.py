@@ -5,17 +5,21 @@ from app.core.access import is_master_admin
 from app.core.time import utc_now
 from app.models.customer import Customer
 from app.models.fuel_type import FuelType
+from app.models.fuel_transfer import FuelTransfer
 from app.models.purchase import Purchase
 from app.models.station import Station
 from app.models.supplier import Supplier
 from app.models.tank import Tank
 from app.models.tanker import Tanker
+from app.models.tanker_compartment import TankerCompartment
 from app.models.tanker_delivery import TankerDelivery
 from app.models.tanker_trip import TankerTrip
 from app.models.tanker_trip_expense import TankerTripExpense
 from app.models.user import User
 from app.schemas.tanker import (
     TankerCreate,
+    TankerCompartmentCreate,
+    TankerCompartmentUpdate,
     TankerDeliveryCreate,
     TankerTripCreate,
     TankerTripExpenseCreate,
@@ -29,13 +33,19 @@ MODULE_NAME = "tanker_operations"
 
 
 def _load_trip(db: Session, trip_id: int) -> TankerTrip | None:
-    return db.query(TankerTrip).options(
+    trip = db.query(TankerTrip).options(
         selectinload(TankerTrip.deliveries),
         selectinload(TankerTrip.expenses),
+        selectinload(TankerTrip.fuel_transfers),
         selectinload(TankerTrip.tanker),
+        selectinload(TankerTrip.tanker).selectinload(Tanker.compartments),
         selectinload(TankerTrip.station),
         selectinload(TankerTrip.linked_tank),
+        selectinload(TankerTrip.transfer_tank),
     ).filter(TankerTrip.id == trip_id).first()
+    if trip:
+        trip.compartment_plan = _build_compartment_plan(trip)
+    return trip
 
 
 def _ensure_trip_access(trip: TankerTrip, current_user: User) -> None:
@@ -52,13 +62,20 @@ def _ensure_trip_access(trip: TankerTrip, current_user: User) -> None:
 
 def _recompute_trip_financials(trip: TankerTrip) -> None:
     trip.total_quantity = round(sum(delivery.quantity for delivery in trip.deliveries), 2)
+    effective_loaded_quantity = trip.loaded_quantity or trip.total_quantity
+    if trip.loaded_quantity is not None:
+        trip.leftover_quantity = round(max(trip.loaded_quantity - trip.total_quantity, 0), 2)
+    else:
+        trip.leftover_quantity = 0
     trip.fuel_revenue = round(sum(delivery.fuel_amount for delivery in trip.deliveries), 2)
     trip.delivery_revenue = round(sum(delivery.delivery_charge for delivery in trip.deliveries), 2)
     trip.expense_total = round(sum(expense.amount for expense in trip.expenses), 2)
+    trip.purchase_total = round((effective_loaded_quantity * trip.purchase_rate), 2) if trip.purchase_rate is not None else round(trip.purchase_total or 0, 2)
+    fuel_cost_of_sales = round((trip.total_quantity * trip.purchase_rate), 2) if trip.purchase_rate is not None else 0
     if trip.trip_type == "supplier_to_station":
         trip.net_profit = round(0 - trip.expense_total, 2)
     else:
-        trip.net_profit = round((trip.fuel_revenue + trip.delivery_revenue) - trip.expense_total, 2)
+        trip.net_profit = round((trip.fuel_revenue + trip.delivery_revenue) - fuel_cost_of_sales - trip.expense_total, 2)
     total_outstanding = round(sum(delivery.outstanding_amount for delivery in trip.deliveries), 2)
     total_value = round(sum(delivery.fuel_amount + delivery.delivery_charge for delivery in trip.deliveries), 2)
     if total_outstanding <= 0:
@@ -67,6 +84,67 @@ def _recompute_trip_financials(trip: TankerTrip) -> None:
         trip.settlement_status = "partial"
     else:
         trip.settlement_status = "unpaid"
+
+
+def _build_compartment_plan(trip: TankerTrip) -> list[dict[str, object]]:
+    compartments = sorted(
+        [compartment for compartment in trip.tanker.compartments if compartment.is_active],
+        key=lambda item: item.position,
+    ) if trip.tanker else []
+    if not compartments or trip.loaded_quantity is None or trip.loaded_quantity <= 0:
+        return []
+    remaining = trip.loaded_quantity
+    plan: list[dict[str, object]] = []
+    for compartment in compartments:
+        if remaining <= 0:
+            break
+        quantity = round(min(compartment.capacity, remaining), 2)
+        if quantity <= 0:
+            continue
+        plan.append(
+            {
+                "compartment_id": compartment.id,
+                "code": compartment.code,
+                "name": compartment.name,
+                "quantity": quantity,
+            }
+        )
+        remaining = round(remaining - quantity, 2)
+    return plan
+
+
+def _validate_compartments(compartments: list[TankerCompartmentCreate], tanker_capacity: float) -> None:
+    total_capacity = 0.0
+    seen_codes: set[str] = set()
+    for index, compartment in enumerate(compartments, start=1):
+        if compartment.capacity <= 0:
+            raise HTTPException(status_code=400, detail="Compartment capacity must be greater than 0")
+        code = compartment.code.strip().upper()
+        if not code:
+            raise HTTPException(status_code=400, detail="Compartment code is required")
+        if code in seen_codes:
+            raise HTTPException(status_code=400, detail="Compartment codes must be unique per tanker")
+        seen_codes.add(code)
+        if compartment.position <= 0:
+            raise HTTPException(status_code=400, detail="Compartment position must be greater than 0")
+        total_capacity += compartment.capacity
+        if total_capacity - tanker_capacity > 0.0001:
+            raise HTTPException(status_code=400, detail="Compartment capacity cannot exceed tanker capacity")
+
+
+def _create_compartments(db: Session, tanker: Tanker, compartments: list[TankerCompartmentCreate]) -> None:
+    _validate_compartments(compartments, tanker.capacity)
+    for compartment in compartments:
+        db.add(
+            TankerCompartment(
+                tanker_id=tanker.id,
+                code=compartment.code.strip().upper(),
+                name=compartment.name.strip(),
+                capacity=compartment.capacity,
+                position=compartment.position,
+                is_active=compartment.is_active,
+            )
+        )
 
 
 def create_tanker(db: Session, data: TankerCreate, current_user: User) -> Tanker:
@@ -82,19 +160,90 @@ def create_tanker(db: Session, data: TankerCreate, current_user: User) -> Tanker
     fuel_type = db.query(FuelType).filter(FuelType.id == data.fuel_type_id).first()
     if not fuel_type:
         raise HTTPException(status_code=404, detail="Fuel type not found")
-    tanker = Tanker(**data.model_dump())
+    tanker_payload = data.model_dump(exclude={"compartments"})
+    tanker = Tanker(**tanker_payload)
     db.add(tanker)
+    db.flush()
+    _create_compartments(db, tanker, data.compartments)
     db.commit()
     db.refresh(tanker)
     return tanker
 
 
 def update_tanker(tanker: Tanker, data: TankerUpdate, db: Session) -> Tanker:
+    updated_capacity = data.capacity if data.capacity is not None else tanker.capacity
+    active_compartment_capacity = sum(compartment.capacity for compartment in tanker.compartments if compartment.is_active)
+    if updated_capacity < active_compartment_capacity:
+        raise HTTPException(status_code=400, detail="Tanker capacity cannot be less than active compartment capacity")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(tanker, field, value)
     db.commit()
     db.refresh(tanker)
     return tanker
+
+
+def create_compartment(
+    db: Session,
+    tanker: Tanker,
+    data: TankerCompartmentCreate,
+) -> TankerCompartment:
+    _validate_compartments([data], tanker.capacity)
+    duplicate = next((item for item in tanker.compartments if item.code.upper() == data.code.strip().upper()), None)
+    if duplicate:
+        raise HTTPException(status_code=400, detail="Compartment codes must be unique per tanker")
+    active_capacity = sum(compartment.capacity for compartment in tanker.compartments if compartment.is_active)
+    if active_capacity + data.capacity > tanker.capacity:
+        raise HTTPException(status_code=400, detail="Compartment capacity cannot exceed tanker capacity")
+    compartment = TankerCompartment(
+        tanker_id=tanker.id,
+        code=data.code.strip().upper(),
+        name=data.name.strip(),
+        capacity=data.capacity,
+        position=data.position,
+        is_active=data.is_active,
+    )
+    db.add(compartment)
+    db.commit()
+    db.refresh(compartment)
+    return compartment
+
+
+def update_compartment(
+    db: Session,
+    tanker: Tanker,
+    compartment: TankerCompartment,
+    data: TankerCompartmentUpdate,
+) -> TankerCompartment:
+    updates = data.model_dump(exclude_unset=True)
+    new_capacity = updates.get("capacity", compartment.capacity)
+    if new_capacity <= 0:
+        raise HTTPException(status_code=400, detail="Compartment capacity must be greater than 0")
+    new_is_active = updates.get("is_active", compartment.is_active)
+    projected_capacity = sum(
+        other.capacity
+        for other in tanker.compartments
+        if other.id != compartment.id and other.is_active
+    )
+    if new_is_active and projected_capacity + new_capacity > tanker.capacity:
+        raise HTTPException(status_code=400, detail="Compartment capacity cannot exceed tanker capacity")
+    if "code" in updates:
+        normalized_code = updates["code"].strip().upper()
+        if not normalized_code:
+            raise HTTPException(status_code=400, detail="Compartment code is required")
+        duplicate = next(
+            (other for other in tanker.compartments if other.id != compartment.id and other.code.upper() == normalized_code),
+            None,
+        )
+        if duplicate:
+            raise HTTPException(status_code=400, detail="Compartment codes must be unique per tanker")
+        updates["code"] = normalized_code
+    if "name" in updates:
+        updates["name"] = updates["name"].strip()
+    for field, value in updates.items():
+        setattr(compartment, field, value)
+    db.commit()
+    db.refresh(compartment)
+    return compartment
 
 
 def create_trip(db: Session, data: TankerTripCreate, current_user: User) -> TankerTrip:
@@ -106,10 +255,19 @@ def create_trip(db: Session, data: TankerTripCreate, current_user: User) -> Tank
     require_station_module_enabled(db, tanker.station_id, MODULE_NAME)
     if data.trip_type not in {"supplier_to_station", "supplier_to_customer"}:
         raise HTTPException(status_code=400, detail="Unsupported trip type")
+    if data.fuel_type_id != tanker.fuel_type_id:
+        raise HTTPException(status_code=400, detail="Trip fuel type must match tanker fuel type")
     if data.trip_type == "supplier_to_station" and data.linked_tank_id is None:
         raise HTTPException(status_code=400, detail="supplier_to_station trips require linked_tank_id")
     if data.trip_type == "supplier_to_customer" and not data.destination_name:
         raise HTTPException(status_code=400, detail="supplier_to_customer trips require destination_name")
+    if data.loaded_quantity is not None:
+        if data.loaded_quantity <= 0:
+            raise HTTPException(status_code=400, detail="loaded_quantity must be greater than 0")
+        if data.loaded_quantity > tanker.capacity:
+            raise HTTPException(status_code=400, detail="loaded_quantity cannot exceed tanker capacity")
+    if data.purchase_rate is not None and data.purchase_rate <= 0:
+        raise HTTPException(status_code=400, detail="purchase_rate must be greater than 0")
     if data.supplier_id is not None:
         supplier = db.query(Supplier).filter(Supplier.id == data.supplier_id).first()
         if not supplier:
@@ -131,6 +289,8 @@ def create_trip(db: Session, data: TankerTripCreate, current_user: User) -> Tank
         linked_tank_id=data.linked_tank_id,
         destination_name=data.destination_name,
         notes=data.notes,
+        loaded_quantity=data.loaded_quantity,
+        purchase_rate=data.purchase_rate,
         status="in_progress",
     )
     db.add(trip)
@@ -172,6 +332,9 @@ def add_trip_delivery(db: Session, trip: TankerTrip, data: TankerDeliveryCreate,
         raise HTTPException(status_code=400, detail="paid_amount is invalid")
     if data.sale_type == "credit" and customer is None:
         raise HTTPException(status_code=400, detail="Credit tanker delivery requires customer_id")
+    existing_quantity = round(sum(existing.quantity for existing in trip.deliveries), 2)
+    if trip.loaded_quantity is not None and existing_quantity + data.quantity > trip.loaded_quantity:
+        raise HTTPException(status_code=400, detail="Trip deliveries cannot exceed the loaded quantity")
     delivery = TankerDelivery(
         trip_id=trip.id,
         customer_id=data.customer_id,
@@ -232,7 +395,7 @@ def add_trip_expense(db: Session, trip: TankerTrip, data: TankerTripExpenseCreat
     return _load_trip(db, trip.id)
 
 
-def complete_trip(db: Session, trip: TankerTrip, current_user: User) -> TankerTrip:
+def complete_trip(db: Session, trip: TankerTrip, current_user: User, transfer_to_tank_id: int | None = None) -> TankerTrip:
     _ensure_trip_access(trip, current_user)
     require_station_module_enabled(db, trip.station_id, MODULE_NAME)
     if trip.status == "completed":
@@ -242,6 +405,7 @@ def complete_trip(db: Session, trip: TankerTrip, current_user: User) -> TankerTr
     trip = _load_trip(db, trip.id)
     _recompute_trip_financials(trip)
 
+    transfer = None
     if trip.trip_type == "supplier_to_station":
         tank = db.query(Tank).filter(Tank.id == trip.linked_tank_id).first()
         supplier = db.query(Supplier).filter(Supplier.id == trip.supplier_id).first() if trip.supplier_id else None
@@ -255,8 +419,11 @@ def complete_trip(db: Session, trip: TankerTrip, current_user: User) -> TankerTr
             fuel_type_id=trip.fuel_type_id,
             tanker_id=trip.tanker_id,
             quantity=trip.total_quantity,
-            rate_per_liter=(trip.fuel_revenue / trip.total_quantity) if trip.total_quantity else 0,
-            total_amount=trip.fuel_revenue,
+            rate_per_liter=trip.purchase_rate if trip.purchase_rate is not None else ((trip.fuel_revenue / trip.total_quantity) if trip.total_quantity else 0),
+            total_amount=round(
+                trip.total_quantity * trip.purchase_rate,
+                2,
+            ) if trip.purchase_rate is not None else trip.fuel_revenue,
             reference_no=f"TANKER-TRIP-{trip.id}",
             notes=f"Generated from tanker trip {trip.id}",
             status="approved",
@@ -270,6 +437,29 @@ def complete_trip(db: Session, trip: TankerTrip, current_user: User) -> TankerTr
         supplier.payable_balance += purchase.total_amount
         trip.linked_purchase_id = purchase.id
     else:
+        if trip.leftover_quantity > 0 and transfer_to_tank_id is not None:
+            transfer_tank = db.query(Tank).filter(Tank.id == transfer_to_tank_id).first()
+            if transfer_tank is None:
+                raise HTTPException(status_code=404, detail="Transfer tank not found")
+            if transfer_tank.station_id != trip.station_id:
+                raise HTTPException(status_code=400, detail="Transfer tank must belong to the same station")
+            if transfer_tank.fuel_type_id != trip.fuel_type_id:
+                raise HTTPException(status_code=400, detail="Transfer tank fuel type must match trip fuel type")
+            if transfer_tank.current_volume + trip.leftover_quantity > transfer_tank.capacity:
+                raise HTTPException(status_code=400, detail="Completing this trip would exceed transfer tank capacity")
+            transfer_tank.current_volume += trip.leftover_quantity
+            trip.transfer_tank_id = transfer_tank.id
+            trip.transferred_quantity = trip.leftover_quantity
+            transfer = FuelTransfer(
+                station_id=trip.station_id,
+                tank_id=transfer_tank.id,
+                tanker_trip_id=trip.id,
+                fuel_type_id=trip.fuel_type_id,
+                quantity=trip.leftover_quantity,
+                transfer_type="tanker_leftover_to_tank",
+                notes=f"Generated from tanker trip {trip.id}",
+            )
+            db.add(transfer)
         for delivery in trip.deliveries:
             if delivery.sale_type == "credit" and delivery.customer_id is not None:
                 customer = db.query(Customer).filter(Customer.id == delivery.customer_id).first()
@@ -286,7 +476,15 @@ def complete_trip(db: Session, trip: TankerTrip, current_user: User) -> TankerTr
         entity_type="tanker_trip",
         entity_id=trip.id,
         station_id=trip.station_id,
-        details={"trip_type": trip.trip_type, "net_profit": trip.net_profit, "linked_purchase_id": trip.linked_purchase_id},
+        details={
+            "trip_type": trip.trip_type,
+            "net_profit": trip.net_profit,
+            "linked_purchase_id": trip.linked_purchase_id,
+            "leftover_quantity": trip.leftover_quantity,
+            "transferred_quantity": trip.transferred_quantity,
+            "transfer_tank_id": trip.transfer_tank_id,
+            "fuel_transfer_id": transfer.id if transfer else None,
+        },
     )
     db.commit()
     return _load_trip(db, trip.id)

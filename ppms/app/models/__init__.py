@@ -31,7 +31,9 @@ from app.models.supplier import Supplier
 from app.models.internal_fuel_usage import InternalFuelUsage
 from app.models.purchase import Purchase
 from app.models.tanker import Tanker
+from app.models.tanker_compartment import TankerCompartment
 from app.models.expense import Expense
+from app.models.fuel_transfer import FuelTransfer
 from app.models.customer_payment import CustomerPayment
 from app.models.supplier_payment import SupplierPayment
 from app.models.shift import Shift

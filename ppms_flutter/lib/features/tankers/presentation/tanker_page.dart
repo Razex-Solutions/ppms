@@ -20,11 +20,14 @@ class _TankerPageState extends State<TankerPage> {
   final _tankerRegistrationController = TextEditingController();
   final _tankerNameController = TextEditingController();
   final _tankerCapacityController = TextEditingController();
+  final _tankerCompartmentCountController = TextEditingController(text: '1');
   final _tankerOwnerNameController = TextEditingController();
   final _tankerDriverNameController = TextEditingController();
   final _tankerDriverPhoneController = TextEditingController();
   final _tripDestinationController = TextEditingController();
   final _tripNotesController = TextEditingController();
+  final _tripLoadedQuantityController = TextEditingController();
+  final _tripPurchaseRateController = TextEditingController();
   final _deliveryDestinationController = TextEditingController();
   final _deliveryQuantityController = TextEditingController();
   final _deliveryFuelRateController = TextEditingController();
@@ -55,6 +58,7 @@ class _TankerPageState extends State<TankerPage> {
   int? _selectedFuelTypeId;
   int? _selectedSupplierId;
   int? _selectedLinkedTankId;
+  int? _selectedTransferTankId;
   int? _selectedDeliveryCustomerId;
   String _tankerOwnershipType = 'owned';
   String _tripType = 'supplier_to_station';
@@ -75,11 +79,14 @@ class _TankerPageState extends State<TankerPage> {
     _tankerRegistrationController.dispose();
     _tankerNameController.dispose();
     _tankerCapacityController.dispose();
+    _tankerCompartmentCountController.dispose();
     _tankerOwnerNameController.dispose();
     _tankerDriverNameController.dispose();
     _tankerDriverPhoneController.dispose();
     _tripDestinationController.dispose();
     _tripNotesController.dispose();
+    _tripLoadedQuantityController.dispose();
+    _tripPurchaseRateController.dispose();
     _deliveryDestinationController.dispose();
     _deliveryQuantityController.dispose();
     _deliveryFuelRateController.dispose();
@@ -227,6 +234,7 @@ class _TankerPageState extends State<TankerPage> {
       _selectedSupplierId = null;
       _selectedDeliveryCustomerId = null;
       _selectedLinkedTankId = null;
+      _selectedTransferTankId = null;
       _selectedFuelTypeId = null;
     });
     await _loadWorkspace();
@@ -249,6 +257,9 @@ class _TankerPageState extends State<TankerPage> {
       return;
     }
 
+    final capacity = double.parse(_tankerCapacityController.text.trim());
+    final compartmentCount =
+        int.tryParse(_tankerCompartmentCountController.text.trim()) ?? 1;
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -259,18 +270,23 @@ class _TankerPageState extends State<TankerPage> {
       final tanker = await widget.sessionController.createTanker({
         'registration_no': _tankerRegistrationController.text.trim(),
         'name': _tankerNameController.text.trim(),
-        'capacity': double.parse(_tankerCapacityController.text.trim()),
+        'capacity': capacity,
         'ownership_type': _tankerOwnershipType,
         'owner_name': _emptyToNull(_tankerOwnerNameController.text),
         'driver_name': _emptyToNull(_tankerDriverNameController.text),
         'driver_phone': _emptyToNull(_tankerDriverPhoneController.text),
         'station_id': stationId,
         'fuel_type_id': fuelTypeId,
+        'compartments': _buildCompartmentPayload(
+          capacity: capacity,
+          count: compartmentCount,
+        ),
       });
       if (!mounted) return;
       _tankerRegistrationController.clear();
       _tankerNameController.clear();
       _tankerCapacityController.clear();
+      _tankerCompartmentCountController.text = '1';
       _tankerOwnerNameController.clear();
       _tankerDriverNameController.clear();
       _tankerDriverPhoneController.clear();
@@ -312,6 +328,8 @@ class _TankerPageState extends State<TankerPage> {
       });
       return;
     }
+    final loadedQuantity = _parseDouble(_tripLoadedQuantityController.text);
+    final purchaseRate = _parseDouble(_tripPurchaseRateController.text);
 
     setState(() {
       _isSubmitting = true;
@@ -332,10 +350,14 @@ class _TankerPageState extends State<TankerPage> {
             ? _tripDestinationController.text.trim()
             : null,
         'notes': _emptyToNull(_tripNotesController.text),
+        'loaded_quantity': loadedQuantity,
+        'purchase_rate': purchaseRate,
       });
       if (!mounted) return;
       _tripDestinationController.clear();
       _tripNotesController.clear();
+      _tripLoadedQuantityController.clear();
+      _tripPurchaseRateController.clear();
       await _loadWorkspace();
       if (!mounted) return;
       setState(() {
@@ -481,7 +503,10 @@ class _TankerPageState extends State<TankerPage> {
     try {
       final trip = await widget.sessionController.completeTankerTrip(
         tripId: tripId,
-        payload: {'reason': _emptyToNull(_completeReasonController.text)},
+        payload: {
+          'reason': _emptyToNull(_completeReasonController.text),
+          'transfer_to_tank_id': _selectedTransferTankId,
+        },
       );
       if (!mounted) return;
       _completeReasonController.clear();
@@ -504,6 +529,43 @@ class _TankerPageState extends State<TankerPage> {
   String? _emptyToNull(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  double? _parseDouble(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    return double.tryParse(trimmed);
+  }
+
+  List<Map<String, dynamic>> _buildCompartmentPayload({
+    required double capacity,
+    required int count,
+  }) {
+    if (count <= 1) {
+      return [
+        {
+          'code': 'C1',
+          'name': 'Main Compartment',
+          'capacity': capacity,
+          'position': 1,
+        },
+      ];
+    }
+    final compartments = <Map<String, dynamic>>[];
+    final baseCapacity = capacity / count;
+    double allocated = 0;
+    for (var index = 1; index <= count; index++) {
+      final remaining = capacity - allocated;
+      final compartmentCapacity = index == count ? remaining : baseCapacity;
+      allocated += compartmentCapacity;
+      compartments.add({
+        'code': 'C$index',
+        'name': 'Compartment $index',
+        'capacity': double.parse(compartmentCapacity.toStringAsFixed(2)),
+        'position': index,
+      });
+    }
+    return compartments;
   }
 
   bool _hasAction(String module, String action) {
@@ -856,6 +918,16 @@ class _TankerPageState extends State<TankerPage> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
+          TextFormField(
+            controller: _tankerCompartmentCountController,
+            enabled: canManageTankers,
+            decoration: const InputDecoration(
+              labelText: 'Compartment Count',
+              helperText: 'Auto-generates equal compartments during setup.',
+            ),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             key: ValueKey<String>('tanker-ownership-$_tankerOwnershipType'),
             initialValue: _tankerOwnershipType,
@@ -956,7 +1028,7 @@ class _TankerPageState extends State<TankerPage> {
                       '${tanker['registration_no']} - ${tanker['name']}',
                     ),
                     subtitle: Text(
-                      '${tanker['ownership_type']} - capacity ${_formatNumber(tanker['capacity'])} - ${tanker['status']}',
+                      '${tanker['ownership_type']} - capacity ${_formatNumber(tanker['capacity'])} - ${((tanker['compartments'] as List<dynamic>?) ?? const []).length} compartments - ${tanker['status']}',
                     ),
                     onTap: () {
                       setState(() {
@@ -1080,6 +1152,28 @@ class _TankerPageState extends State<TankerPage> {
                     });
                   }
                 : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tripLoadedQuantityController,
+            enabled: canCreateTrips,
+            decoration: const InputDecoration(
+              labelText: 'Loaded Quantity (optional)',
+              helperText:
+                  'Used for compartment planning and leftover tracking.',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _tripPurchaseRateController,
+            enabled: canCreateTrips,
+            decoration: const InputDecoration(
+              labelText: 'Purchase Rate (optional)',
+              helperText:
+                  'Lets the trip summary show fuel cost and cleaner profit.',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 12),
           if (_tripType == 'supplier_to_station')
@@ -1360,6 +1454,34 @@ class _TankerPageState extends State<TankerPage> {
           const SizedBox(height: 24),
           Text('Complete Trip', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
+          DropdownButtonFormField<int?>(
+            key: ValueKey<String>(
+              'trip-transfer-tank-${_selectedTransferTankId ?? 'none'}',
+            ),
+            initialValue: _selectedTransferTankId,
+            decoration: const InputDecoration(
+              labelText: 'Transfer Leftover To Tank (optional)',
+            ),
+            items: [
+              const DropdownMenuItem<int?>(
+                value: null,
+                child: Text('Keep no transfer'),
+              ),
+              for (final tank in _tanks)
+                DropdownMenuItem<int?>(
+                  value: tank['id'] as int,
+                  child: Text('${tank['code']} - ${tank['name']}'),
+                ),
+            ],
+            onChanged: canCompleteTrips
+                ? (value) {
+                    setState(() {
+                      _selectedTransferTankId = value;
+                    });
+                  }
+                : null,
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _completeReasonController,
             enabled: canCompleteTrips,
@@ -1401,9 +1523,29 @@ class _TankerPageState extends State<TankerPage> {
               else ...[
                 Text('Type: ${selectedTrip['trip_type']}'),
                 Text('Status: ${selectedTrip['status']}'),
+                if (selectedTrip['loaded_quantity'] != null)
+                  Text(
+                    'Loaded Quantity: ${_formatNumber(selectedTrip['loaded_quantity'])}',
+                  ),
+                if (selectedTrip['purchase_rate'] != null)
+                  Text(
+                    'Purchase Rate: ${_formatNumber(selectedTrip['purchase_rate'])}',
+                  ),
+                if (selectedTrip['purchase_total'] != null)
+                  Text(
+                    'Purchase Total: ${_formatNumber(selectedTrip['purchase_total'])}',
+                  ),
                 Text(
                   'Quantity: ${_formatNumber(selectedTrip['total_quantity'])}',
                 ),
+                if ((selectedTrip['leftover_quantity'] as num? ?? 0) > 0)
+                  Text(
+                    'Leftover Quantity: ${_formatNumber(selectedTrip['leftover_quantity'])}',
+                  ),
+                if ((selectedTrip['transferred_quantity'] as num? ?? 0) > 0)
+                  Text(
+                    'Transferred To Tank: ${_formatNumber(selectedTrip['transferred_quantity'])}',
+                  ),
                 Text(
                   'Fuel Revenue: ${_formatNumber(selectedTrip['fuel_revenue'])}',
                 ),
@@ -1416,6 +1558,31 @@ class _TankerPageState extends State<TankerPage> {
                 Text(
                   'Net Profit: ${_formatNumber(selectedTrip['net_profit'])}',
                 ),
+                const Divider(height: 24),
+                Text(
+                  'Compartment Plan',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if ((selectedTrip['compartment_plan'] as List<dynamic>? ??
+                        const [])
+                    .isEmpty)
+                  const Text('No compartment plan was generated for this trip.')
+                else
+                  for (final rawPlan
+                      in selectedTrip['compartment_plan'] as List<dynamic>)
+                    Builder(
+                      builder: (context) {
+                        final plan = Map<String, dynamic>.from(rawPlan as Map);
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('${plan['code']} - ${plan['name']}'),
+                          subtitle: Text(
+                            'Assigned ${_formatNumber(plan['quantity'])}',
+                          ),
+                        );
+                      },
+                    ),
                 const Divider(height: 24),
                 Text(
                   'Deliveries',

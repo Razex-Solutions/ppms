@@ -10,6 +10,9 @@ from app.models.tanker_trip import TankerTrip
 from app.models.user import User
 from app.schemas.tanker import (
     TankerCreate,
+    TankerCompartmentCreate,
+    TankerCompartmentResponse,
+    TankerCompartmentUpdate,
     TankerDeliveryCreate,
     TankerResponse,
     TankerTripComplete,
@@ -24,8 +27,10 @@ from app.services.tanker_ops import (
     add_trip_delivery,
     add_trip_expense,
     complete_trip,
+    create_compartment,
     create_tanker,
     create_trip,
+    update_compartment,
     update_tanker,
 )
 
@@ -148,7 +153,7 @@ def complete_trip_route(
     trip = db.query(TankerTrip).filter(TankerTrip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Tanker trip not found")
-    return complete_trip(db, trip, current_user)
+    return complete_trip(db, trip, current_user, transfer_to_tank_id=data.transfer_to_tank_id)
 
 
 @router.post("/", response_model=TankerResponse)
@@ -234,3 +239,75 @@ def delete_tanker(
     db.delete(tanker)
     db.commit()
     return {"message": "Tanker deleted"}
+
+
+@router.get("/{tanker_id}/compartments", response_model=list[TankerCompartmentResponse])
+def list_compartments(
+    tanker_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "tankers", "read", detail="You do not have permission to view tanker compartments")
+    tanker = db.query(Tanker).filter(Tanker.id == tanker_id).first()
+    if not tanker:
+        raise HTTPException(status_code=404, detail="Tanker not found")
+    _ensure_tanker_access(tanker, current_user)
+    require_station_module_enabled(db, tanker.station_id, MODULE_NAME)
+    return tanker.compartments
+
+
+@router.post("/{tanker_id}/compartments", response_model=TankerCompartmentResponse)
+def create_compartment_route(
+    tanker_id: int,
+    data: TankerCompartmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "tankers", "update", detail="You do not have permission to manage tanker compartments")
+    tanker = db.query(Tanker).filter(Tanker.id == tanker_id).first()
+    if not tanker:
+        raise HTTPException(status_code=404, detail="Tanker not found")
+    _ensure_tanker_access(tanker, current_user)
+    require_station_module_enabled(db, tanker.station_id, MODULE_NAME)
+    return create_compartment(db, tanker, data)
+
+
+@router.put("/{tanker_id}/compartments/{compartment_id}", response_model=TankerCompartmentResponse)
+def update_compartment_route(
+    tanker_id: int,
+    compartment_id: int,
+    data: TankerCompartmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "tankers", "update", detail="You do not have permission to manage tanker compartments")
+    tanker = db.query(Tanker).filter(Tanker.id == tanker_id).first()
+    if not tanker:
+        raise HTTPException(status_code=404, detail="Tanker not found")
+    _ensure_tanker_access(tanker, current_user)
+    require_station_module_enabled(db, tanker.station_id, MODULE_NAME)
+    compartment = next((item for item in tanker.compartments if item.id == compartment_id), None)
+    if compartment is None:
+        raise HTTPException(status_code=404, detail="Tanker compartment not found")
+    return update_compartment(db, tanker, compartment, data)
+
+
+@router.delete("/{tanker_id}/compartments/{compartment_id}")
+def delete_compartment(
+    tanker_id: int,
+    compartment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "tankers", "update", detail="You do not have permission to manage tanker compartments")
+    tanker = db.query(Tanker).filter(Tanker.id == tanker_id).first()
+    if not tanker:
+        raise HTTPException(status_code=404, detail="Tanker not found")
+    _ensure_tanker_access(tanker, current_user)
+    require_station_module_enabled(db, tanker.station_id, MODULE_NAME)
+    compartment = next((item for item in tanker.compartments if item.id == compartment_id), None)
+    if compartment is None:
+        raise HTTPException(status_code=404, detail="Tanker compartment not found")
+    db.delete(compartment)
+    db.commit()
+    return {"message": "Tanker compartment deleted"}

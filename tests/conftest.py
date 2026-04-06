@@ -210,6 +210,19 @@ def seed_base_data(session_local):
         db.add(tank)
         db.flush()
 
+        foreign_tank = Tank(
+            name="Tank C",
+            code="TANK-C",
+            capacity=1200,
+            current_volume=100,
+            low_stock_threshold=40,
+            location="Rear",
+            station_id=station_c.id,
+            fuel_type_id=fuel_type.id,
+        )
+        db.add(foreign_tank)
+        db.flush()
+
         dispenser = Dispenser(
             name="Dispenser A",
             code="DISP-A",
@@ -262,6 +275,7 @@ def seed_base_data(session_local):
             "foreign_organization_id": foreign_organization.id,
             "fuel_type_id": fuel_type.id,
             "tank_id": tank.id,
+            "foreign_tank_id": foreign_tank.id,
             "nozzle_id": nozzle.id,
             "customer_id": customer.id,
             "foreign_shift_id": foreign_shift.id,

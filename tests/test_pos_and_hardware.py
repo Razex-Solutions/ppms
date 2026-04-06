@@ -332,10 +332,15 @@ def test_tanker_module_workflows_and_station_toggle(client):
             "ownership_type": "owned",
             "station_id": data["station_a_id"],
             "fuel_type_id": data["fuel_type_id"],
+            "compartments": [
+                {"code": "C1", "name": "Front", "capacity": 2500, "position": 1},
+                {"code": "C2", "name": "Rear", "capacity": 2500, "position": 2},
+            ],
         },
     )
     assert tanker_response.status_code == 200, tanker_response.text
     tanker_id = tanker_response.json()["id"]
+    assert len(tanker_response.json()["compartments"]) == 2
 
     supplier_station_trip = test_client.post(
         "/tankers/trips",
@@ -347,6 +352,8 @@ def test_tanker_module_workflows_and_station_toggle(client):
             "trip_type": "supplier_to_station",
             "linked_tank_id": data["tank_id"],
             "destination_name": "Station Storage",
+            "loaded_quantity": 20,
+            "purchase_rate": 5,
         },
     )
     assert supplier_station_trip.status_code == 200, supplier_station_trip.text
@@ -383,6 +390,7 @@ def test_tanker_module_workflows_and_station_toggle(client):
     assert completed_trip["status"] == "completed"
     assert completed_trip["linked_purchase_id"] is not None
     assert completed_trip["net_profit"] == -10
+    assert completed_trip["compartment_plan"][0]["quantity"] == 20
 
     db = session_local()
     try:
@@ -435,6 +443,8 @@ def test_tanker_module_workflows_and_station_toggle(client):
             "fuel_type_id": data["fuel_type_id"],
             "trip_type": "supplier_to_customer",
             "destination_name": "Other Pump",
+            "loaded_quantity": 20,
+            "purchase_rate": 6,
         },
     )
     assert direct_sale_trip.status_code == 200, direct_sale_trip.text
@@ -465,18 +475,28 @@ def test_tanker_module_workflows_and_station_toggle(client):
     complete_direct_trip = test_client.post(
         f"/tankers/trips/{direct_trip_id}/complete",
         headers=foreign_manager_headers,
-        json={"reason": "Customer delivery completed"},
+        json={
+            "reason": "Customer delivery completed",
+            "transfer_to_tank_id": data["foreign_tank_id"],
+        },
     )
     assert complete_direct_trip.status_code == 200, complete_direct_trip.text
     assert complete_direct_trip.json()["status"] == "completed"
-    assert complete_direct_trip.json()["net_profit"] == 128
+    assert complete_direct_trip.json()["net_profit"] == 38
+    assert complete_direct_trip.json()["leftover_quantity"] == 5
+    assert complete_direct_trip.json()["transferred_quantity"] == 5
+    assert complete_direct_trip.json()["fuel_transfers"][0]["tank_id"] == data["foreign_tank_id"]
 
     db = session_local()
     try:
         from app.models.customer import Customer
 
+        from app.models.tank import Tank
+
         foreign_customer = db.query(Customer).filter(Customer.id == foreign_customer_id).first()
+        foreign_tank = db.query(Tank).filter(Tank.id == data["foreign_tank_id"]).first()
         assert foreign_customer.outstanding_balance == 140
+        assert foreign_tank.current_volume == 105
     finally:
         db.close()
 

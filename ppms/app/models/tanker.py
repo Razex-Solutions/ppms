@@ -23,3 +23,9 @@ class Tanker(Base):
 
     station = relationship("Station")
     fuel_type = relationship("FuelType")
+    compartments = relationship(
+        "TankerCompartment",
+        back_populates="tanker",
+        cascade="all, delete-orphan",
+        order_by="TankerCompartment.position",
+    )
