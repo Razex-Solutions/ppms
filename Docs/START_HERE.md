@@ -18,7 +18,7 @@ When returning to this project, use these files in this order:
 
 Start with:
 
-- `Phase 2 - Operations Core`
+- `Phase 3 - Finance, Ledgers, Payroll, Pricing`
 
 from:
 
@@ -27,7 +27,8 @@ from:
 ## Phase Status
 
 - `Phase 1 - Setup Hierarchy Foundation`: complete locally
-- next sequence: continue into `Phase 2 - Operations Core`
+- `Phase 2 - Operations Core`: complete locally
+- next sequence: continue into `Phase 3 - Finance, Ledgers, Payroll, Pricing`
 
 ## Important Decision Already Made
 

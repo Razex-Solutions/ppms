@@ -68,7 +68,8 @@ The Flutter app is now beyond simple placeholders. It includes real workspaces f
 
 Current phased execution status:
 - `Phase 1 - Setup Hierarchy Foundation`: complete locally
-- `Phase 2 - Operations Core`: next in sequence
+- `Phase 2 - Operations Core`: complete locally
+- `Phase 3 - Finance, Ledgers, Payroll, Pricing`: next in sequence
 
 Phase 1 completion now includes:
 - setup-foundation backend summary endpoints for organizations and stations
@@ -79,6 +80,17 @@ Phase 1 completion now includes:
 - station setup checklist/progress guidance
 - invoice default-following UX and override path
 - targeted backend setup tests plus clean Flutter analyze/test validation
+
+Phase 2 completion now includes:
+- station shift templates for daily, hourly, custom, and 24-hour shift setup
+- shift openings linked to templates plus shift-cash records created at open
+- multiple cash submissions per shift with reconciliation at closeout
+- explicit meter segment history built from sales and adjustment boundaries
+- hardware workspace visibility for meter adjustments and meter segments
+- meter-led fuel sales continuing to drive quantity derivation and stock deduction
+- explicit internal fuel usage records with automatic tank-volume reduction
+- station expenses aligned to direct operational recording by default
+- targeted backend transaction/access/reporting coverage plus clean Flutter analyze/test validation
 
 ### Architecture Direction
 Current direction is:
