@@ -64,6 +64,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
 
   Map<String, dynamic>? _selectedStation;
   Map<String, dynamic>? _invoiceProfile;
+  Map<String, dynamic>? _stationSetupFoundation;
 
   int? _selectedOrganizationId;
   int? _selectedStationId;
@@ -134,6 +135,14 @@ class _StationSetupPageState extends State<StationSetupPage> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  List<Map<String, dynamic>> _mapList(dynamic value) {
+    return List<Map<String, dynamic>>.from(
+      (value as List? ?? const []).map(
+        (item) => Map<String, dynamic>.from(item as Map),
+      ),
+    );
+  }
+
   Future<void> _loadWorkspace() async {
     setState(() {
       _isLoading = true;
@@ -154,14 +163,6 @@ class _StationSetupPageState extends State<StationSetupPage> {
           ),
         ),
       );
-      final fuelTypes = _dedupeById(
-        List<Map<String, dynamic>>.from(
-          (await widget.sessionController.fetchFuelTypes()).map(
-            (item) => Map<String, dynamic>.from(item as Map),
-          ),
-        ),
-      );
-
       final organizationId =
           _validSelection(_selectedOrganizationId, organizations) ??
           (organizations.isNotEmpty ? organizations.first['id'] as int : null);
@@ -178,37 +179,37 @@ class _StationSetupPageState extends State<StationSetupPage> {
           _validSelection(_selectedStationId, stations) ??
           (stations.isNotEmpty ? stations.first['id'] as int : null);
 
-      final tanks = stationId == null
-          ? const <Map<String, dynamic>>[]
-          : _dedupeById(
-              List<Map<String, dynamic>>.from(
-                (await widget.sessionController.fetchTanks(
-                  stationId: stationId,
-                )).map((item) => Map<String, dynamic>.from(item as Map)),
-              ),
-            );
-      final dispensers = stationId == null
-          ? const <Map<String, dynamic>>[]
-          : _dedupeById(
-              List<Map<String, dynamic>>.from(
-                (await widget.sessionController.fetchDispensers(
-                  stationId: stationId,
-                )).map((item) => Map<String, dynamic>.from(item as Map)),
-              ),
-            );
-      final nozzles = stationId == null
-          ? const <Map<String, dynamic>>[]
-          : _dedupeById(
-              List<Map<String, dynamic>>.from(
-                (await widget.sessionController.fetchNozzles(
-                  stationId: stationId,
-                )).map((item) => Map<String, dynamic>.from(item as Map)),
-              ),
-            );
       final selectedStation = stations.cast<Map<String, dynamic>?>().firstWhere(
         (station) => station?['id'] == stationId,
         orElse: () => null,
       );
+      final stationSetupFoundation = stationId == null
+          ? null
+          : await widget.sessionController.fetchStationSetupFoundation(
+              stationId: stationId,
+            );
+      final fuelTypes = stationSetupFoundation == null
+          ? const <Map<String, dynamic>>[]
+          : _dedupeById(_mapList(stationSetupFoundation['fuel_types']));
+      final tanks = stationSetupFoundation == null
+          ? const <Map<String, dynamic>>[]
+          : _dedupeById(_mapList(stationSetupFoundation['tanks']));
+      final dispensers = stationSetupFoundation == null
+          ? const <Map<String, dynamic>>[]
+          : _dedupeById(
+              _mapList(stationSetupFoundation['dispensers']).map((item) {
+                final copy = Map<String, dynamic>.from(item);
+                copy.remove('nozzles');
+                return copy;
+              }).toList(),
+            );
+      final nozzles = stationSetupFoundation == null
+          ? const <Map<String, dynamic>>[]
+          : _dedupeById(
+              _mapList(stationSetupFoundation['dispensers']).expand((item) {
+                return _mapList(item['nozzles']);
+              }).toList(),
+            );
       final invoiceProfile = stationId == null
           ? null
           : await widget.sessionController.fetchInvoiceProfile(
@@ -243,6 +244,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
         _selectedStationId = stationId;
         _selectedStation = selectedStation;
         _invoiceProfile = invoiceProfile;
+        _stationSetupFoundation = stationSetupFoundation;
         _selectedTankFuelTypeId = selectedTankFuelTypeId;
         _selectedNozzleFuelTypeId = selectedNozzleFuelTypeId;
         _selectedNozzleTankId = selectedNozzleTankId;
@@ -283,6 +285,12 @@ class _StationSetupPageState extends State<StationSetupPage> {
         (organization) => organization?['id'] == _selectedOrganizationId,
         orElse: () => null,
       );
+
+  Map<String, dynamic>? get _resolvedBranding =>
+      _stationSetupFoundation?['resolved_branding'] as Map<String, dynamic>?;
+
+  Map<String, dynamic>? get _invoiceIdentity =>
+      _stationSetupFoundation?['invoice_identity'] as Map<String, dynamic>?;
 
   Future<void> _changeOrganization(int? organizationId) async {
     if (organizationId == null) return;
@@ -396,8 +404,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
 
     try {
       final tank = await widget.sessionController.createTank({
-        'name': _tankNameController.text.trim(),
-        'code': _tankCodeController.text.trim(),
+        'name': _emptyToNull(_tankNameController.text),
+        'code': _emptyToNull(_tankCodeController.text),
         'capacity': double.parse(_tankCapacityController.text.trim()),
         'current_volume': double.parse(
           _tankCurrentVolumeController.text.trim(),
@@ -443,8 +451,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
 
     try {
       final dispenser = await widget.sessionController.createDispenser({
-        'name': _dispenserNameController.text.trim(),
-        'code': _dispenserCodeController.text.trim(),
+        'name': _emptyToNull(_dispenserNameController.text),
+        'code': _emptyToNull(_dispenserCodeController.text),
         'location': _emptyToNull(_dispenserLocationController.text),
         'station_id': stationId,
       });
@@ -489,8 +497,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
 
     try {
       final nozzle = await widget.sessionController.createNozzle({
-        'name': _nozzleNameController.text.trim(),
-        'code': _nozzleCodeController.text.trim(),
+        'name': _emptyToNull(_nozzleNameController.text),
+        'code': _emptyToNull(_nozzleCodeController.text),
         'station_id': stationId,
         'fuel_type_id': fuelTypeId,
         'tank_id': tankId,
@@ -865,14 +873,17 @@ class _StationSetupPageState extends State<StationSetupPage> {
           const SizedBox(height: 12),
           _SetupBrandPreviewCard(
             brandName: _useOrganizationBranding
-                ? (_selectedOrganization?['brand_name'] as String? ??
+                ? (_resolvedBranding?['brand_name'] as String? ??
+                      _selectedOrganization?['brand_name'] as String? ??
                       _selectedOrganization?['name'] as String? ??
                       'Organization Brand')
-                : (_selectedStation?['brand_name'] as String? ??
+                : (_resolvedBranding?['brand_name'] as String? ??
+                      _selectedStation?['brand_name'] as String? ??
                       _selectedStation?['name'] as String? ??
                       'Station Brand'),
             logoUrl: _useOrganizationBranding
-                ? (_selectedOrganization?['logo_url'] as String?)
+                ? (_resolvedBranding?['logo_url'] as String? ??
+                      _selectedOrganization?['logo_url'] as String?)
                 : _logoUrlController.text.trim(),
             helperText: _useOrganizationBranding
                 ? 'This station is inheriting the organization brand automatically.'
@@ -960,16 +971,23 @@ class _StationSetupPageState extends State<StationSetupPage> {
               'Organization',
               '${organization?['name'] ?? '-'}',
             ),
-            _buildSummaryLine('Brand', '${organization?['brand_name'] ?? '-'}'),
+            _buildSummaryLine(
+              'Brand',
+              '${_resolvedBranding?['brand_name'] ?? organization?['brand_name'] ?? '-'}',
+            ),
             _buildSummaryLine('Station', '${_selectedStation?['name'] ?? '-'}'),
             _buildSummaryLine('Code', '${_selectedStation?['code'] ?? '-'}'),
             _buildSummaryLine(
               'Setup Status',
-              '${_selectedStation?['setup_status'] ?? '-'}',
+              '${_stationSetupFoundation?['setup_status'] ?? _selectedStation?['setup_status'] ?? '-'}',
             ),
             _buildSummaryLine(
               'Head Office',
               _selectedStation?['is_head_office'] == true ? 'yes' : 'no',
+            ),
+            _buildSummaryLine(
+              'Legal Name',
+              '${_stationSetupFoundation?['resolved_legal_name'] ?? '-'}',
             ),
             const SizedBox(height: 16),
             const Text(
@@ -1182,12 +1200,20 @@ class _StationSetupPageState extends State<StationSetupPage> {
                   children: [
                     TextFormField(
                       controller: _tankNameController,
-                      decoration: const InputDecoration(labelText: 'Tank Name'),
+                      decoration: const InputDecoration(
+                        labelText: 'Tank Name',
+                        helperText:
+                            'Leave blank to auto-generate the next tank name.',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankCodeController,
-                      decoration: const InputDecoration(labelText: 'Tank Code'),
+                      decoration: const InputDecoration(
+                        labelText: 'Tank Code',
+                        helperText:
+                            'Leave blank to auto-generate the next tank code.',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
@@ -1254,6 +1280,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       controller: _dispenserNameController,
                       decoration: const InputDecoration(
                         labelText: 'Dispenser Name',
+                        helperText:
+                            'Leave blank to auto-generate the next dispenser name.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1261,6 +1289,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       controller: _dispenserCodeController,
                       decoration: const InputDecoration(
                         labelText: 'Dispenser Code',
+                        helperText:
+                            'Leave blank to auto-generate the next dispenser code.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1288,6 +1318,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       controller: _nozzleNameController,
                       decoration: const InputDecoration(
                         labelText: 'Nozzle Name',
+                        helperText:
+                            'Leave blank to auto-generate the next nozzle name.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1295,6 +1327,8 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       controller: _nozzleCodeController,
                       decoration: const InputDecoration(
                         labelText: 'Nozzle Code',
+                        helperText:
+                            'Leave blank to auto-generate the next nozzle code.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1322,6 +1356,17 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       onChanged: (value) {
                         setState(() {
                           _selectedNozzleTankId = value;
+                          final selectedTank = _tanks
+                              .cast<Map<String, dynamic>?>()
+                              .firstWhere(
+                                (item) => item?['id'] == value,
+                                orElse: () => null,
+                              );
+                          final tankFuelTypeId =
+                              selectedTank?['fuel_type_id'] as int?;
+                          if (tankFuelTypeId != null) {
+                            _selectedNozzleFuelTypeId = tankFuelTypeId;
+                          }
                         });
                       },
                     ),
@@ -1468,7 +1513,13 @@ class _StationSetupPageState extends State<StationSetupPage> {
               const SizedBox(height: 12),
               _buildSummaryLine(
                 'Business Name',
-                _invoiceProfile?['business_name'] as String? ?? '-',
+                _invoiceIdentity?['business_name'] as String? ??
+                    _invoiceProfile?['business_name'] as String? ??
+                    '-',
+              ),
+              _buildSummaryLine(
+                'Legal Name',
+                _invoiceIdentity?['legal_name'] as String? ?? '-',
               ),
               _buildSummaryLine(
                 'Prefix',
@@ -1476,7 +1527,9 @@ class _StationSetupPageState extends State<StationSetupPage> {
               ),
               _buildSummaryLine(
                 'Footer',
-                _invoiceProfile?['footer_text'] as String? ?? '-',
+                _invoiceIdentity?['footer_text'] as String? ??
+                    _invoiceProfile?['footer_text'] as String? ??
+                    '-',
               ),
             ],
           ),

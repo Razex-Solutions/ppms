@@ -402,6 +402,17 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> getStationSetupFoundation(
+    String accessToken, {
+    required int stationId,
+  }) async {
+    return _send(
+      'GET',
+      '/stations/$stationId/setup-foundation',
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> deleteStation(
     String accessToken, {
     required int stationId,
@@ -426,6 +437,17 @@ class ApiClient {
       '/organizations/',
       accessToken: accessToken,
       body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> getOrganizationSetupFoundation(
+    String accessToken, {
+    required int organizationId,
+  }) async {
+    return _send(
+      'GET',
+      '/organizations/$organizationId/setup-foundation',
+      accessToken: accessToken,
     );
   }
 

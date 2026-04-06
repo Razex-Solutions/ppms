@@ -40,6 +40,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   int _stationCount = 1;
   List<Map<String, dynamic>> _organizations = const [];
   List<Map<String, dynamic>> _roles = const [];
+  Map<String, dynamic>? _latestSetupFoundation;
   late List<_StationDraft> _stationDrafts;
 
   @override
@@ -245,12 +246,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
       if (!mounted) {
         return;
       }
+      final setupFoundation = await widget.sessionController
+          .fetchOrganizationSetupFoundation(organizationId: organizationId);
+      if (!mounted) {
+        return;
+      }
       _resetForm();
       await _loadWorkspace();
       if (!mounted) {
         return;
       }
       setState(() {
+        _latestSetupFoundation = setupFoundation;
         _feedbackMessage =
             'Organization ${organization['name']} created with $_stationCount station(s)'
             '${_createHeadOfficeAccount ? ' and initial head office login' : ''}.';
@@ -289,6 +296,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             as int?;
     _inheritBranding = true;
     _createHeadOfficeAccount = true;
+    _latestSetupFoundation = null;
     _syncStationDraftCount(1);
     for (final draft in _stationDrafts) {
       draft.reset();
@@ -578,6 +586,24 @@ class _OnboardingPageState extends State<OnboardingPage> {
             const Text('1. Organization identity and branding'),
             const Text('2. Initial station list and setup flags'),
             const Text('3. First HeadOffice login for the tenant'),
+            if (_latestSetupFoundation != null) ...[
+              const Divider(height: 28),
+              Text(
+                'Latest Setup Foundation',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _latestSetupFoundation?['organization_name'] as String? ??
+                    'Organization',
+              ),
+              Text(
+                'Stations: ${(_latestSetupFoundation?['stations'] as List?)?.length ?? 0}',
+              ),
+              Text(
+                'Brand: ${(_latestSetupFoundation?['resolved_branding'] as Map?)?['brand_name'] ?? 'Custom'}',
+              ),
+            ],
             const SizedBox(height: 20),
             Text(
               'Current platform user',

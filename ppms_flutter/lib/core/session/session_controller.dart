@@ -343,6 +343,15 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> fetchStationSetupFoundation({
+    required int stationId,
+  }) async {
+    return _apiClient.getStationSetupFoundation(
+      await _validAccessToken(),
+      stationId: stationId,
+    );
+  }
+
   Future<Map<String, dynamic>> deleteStation({required int stationId}) async {
     return _apiClient.deleteStation(
       await _validAccessToken(),
@@ -364,6 +373,15 @@ class SessionController extends ChangeNotifier {
     return _apiClient.createOrganization(
       await _validAccessToken(),
       payload: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchOrganizationSetupFoundation({
+    required int organizationId,
+  }) async {
+    return _apiClient.getOrganizationSetupFoundation(
+      await _validAccessToken(),
+      organizationId: organizationId,
     );
   }
 
