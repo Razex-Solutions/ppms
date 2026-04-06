@@ -95,6 +95,8 @@ export default function SupportConsolePage() {
   const [recentNotifications, setRecentNotifications] = useState<ApiRecord[]>(
     [],
   );
+  const [recentNotificationDeliveries, setRecentNotificationDeliveries] =
+    useState<ApiRecord[]>([]);
   const [recentDispatches, setRecentDispatches] = useState<ApiRecord[]>([]);
   const [plans, setPlans] = useState<ApiRecord[]>([]);
   const [subscription, setSubscription] = useState<ApiRecord | null>(null);
@@ -194,6 +196,7 @@ export default function SupportConsolePage() {
         notificationDiagnosticsResponse,
         documentDiagnosticsResponse,
         notificationResponse,
+        notificationDeliveryResponse,
         dispatchResponse,
       ] =
         await Promise.all([
@@ -219,6 +222,10 @@ export default function SupportConsolePage() {
             headers,
             cache: "no-store",
           }),
+          fetch("/api/ppms/notifications/deliveries?limit=8", {
+            headers,
+            cache: "no-store",
+          }),
           fetch("/api/ppms/financial-documents/dispatches?limit=8", {
             headers,
             cache: "no-store",
@@ -232,6 +239,7 @@ export default function SupportConsolePage() {
         notificationDiagnosticsJson,
         documentDiagnosticsJson,
         notificationJson,
+        notificationDeliveryJson,
         dispatchJson,
       ] = await Promise.all([
         readJson(meResponse),
@@ -241,6 +249,7 @@ export default function SupportConsolePage() {
         readJson(notificationDiagnosticsResponse),
         readJson(documentDiagnosticsResponse),
         readJson(notificationResponse),
+        readJson(notificationDeliveryResponse),
         readJson(dispatchResponse),
       ]);
       if (!meResponse.ok) throw new Error(textValue(me.detail, "Session failed"));
@@ -269,6 +278,11 @@ export default function SupportConsolePage() {
       if (!notificationResponse.ok) {
         throw new Error(textValue(notificationJson.detail, "Notification list failed"));
       }
+      if (!notificationDeliveryResponse.ok) {
+        throw new Error(
+          textValue(notificationDeliveryJson.detail, "Notification delivery list failed"),
+        );
+      }
       if (!dispatchResponse.ok) {
         throw new Error(textValue(dispatchJson.detail, "Dispatch list failed"));
       }
@@ -292,6 +306,9 @@ export default function SupportConsolePage() {
       setNotificationDiagnostics(notificationDiagnosticsJson);
       setDocumentDiagnostics(documentDiagnosticsJson);
       setRecentNotifications(Array.isArray(notificationJson) ? notificationJson : []);
+      setRecentNotificationDeliveries(
+        Array.isArray(notificationDeliveryJson) ? notificationDeliveryJson : [],
+      );
       setRecentDispatches(Array.isArray(dispatchJson) ? dispatchJson : []);
       setSelectedOrganizationId(nextOrganizationId || null);
 
@@ -473,6 +490,112 @@ export default function SupportConsolePage() {
     }
   }
 
+  async function reloadCommunicationHealth() {
+    const [
+      notificationSummaryJson,
+      notificationDiagnosticsJson,
+      documentDiagnosticsJson,
+      notificationJson,
+      notificationDeliveryJson,
+      dispatchJson,
+    ] = await Promise.all([
+      apiFetch("/notifications/summary"),
+      apiFetch("/notifications/deliveries/diagnostics"),
+      apiFetch("/financial-documents/dispatches/diagnostics"),
+      apiFetch("/notifications?limit=8"),
+      apiFetch("/notifications/deliveries?limit=8"),
+      apiFetch("/financial-documents/dispatches?limit=8"),
+    ]);
+    setNotificationSummary(notificationSummaryJson as ApiRecord);
+    setNotificationDiagnostics(notificationDiagnosticsJson as ApiRecord);
+    setDocumentDiagnostics(documentDiagnosticsJson as ApiRecord);
+    setRecentNotifications(
+      Array.isArray(notificationJson) ? notificationJson : [],
+    );
+    setRecentNotificationDeliveries(
+      Array.isArray(notificationDeliveryJson) ? notificationDeliveryJson : [],
+    );
+    setRecentDispatches(Array.isArray(dispatchJson) ? dispatchJson : []);
+  }
+
+  async function processNotificationDeliveries() {
+    setIsBusy(true);
+    setStatus(null);
+    try {
+      await apiFetch("/notifications/deliveries/process-due?limit=100", {
+        method: "POST",
+      });
+      await reloadCommunicationHealth();
+      setStatus("Due notification deliveries processed.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Notification delivery processing failed",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function retryNotificationDelivery(deliveryId: number) {
+    setIsBusy(true);
+    setStatus(null);
+    try {
+      await apiFetch(`/notifications/deliveries/${deliveryId}/retry`, {
+        method: "POST",
+      });
+      await reloadCommunicationHealth();
+      setStatus(`Notification delivery #${deliveryId} retried.`);
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Notification delivery retry failed",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function processDocumentDispatches() {
+    setIsBusy(true);
+    setStatus(null);
+    try {
+      await apiFetch("/financial-documents/dispatches/process-due?limit=100", {
+        method: "POST",
+      });
+      await reloadCommunicationHealth();
+      setStatus("Due document dispatches processed.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Document dispatch processing failed",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function retryDocumentDispatch(dispatchId: number) {
+    setIsBusy(true);
+    setStatus(null);
+    try {
+      await apiFetch(`/financial-documents/dispatches/${dispatchId}/retry`, {
+        method: "POST",
+      });
+      await reloadCommunicationHealth();
+      setStatus(`Document dispatch #${dispatchId} retried.`);
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Document dispatch retry failed",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function submitOrganizationCorrection(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -611,6 +734,7 @@ export default function SupportConsolePage() {
     setNotificationDiagnostics(null);
     setDocumentDiagnostics(null);
     setRecentNotifications([]);
+    setRecentNotificationDeliveries([]);
     setRecentDispatches([]);
     setPlans([]);
     setSubscription(null);
@@ -1321,9 +1445,25 @@ export default function SupportConsolePage() {
             <h2>Notifications and document dispatch</h2>
             <p>
               Review delivery pressure before support starts changing tenant
-              settings. Retry and process-due controls can stay in a later
-              audited support slice.
+              settings. These actions use the same delivery job APIs as the
+              tenant app, but keep support triage in the web console.
             </p>
+            <div className="actions">
+              <button
+                disabled={isBusy}
+                onClick={() => void processNotificationDeliveries()}
+                type="button"
+              >
+                Process due notifications
+              </button>
+              <button
+                disabled={isBusy}
+                onClick={() => void processDocumentDispatches()}
+                type="button"
+              >
+                Process due documents
+              </button>
+            </div>
             <div className="metric-row">
               <div className="metric">
                 <span>Unread</span>
@@ -1347,7 +1487,7 @@ export default function SupportConsolePage() {
               </div>
             </div>
             <div className="grid nested-grid">
-              <div className="span-6">
+              <div className="span-4">
                 <h3>Recent notifications</h3>
                 <div className="list support-list">
                   {recentNotifications.length === 0 ? (
@@ -1368,28 +1508,75 @@ export default function SupportConsolePage() {
                   )}
                 </div>
               </div>
-              <div className="span-6">
+              <div className="span-4">
+                <h3>Notification deliveries</h3>
+                <div className="list support-list">
+                  {recentNotificationDeliveries.length === 0 ? (
+                    <p>No recent notification deliveries found.</p>
+                  ) : (
+                    recentNotificationDeliveries.map((delivery) => {
+                      const deliveryId = getId(delivery);
+                      const canRetry = textValue(delivery.status) === "failed";
+                      return (
+                        <div className="list-item" key={deliveryId}>
+                          <strong>
+                            Delivery #{deliveryId} - {textValue(delivery.channel)}
+                          </strong>
+                          <span className="muted">
+                            {textValue(delivery.status)} - attempts{" "}
+                            {textValue(delivery.attempts_count, "0")}
+                          </span>
+                          <span className="muted">
+                            {textValue(delivery.destination, "no destination")}
+                          </span>
+                          <button
+                            className="secondary"
+                            disabled={isBusy || !canRetry}
+                            onClick={() => void retryNotificationDelivery(deliveryId)}
+                            type="button"
+                          >
+                            Retry delivery
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+              <div className="span-4">
                 <h3>Recent document dispatches</h3>
                 <div className="list support-list">
                   {recentDispatches.length === 0 ? (
                     <p>No recent document dispatches found.</p>
                   ) : (
-                    recentDispatches.map((dispatch) => (
-                      <div className="list-item" key={getId(dispatch)}>
-                        <strong>
-                          {textValue(dispatch.document_type, "Document")} #{
-                            textValue(dispatch.id)
-                          }
-                        </strong>
-                        <span className="muted">
-                          {textValue(dispatch.channel)} -{" "}
-                          {textValue(dispatch.status)}
-                        </span>
-                        <span className="muted">
-                          {textValue(dispatch.recipient_contact, "no recipient")}
-                        </span>
-                      </div>
-                    ))
+                    recentDispatches.map((dispatch) => {
+                      const dispatchId = getId(dispatch);
+                      const canRetry = textValue(dispatch.status) === "failed";
+                      return (
+                        <div className="list-item" key={dispatchId}>
+                          <strong>
+                            {textValue(dispatch.document_type, "Document")} #{
+                              textValue(dispatch.id)
+                            }
+                          </strong>
+                          <span className="muted">
+                            {textValue(dispatch.channel)} -{" "}
+                            {textValue(dispatch.status)}
+                          </span>
+                          <span className="muted">
+                            {textValue(dispatch.recipient_contact, "no recipient")}
+                          </span>
+                          <button
+                            className="secondary"
+                            disabled={isBusy || !canRetry}
+                            onClick={() => void retryDocumentDispatch(dispatchId)}
+                            type="button"
+                          >
+                            Retry dispatch
+                          </button>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
