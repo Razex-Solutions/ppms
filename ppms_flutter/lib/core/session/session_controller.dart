@@ -1093,6 +1093,30 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> fetchShiftCash({required int shiftId}) async {
+    return _apiClient.getShiftCash(await _validAccessToken(), shiftId: shiftId);
+  }
+
+  Future<List<dynamic>> fetchShiftCashSubmissions({
+    required int shiftId,
+  }) async {
+    return _apiClient.getShiftCashSubmissions(
+      await _validAccessToken(),
+      shiftId: shiftId,
+    );
+  }
+
+  Future<Map<String, dynamic>> createShiftCashSubmission({
+    required int shiftId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.createShiftCashSubmission(
+      await _validAccessToken(),
+      shiftId: shiftId,
+      payload: payload,
+    );
+  }
+
   Future<List<dynamic>> fetchPosProducts({
     int? stationId,
     String? module,

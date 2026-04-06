@@ -229,8 +229,10 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "reject_reverse": {"Admin", "HeadOffice"},
     },
     "shifts": {
+        "read": {"Admin", "HeadOffice", "Manager", "Operator", "Accountant"},
         "open": {"Admin", "Manager", "Operator"},
         "close": {"Admin", "Manager", "Operator"},
+        "submit_cash": {"Admin", "Manager", "Operator"},
     },
     "attendance": {
         "check_in": {"Admin", "Manager", "Operator", "Accountant"},

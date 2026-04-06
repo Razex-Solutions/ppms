@@ -16,20 +16,26 @@ class ShiftPage extends StatefulWidget {
 class _ShiftPageState extends State<ShiftPage> {
   final _openFormKey = GlobalKey<FormState>();
   final _closeFormKey = GlobalKey<FormState>();
+  final _submissionFormKey = GlobalKey<FormState>();
   final _initialCashController = TextEditingController(text: '0');
   final _openNotesController = TextEditingController();
   final _actualCashController = TextEditingController();
   final _closeNotesController = TextEditingController();
+  final _submissionAmountController = TextEditingController();
+  final _submissionNotesController = TextEditingController();
 
   bool _isLoading = true;
   bool _isOpening = false;
   bool _isClosing = false;
+  bool _isSubmittingCash = false;
   String? _errorMessage;
   String? _feedbackMessage;
 
   List<Map<String, dynamic>> _stations = const [];
   List<Map<String, dynamic>> _shifts = const [];
   List<Map<String, dynamic>> _shiftTemplates = const [];
+  List<Map<String, dynamic>> _cashSubmissions = const [];
+  Map<String, dynamic>? _shiftCashSummary;
   int? _selectedStationId;
   int? _selectedShiftTemplateId;
   String _statusFilter = 'all';
@@ -50,6 +56,8 @@ class _ShiftPageState extends State<ShiftPage> {
     _openNotesController.dispose();
     _actualCashController.dispose();
     _closeNotesController.dispose();
+    _submissionAmountController.dispose();
+    _submissionNotesController.dispose();
     super.dispose();
   }
 
@@ -87,6 +95,21 @@ class _ShiftPageState extends State<ShiftPage> {
                 stationId: stationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             );
+      final selectedShiftId = _resolveSelectedShiftId(shifts);
+      final shiftCashSummary = selectedShiftId == null
+          ? null
+          : Map<String, dynamic>.from(
+              await widget.sessionController.fetchShiftCash(
+                shiftId: selectedShiftId,
+              ),
+            );
+      final cashSubmissions = selectedShiftId == null
+          ? const <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              (await widget.sessionController.fetchShiftCashSubmissions(
+                shiftId: selectedShiftId,
+              )).map((item) => Map<String, dynamic>.from(item as Map)),
+            );
 
       if (!mounted) {
         return;
@@ -97,10 +120,12 @@ class _ShiftPageState extends State<ShiftPage> {
         _selectedStationId = stationId;
         _shifts = shifts;
         _shiftTemplates = shiftTemplates;
+        _shiftCashSummary = shiftCashSummary;
+        _cashSubmissions = cashSubmissions;
         _selectedShiftTemplateId = _resolveSelectedShiftTemplateId(
           shiftTemplates,
         );
-        _selectedShiftId = _resolveSelectedShiftId(shifts);
+        _selectedShiftId = selectedShiftId;
         _isLoading = false;
       });
     } on ApiException catch (error) {
@@ -192,6 +217,13 @@ class _ShiftPageState extends State<ShiftPage> {
   Future<void> _changeStatusFilter(String? value) async {
     setState(() {
       _statusFilter = value ?? 'all';
+    });
+    await _loadShiftWorkspace();
+  }
+
+  Future<void> _selectShift(int? value) async {
+    setState(() {
+      _selectedShiftId = value;
     });
     await _loadShiftWorkspace();
   }
@@ -307,6 +339,60 @@ class _ShiftPageState extends State<ShiftPage> {
     }
   }
 
+  Future<void> _submitCash() async {
+    if (!_submissionFormKey.currentState!.validate()) {
+      return;
+    }
+    final shift = _selectedShift;
+    if (shift == null) {
+      setState(() {
+        _feedbackMessage = 'Select a shift before recording a cash submission.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmittingCash = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final submission = await widget.sessionController
+          .createShiftCashSubmission(
+            shiftId: shift['id'] as int,
+            payload: {
+              'amount': double.parse(_submissionAmountController.text.trim()),
+              'notes': _emptyToNull(_submissionNotesController.text),
+            },
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      _submissionAmountController.clear();
+      _submissionNotesController.clear();
+      await _loadShiftWorkspace();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _feedbackMessage =
+            'Cash submission #${submission['id']} recorded for ${_formatNumber(submission['amount'])}.';
+        _isSubmittingCash = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmittingCash = false;
+      });
+    }
+  }
+
   String? _emptyToNull(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
@@ -323,7 +409,9 @@ class _ShiftPageState extends State<ShiftPage> {
 
   bool get _canOpenShifts => _hasAction('shifts', 'open');
   bool get _canCloseShifts => _hasAction('shifts', 'close');
-  bool get _canReadShifts => _canOpenShifts || _canCloseShifts;
+  bool get _canReadShifts =>
+      _hasAction('shifts', 'read') || _canOpenShifts || _canCloseShifts;
+  bool get _canSubmitCash => _hasAction('shifts', 'submit_cash');
   bool get _showShiftWorkspace => _capabilities.featureVisible(
     platformFeature: false,
     modules: const ['shifts'],
@@ -389,7 +477,9 @@ class _ShiftPageState extends State<ShiftPage> {
     final canOpenShifts = _canOpenShifts;
     final canCloseShifts = _canCloseShifts;
     final canReadShifts = _canReadShifts;
+    final canSubmitCash = _canSubmitCash;
     final selectedTemplate = _selectedShiftTemplate;
+    final shiftCashSummary = _shiftCashSummary;
     final activeTemplateCount = _shiftTemplates
         .where((template) => template['is_active'] == true)
         .length;
@@ -695,6 +785,127 @@ class _ShiftPageState extends State<ShiftPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
+                                'Shift Cash',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 8),
+                              if (shiftCashSummary == null)
+                                _buildPermissionNotice(
+                                  context,
+                                  'Select a shift to review and record cash submissions.',
+                                )
+                              else ...[
+                                Text(
+                                  'Opening ${_formatNumber(shiftCashSummary['opening_cash'])} • '
+                                  'Submitted ${_formatNumber(shiftCashSummary['cash_submitted'])} • '
+                                  'Expected ${_formatNumber(shiftCashSummary['expected_cash'])}',
+                                ),
+                                const SizedBox(height: 12),
+                                Form(
+                                  key: _submissionFormKey,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (!canSubmitCash) ...[
+                                        _buildPermissionNotice(
+                                          context,
+                                          'Cash submission recording is disabled for this role.',
+                                        ),
+                                        const SizedBox(height: 12),
+                                      ],
+                                      TextFormField(
+                                        controller: _submissionAmountController,
+                                        enabled:
+                                            canSubmitCash &&
+                                            selectedShift != null &&
+                                            selectedShift['status'] == 'open',
+                                        decoration: const InputDecoration(
+                                          labelText: 'Cash Submission Amount',
+                                        ),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                        validator: (value) {
+                                          if (value == null ||
+                                              value.trim().isEmpty) {
+                                            return 'Enter the submitted amount';
+                                          }
+                                          if (double.tryParse(value.trim()) ==
+                                              null) {
+                                            return 'Enter a valid cash amount';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextFormField(
+                                        controller: _submissionNotesController,
+                                        enabled:
+                                            canSubmitCash &&
+                                            selectedShift != null &&
+                                            selectedShift['status'] == 'open',
+                                        decoration: const InputDecoration(
+                                          labelText:
+                                              'Submission Notes (optional)',
+                                        ),
+                                        maxLines: 2,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      FilledButton.tonalIcon(
+                                        onPressed:
+                                            _isSubmittingCash ||
+                                                !canSubmitCash ||
+                                                selectedShift == null ||
+                                                selectedShift['status'] !=
+                                                    'open'
+                                            ? null
+                                            : _submitCash,
+                                        icon: _isSubmittingCash
+                                            ? const SizedBox.square(
+                                                dimension: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Icon(
+                                                Icons.account_balance_wallet,
+                                              ),
+                                        label: const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                          child: Text('Record Cash Submission'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                if (_cashSubmissions.isEmpty)
+                                  const Text(
+                                    'No cash submissions recorded for this shift yet.',
+                                  )
+                                else
+                                  for (final submission in _cashSubmissions)
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Icons.payments_outlined,
+                                      ),
+                                      title: Text(
+                                        _formatNumber(submission['amount']),
+                                      ),
+                                      subtitle: Text(
+                                        submission['notes'] as String? ??
+                                            'Recorded during shift',
+                                      ),
+                                    ),
+                              ],
+                              const SizedBox(height: 24),
+                              Text(
                                 'Close Shift',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
@@ -721,13 +932,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                       child: Text(_formatShiftTitle(shift)),
                                     ),
                                 ],
-                                onChanged: canReadShifts
-                                    ? (value) {
-                                        setState(() {
-                                          _selectedShiftId = value;
-                                        });
-                                      }
-                                    : null,
+                                onChanged: canReadShifts ? _selectShift : null,
                               ),
                               if (selectedShift != null) ...[
                                 const SizedBox(height: 8),
@@ -883,11 +1088,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                       ),
                                     )
                                   : null,
-                              onTap: () {
-                                setState(() {
-                                  _selectedShiftId = shift['id'] as int;
-                                });
-                              },
+                              onTap: () => _selectShift(shift['id'] as int),
                             ),
                       ],
                     ),

@@ -1419,6 +1419,37 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> getShiftCash(
+    String accessToken, {
+    required int shiftId,
+  }) async {
+    return _send('GET', '/shifts/$shiftId/cash', accessToken: accessToken);
+  }
+
+  Future<List<dynamic>> getShiftCashSubmissions(
+    String accessToken, {
+    required int shiftId,
+  }) async {
+    return _sendList(
+      'GET',
+      '/shifts/$shiftId/cash-submissions',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> createShiftCashSubmission(
+    String accessToken, {
+    required int shiftId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'POST',
+      '/shifts/$shiftId/cash-submissions',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<List<dynamic>> getPosProducts(
     String accessToken, {
     int? stationId,

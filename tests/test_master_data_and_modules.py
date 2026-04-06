@@ -663,3 +663,83 @@ def test_phase2_runtime_shift_can_use_station_shift_template(client):
         },
     )
     assert wrong_station_template.status_code == 404
+
+
+def test_phase2_shift_cash_rolls_up_multiple_submissions(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    operator_headers = login(test_client, "operator", "operator123")
+
+    open_shift = test_client.post(
+        "/shifts/",
+        headers=operator_headers,
+        json={
+            "station_id": data["station_a_id"],
+            "initial_cash": 200,
+            "notes": "Cash control start",
+        },
+    )
+    assert open_shift.status_code == 200, open_shift.text
+    shift_id = open_shift.json()["id"]
+
+    initial_cash_summary = test_client.get(
+        f"/shifts/{shift_id}/cash",
+        headers=operator_headers,
+    )
+    assert initial_cash_summary.status_code == 200, initial_cash_summary.text
+    assert initial_cash_summary.json()["opening_cash"] == 200
+    assert initial_cash_summary.json()["cash_submitted"] == 0
+    assert initial_cash_summary.json()["submission_count"] == 0
+
+    first_submission = test_client.post(
+        f"/shifts/{shift_id}/cash-submissions",
+        headers=operator_headers,
+        json={"amount": 120, "notes": "First drop"},
+    )
+    assert first_submission.status_code == 200, first_submission.text
+
+    second_submission = test_client.post(
+        f"/shifts/{shift_id}/cash-submissions",
+        headers=operator_headers,
+        json={"amount": 80, "notes": "Second drop"},
+    )
+    assert second_submission.status_code == 200, second_submission.text
+
+    submissions = test_client.get(
+        f"/shifts/{shift_id}/cash-submissions",
+        headers=operator_headers,
+    )
+    assert submissions.status_code == 200, submissions.text
+    assert [item["amount"] for item in submissions.json()] == [120, 80]
+
+    updated_cash_summary = test_client.get(
+        f"/shifts/{shift_id}/cash",
+        headers=operator_headers,
+    )
+    assert updated_cash_summary.status_code == 200, updated_cash_summary.text
+    assert updated_cash_summary.json()["cash_submitted"] == 200
+    assert updated_cash_summary.json()["submission_count"] == 2
+
+    close_shift = test_client.post(
+        f"/shifts/{shift_id}/close",
+        headers=operator_headers,
+        json={"actual_cash_collected": 210, "notes": "Counted drawer"},
+    )
+    assert close_shift.status_code == 200, close_shift.text
+
+    final_cash_summary = test_client.get(
+        f"/shifts/{shift_id}/cash",
+        headers=operator_headers,
+    )
+    assert final_cash_summary.status_code == 200, final_cash_summary.text
+    assert final_cash_summary.json()["cash_submitted"] == 200
+    assert final_cash_summary.json()["closing_cash"] == 210
+    assert final_cash_summary.json()["difference"] == 10
+
+    blocked_submission = test_client.post(
+        f"/shifts/{shift_id}/cash-submissions",
+        headers=operator_headers,
+        json={"amount": 10},
+    )
+    assert blocked_submission.status_code == 400
+    assert blocked_submission.json()["detail"] == "Cannot record a cash submission for a closed shift"
