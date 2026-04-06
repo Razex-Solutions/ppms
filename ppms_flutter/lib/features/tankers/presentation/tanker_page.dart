@@ -640,6 +640,24 @@ class _TankerPageState extends State<TankerPage> {
     );
   }
 
+  Map<String, dynamic>? get _selectedTanker {
+    return _tankers.cast<Map<String, dynamic>?>().firstWhere(
+      (tanker) => tanker?['id'] == _selectedTankerId,
+      orElse: () => null,
+    );
+  }
+
+  String get _selectedStationLabel {
+    for (final station in _stations) {
+      if (station['id'] == _selectedStationId) {
+        final name = station['name'] as String? ?? 'Station';
+        final code = station['code'] as String? ?? '-';
+        return '$name ($code)';
+      }
+    }
+    return 'No station selected';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_showTankerWorkspace) {
@@ -926,6 +944,8 @@ class _TankerPageState extends State<TankerPage> {
                     },
                   ),
                   const SizedBox(height: 20),
+                  _buildWorkspaceReview(context),
+                  const SizedBox(height: 20),
                   if (availableSections.isEmpty)
                     const SizedBox.shrink()
                   else if (_section == _TankerSection.tankers)
@@ -1119,6 +1139,98 @@ class _TankerPageState extends State<TankerPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildWorkspaceReview(BuildContext context) {
+    final selectedTanker = _selectedTanker;
+    final selectedTrip = _selectedTrip;
+    final selectedTitle = switch (_section) {
+      _TankerSection.tankers =>
+        selectedTanker == null
+            ? 'No tanker selected yet'
+            : '${selectedTanker['registration_no']} - ${selectedTanker['name']} is selected',
+      _TankerSection.trips =>
+        selectedTrip == null
+            ? 'No trip selected yet'
+            : 'Trip #${selectedTrip['id']} is selected for planning review',
+      _TankerSection.tripOps =>
+        selectedTrip == null
+            ? 'No trip selected for operations yet'
+            : 'Trip #${selectedTrip['id']} is selected for operations',
+    };
+    final nextAction = switch (_section) {
+      _TankerSection.tankers =>
+        'Review fleet readiness, ownership, capacity, and compartments before registering another tanker.',
+      _TankerSection.trips =>
+        'Review selected tanker, supplier, fuel, loaded quantity, and linked tank before creating a trip.',
+      _TankerSection.tripOps =>
+        'Review delivered quantity, leftovers, expenses, and profit before posting delivery, expense, or completion updates.',
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Review First',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(selectedTitle, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context,
+                icon: Icons.store_outlined,
+                label: _selectedStationLabel,
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.local_shipping_outlined,
+                label: 'Tankers ${_tankers.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.route_outlined,
+                label: 'Trips ${_trips.length}',
+              ),
+              _buildInfoChip(
+                context,
+                icon: Icons.water_drop_outlined,
+                label:
+                    'Delivered ${_formatNumber(_summary?['total_delivered_quantity'])}',
+              ),
+              if (selectedTrip != null)
+                _buildInfoChip(
+                  context,
+                  icon: Icons.trending_up_outlined,
+                  label: 'Profit ${_formatNumber(selectedTrip['net_profit'])}',
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
