@@ -31,15 +31,27 @@ class SessionController extends ChangeNotifier {
   int? get organizationId => _currentUser?['organization_id'] as int?;
   Map<String, dynamic> get permissions =>
       _currentUser?['permissions'] as Map<String, dynamic>? ?? const {};
-  List<String> get enabledModules =>
-      List<String>.from(_rootInfo?['enabled_modules'] ?? const []);
+  Map<String, dynamic> get featureFlags =>
+      _currentUser?['feature_flags'] as Map<String, dynamic>? ?? const {};
+  List<String> get backendEnabledModules => List<String>.from(
+    _currentUser?['backend_enabled_modules'] ??
+        _rootInfo?['enabled_modules'] ??
+        const [],
+  );
+  List<String> get enabledModules => List<String>.from(
+    _currentUser?['effective_enabled_modules'] ??
+        _rootInfo?['enabled_modules'] ??
+        const [],
+  );
   List<String> get creatableRoles =>
       List<String>.from(_currentUser?['creatable_roles'] ?? const []);
   Map<String, dynamic> get roleScopeRule =>
       _currentUser?['role_scope_rule'] as Map<String, dynamic>? ?? const {};
 
   bool canAccessModule(String module) =>
-      enabledModules.contains(module) || permissions.containsKey(module);
+      enabledModules.contains(module) ||
+      featureFlags[module] == true ||
+      permissions.containsKey(module);
 
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();

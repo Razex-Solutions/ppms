@@ -26,9 +26,14 @@ def test_flutter_contract_for_auth_dashboard_and_reference_lists(client):
             "organization_id",
             "role_name",
             "permissions",
+            "backend_enabled_modules",
+            "effective_enabled_modules",
+            "feature_flags",
         },
         "auth me",
     )
+    assert "fuel_sales" in auth_me.json()["effective_enabled_modules"]
+    assert auth_me.json()["feature_flags"]["meter_adjustments"] is True
 
     dashboard = test_client.get(
         f"/dashboard/?station_id={data['station_a_id']}",

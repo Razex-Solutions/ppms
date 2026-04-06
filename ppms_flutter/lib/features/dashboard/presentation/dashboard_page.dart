@@ -96,12 +96,7 @@ class DashboardPage extends StatelessWidget {
               creditAlerts,
             )
           else if (roleName == 'Operator')
-            _buildOperatorLayout(
-              context,
-              capabilities,
-              sales,
-              alerts,
-            )
+            _buildOperatorLayout(context, capabilities, sales, alerts)
           else
             _buildGeneralLayout(
               context,
@@ -160,7 +155,8 @@ class DashboardPage extends StatelessWidget {
                     DashboardMetricTile(
                       label: 'Net profit',
                       value: _value(profit),
-                      caption: 'Current profitability signal from the backend summary',
+                      caption:
+                          'Current profitability signal from the backend summary',
                       icon: Icons.trending_up_outlined,
                       tint: colorScheme.primary,
                     ),
@@ -201,14 +197,16 @@ class DashboardPage extends StatelessWidget {
                   DashboardMetricTile(
                     label: 'Total sales',
                     value: _value(salesTotal),
-                    caption: 'Aggregate sales value currently visible to HeadOffice',
+                    caption:
+                        'Aggregate sales value currently visible to HeadOffice',
                     icon: Icons.point_of_sale_outlined,
                     tint: colorScheme.tertiary,
                   ),
                   DashboardMetricTile(
                     label: 'Alert volume',
                     value: '${alerts.length + creditAlerts.length}',
-                    caption: 'Low stock and credit-limit exceptions needing review',
+                    caption:
+                        'Low stock and credit-limit exceptions needing review',
                     icon: Icons.rule_folder_outlined,
                     tint: colorScheme.error,
                   ),
@@ -283,7 +281,8 @@ class DashboardPage extends StatelessWidget {
                     DashboardMetricTile(
                       label: 'Net profit',
                       value: _value(profit),
-                      caption: 'Profitability snapshot from the current dashboard payload',
+                      caption:
+                          'Profitability snapshot from the current dashboard payload',
                       icon: Icons.insights_outlined,
                       tint: colorScheme.tertiary,
                     ),
@@ -327,7 +326,10 @@ class DashboardPage extends StatelessWidget {
       if (_canShowExpensesSummary(capabilities))
         _MetricCard(label: 'Expenses', value: _value(dashboard?['expenses'])),
       if (_canShowFinanceSummary(capabilities))
-        _MetricCard(label: 'Net Profit', value: _value(dashboard?['net_profit'])),
+        _MetricCard(
+          label: 'Net Profit',
+          value: _value(dashboard?['net_profit']),
+        ),
       if (_canShowInventorySummary(capabilities))
         _MetricCard(
           label: 'Fuel Stock (L)',
@@ -634,7 +636,8 @@ class DashboardPage extends StatelessWidget {
                   DashboardMetricTile(
                     label: 'Sales',
                     value: _value(salesTotal),
-                    caption: 'Total visible sales in the current operational window',
+                    caption:
+                        'Total visible sales in the current operational window',
                     icon: Icons.point_of_sale_outlined,
                     tint: colorScheme.primary,
                   ),
@@ -737,7 +740,8 @@ class DashboardPage extends StatelessWidget {
           subtitle:
               'Use this to see where follow-up is needed before numbers drift out of control.',
           child: DashboardAttentionList(
-            emptyLabel: 'No credit-limit or stock-linked finance alerts are active.',
+            emptyLabel:
+                'No credit-limit or stock-linked finance alerts are active.',
             items: [
               for (final alert in creditAlerts)
                 DashboardAttentionItem(
@@ -1051,7 +1055,8 @@ class DashboardPage extends StatelessWidget {
       default:
         return (
           'Dashboard',
-          'Current access scope: $scopeLevel. Review today''s operational and financial summary.',
+          'Current access scope: $scopeLevel. Review today'
+              's operational and financial summary.',
         );
     }
   }
@@ -1069,13 +1074,15 @@ class DashboardPage extends StatelessWidget {
         ];
       case 'StationAdmin':
         return [
-          if (capabilities.hasAnyPermission(
-            const ['invoice_profiles', 'document_templates'],
-          ))
+          if (capabilities.hasAnyPermission(const [
+            'invoice_profiles',
+            'document_templates',
+          ]))
             'Setup',
-          if (capabilities.hasAnyPermission(
-            const ['users', 'employee_profiles'],
-          ))
+          if (capabilities.hasAnyPermission(const [
+            'users',
+            'employee_profiles',
+          ]))
             'Users',
           if (capabilities.hasAnyPermission(const ['station_modules']))
             'Module Control',
@@ -1109,37 +1116,60 @@ class DashboardPage extends StatelessWidget {
   }
 
   static bool _canShowSalesSummary(SessionCapabilities capabilities) {
-    return capabilities.hasPermission('fuel_sales');
+    return capabilities.moduleEnabled('fuel_sales') &&
+        capabilities.hasPermission('fuel_sales');
   }
 
   static bool _canShowFinanceSummary(SessionCapabilities capabilities) {
-    return capabilities.hasAnyPermission(
-      const ['customer_payments', 'supplier_payments', 'reports'],
-    );
+    return capabilities.hasAnyEnabledModule(const [
+          'customer_payments',
+          'supplier_payments',
+          'reports',
+        ]) &&
+        capabilities.hasAnyPermission(const [
+          'customer_payments',
+          'supplier_payments',
+          'reports',
+        ]);
   }
 
   static bool _canShowExpensesSummary(SessionCapabilities capabilities) {
-    return capabilities.hasPermission('expenses');
+    return capabilities.moduleEnabled('expenses') &&
+        capabilities.hasPermission('expenses');
   }
 
   static bool _canShowInventorySummary(SessionCapabilities capabilities) {
-    return capabilities.hasAnyPermission(const ['tanks', 'dispensers', 'nozzles']);
+    return capabilities.hasAnyEnabledModule(const [
+          'tanks',
+          'dispensers',
+          'nozzles',
+        ]) &&
+        capabilities.hasAnyPermission(const ['tanks', 'dispensers', 'nozzles']);
   }
 
   static bool _canShowTankerSummary(SessionCapabilities capabilities) {
-    return capabilities.hasPermission('tankers');
+    return capabilities.hasAllEnabledModules(const [
+          'tankers',
+          'tanker_operations',
+        ]) &&
+        capabilities.hasPermission('tankers');
   }
 
   static bool _canShowGovernanceSummary(SessionCapabilities capabilities) {
-    return capabilities.hasAnyPermission(
-      const ['expenses', 'purchases', 'customers'],
-      actions: const [
-        'approve',
-        'reject',
-        'approve_credit_override',
-        'reject_credit_override',
-      ],
-    );
+    return capabilities.hasAnyEnabledModule(const [
+          'expenses',
+          'purchases',
+          'customers',
+        ]) &&
+        capabilities.hasAnyPermission(
+          const ['expenses', 'purchases', 'customers'],
+          actions: const [
+            'approve',
+            'reject',
+            'approve_credit_override',
+            'reject_credit_override',
+          ],
+        );
   }
 }
 
@@ -1182,9 +1212,9 @@ class _SummaryChip extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 140),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.35,
-        ),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(

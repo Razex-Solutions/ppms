@@ -470,11 +470,7 @@ class _AppShellState extends State<AppShell> {
         ),
       if (capabilities.featureVisible(
         platformFeature: false,
-        modules: const [
-          'purchases',
-          'customer_payments',
-          'supplier_payments',
-        ],
+        modules: const ['purchases', 'customer_payments', 'supplier_payments'],
         permissionModules: const [
           'purchases',
           'customer_payments',
@@ -500,6 +496,7 @@ class _AppShellState extends State<AppShell> {
         ),
       if (capabilities.featureVisible(
         platformFeature: false,
+        requiredModules: const ['reports'],
         permissionModules: const ['reports'],
       ))
         _ShellDestination(
@@ -509,6 +506,7 @@ class _AppShellState extends State<AppShell> {
         ),
       if (capabilities.featureVisible(
         platformFeature: false,
+        requiredModules: const ['financial_documents'],
         permissionModules: const ['reports'],
       ))
         _ShellDestination(
@@ -540,9 +538,8 @@ class _AppShellState extends State<AppShell> {
         ),
       if (capabilities.featureVisible(
         platformFeature: false,
-        modules: const ['tankers'],
+        requiredModules: const ['tankers', 'tanker_operations'],
         permissionModules: const ['tankers'],
-        hideWhenModulesOff: true,
       ))
         _ShellDestination(
           label: 'Tankers',

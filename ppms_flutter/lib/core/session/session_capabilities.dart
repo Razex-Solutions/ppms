@@ -3,14 +3,11 @@ import 'package:ppms_flutter/core/session/session_controller.dart';
 class SessionCapabilities {
   SessionCapabilities(this._session);
 
-  static const Set<String> _readOnlyActions = {
-    'read',
-    'read_meter_history',
-  };
+  static const Set<String> _readOnlyActions = {'read', 'read_meter_history'};
 
   final SessionController _session;
 
-  bool get isPlatformUser => _session.isMasterAdmin;
+  bool get isPlatformUser => _session.isPlatformUser;
   bool get isTenantUser => !isPlatformUser;
 
   List<String> permissionActions(String module) {
@@ -21,7 +18,9 @@ class SessionCapabilities {
     return const [];
   }
 
-  bool moduleEnabled(String module) => _session.enabledModules.contains(module);
+  bool moduleEnabled(String module) =>
+      _session.enabledModules.contains(module) ||
+      _session.featureFlags[module] == true;
 
   bool hasPermission(String module, [String? action]) {
     final actions = permissionActions(module);
@@ -31,10 +30,7 @@ class SessionCapabilities {
     return actions.contains(action);
   }
 
-  bool hasAnyPermission(
-    Iterable<String> modules, {
-    Iterable<String>? actions,
-  }) {
+  bool hasAnyPermission(Iterable<String> modules, {Iterable<String>? actions}) {
     for (final module in modules) {
       final moduleActions = permissionActions(module);
       if (moduleActions.isEmpty) {
@@ -59,9 +55,19 @@ class SessionCapabilities {
     return false;
   }
 
+  bool hasAllEnabledModules(Iterable<String> modules) {
+    for (final module in modules) {
+      if (!moduleEnabled(module)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool featureVisible({
     required bool platformFeature,
     List<String> modules = const [],
+    List<String> requiredModules = const [],
     List<String> permissionModules = const [],
     Iterable<String>? permissionActions,
     bool hideWhenModulesOff = false,
@@ -70,7 +76,13 @@ class SessionCapabilities {
       return false;
     }
 
-    if (hideWhenModulesOff && modules.isNotEmpty && !hasAnyEnabledModule(modules)) {
+    if (hideWhenModulesOff &&
+        modules.isNotEmpty &&
+        !hasAnyEnabledModule(modules)) {
+      return false;
+    }
+
+    if (requiredModules.isNotEmpty && !hasAllEnabledModules(requiredModules)) {
       return false;
     }
 

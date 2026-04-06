@@ -454,6 +454,30 @@ def test_permission_catalog_and_core_role_governance(client):
     assert delete_response.status_code == 400
 
 
+def test_auth_me_returns_effective_module_visibility(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+    operator_headers = login(test_client, "operator", "operator123")
+
+    before_response = test_client.get("/auth/me", headers=operator_headers)
+    assert before_response.status_code == 200, before_response.text
+    assert "tankers" in before_response.json()["effective_enabled_modules"]
+    assert before_response.json()["feature_flags"]["tanker_operations"] is True
+
+    disable_response = test_client.put(
+        f"/station-modules/{data['station_a_id']}",
+        headers=admin_headers,
+        json={"module_name": "tanker_operations", "is_enabled": False},
+    )
+    assert disable_response.status_code == 200, disable_response.text
+
+    after_response = test_client.get("/auth/me", headers=operator_headers)
+    assert after_response.status_code == 200, after_response.text
+    assert "tankers" not in after_response.json()["effective_enabled_modules"]
+    assert after_response.json()["feature_flags"]["tanker_operations"] is False
+
+
 def test_role_creation_hierarchy_is_enforced(client):
     test_client, session_local = client
     data = seed_base_data(session_local)

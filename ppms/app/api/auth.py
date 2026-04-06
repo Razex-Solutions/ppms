@@ -33,6 +33,7 @@ from app.services.auth_sessions import (
     revoke_session,
     revoke_user_sessions,
 )
+from app.services.capabilities import get_capability_context
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -85,7 +86,11 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
 
 
 @router.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    capability_context = get_capability_context(db, current_user)
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -102,6 +107,7 @@ def get_me(current_user: User = Depends(get_current_user)):
         "role_scope_rule": get_role_scope_rule(current_user.role.name),
         "creatable_roles": get_creatable_roles(current_user.role.name),
         "permissions": get_effective_permissions(current_user),
+        **capability_context,
     }
 
 
