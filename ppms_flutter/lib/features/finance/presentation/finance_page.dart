@@ -45,6 +45,8 @@ class _FinancePageState extends State<FinancePage> {
   List<Map<String, dynamic>> _purchases = const [];
   List<Map<String, dynamic>> _customerPayments = const [];
   List<Map<String, dynamic>> _supplierPayments = const [];
+  Map<String, dynamic>? _selectedCustomerLedgerSummary;
+  Map<String, dynamic>? _selectedSupplierLedgerSummary;
 
   int? _selectedStationId;
   int? _selectedSupplierId;
@@ -74,33 +76,31 @@ class _FinancePageState extends State<FinancePage> {
       _hasAction('supplier_payments', 'create');
   bool get _canReverseSupplierPayments =>
       _hasAction('supplier_payments', 'reverse');
+  bool get _canReadLedger => _hasAction('ledger', 'read');
 
   bool get _canReadPurchases => _canCreatePurchases || _canReversePurchases;
   bool get _canReadCustomerPayments =>
       _canCreateCustomerPayments || _canReverseCustomerPayments;
   bool get _canReadSupplierPayments =>
       _canCreateSupplierPayments || _canReverseSupplierPayments;
-  bool get _showPurchases =>
-      _capabilities.featureVisible(
-        platformFeature: false,
-        modules: const ['purchases'],
-        permissionModules: const ['purchases'],
-        hideWhenModulesOff: true,
-      );
-  bool get _showCustomerPayments =>
-      _capabilities.featureVisible(
-        platformFeature: false,
-        modules: const ['customer_payments'],
-        permissionModules: const ['customer_payments'],
-        hideWhenModulesOff: true,
-      );
-  bool get _showSupplierPayments =>
-      _capabilities.featureVisible(
-        platformFeature: false,
-        modules: const ['supplier_payments'],
-        permissionModules: const ['supplier_payments'],
-        hideWhenModulesOff: true,
-      );
+  bool get _showPurchases => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['purchases'],
+    permissionModules: const ['purchases'],
+    hideWhenModulesOff: true,
+  );
+  bool get _showCustomerPayments => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['customer_payments'],
+    permissionModules: const ['customer_payments'],
+    hideWhenModulesOff: true,
+  );
+  bool get _showSupplierPayments => _capabilities.featureVisible(
+    platformFeature: false,
+    modules: const ['supplier_payments'],
+    permissionModules: const ['supplier_payments'],
+    hideWhenModulesOff: true,
+  );
 
   @override
   void initState() {
@@ -227,6 +227,7 @@ class _FinancePageState extends State<FinancePage> {
             _selectedSupplierPaymentId ?? _firstId(supplierPayments);
         _isLoading = false;
       });
+      await _loadLedgerSummaries();
     } on ApiException catch (error) {
       if (!mounted) {
         return;
@@ -256,8 +257,41 @@ class _FinancePageState extends State<FinancePage> {
       _selectedPurchaseId = null;
       _selectedCustomerPaymentId = null;
       _selectedSupplierPaymentId = null;
+      _selectedCustomerLedgerSummary = null;
+      _selectedSupplierLedgerSummary = null;
     });
     await _loadFinanceWorkspace();
+  }
+
+  Future<void> _loadLedgerSummaries() async {
+    final stationId = _selectedStationId;
+    try {
+      final customerSummary = !_canReadLedger || _selectedCustomerId == null
+          ? null
+          : await widget.sessionController.fetchCustomerLedgerSummary(
+              customerId: _selectedCustomerId!,
+            );
+      final supplierSummary = !_canReadLedger || _selectedSupplierId == null
+          ? null
+          : await widget.sessionController.fetchSupplierLedgerSummary(
+              supplierId: _selectedSupplierId!,
+              stationId: stationId,
+            );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedCustomerLedgerSummary = customerSummary;
+        _selectedSupplierLedgerSummary = supplierSummary;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    }
   }
 
   Future<void> _submitPurchase() async {
@@ -813,6 +847,32 @@ class _FinancePageState extends State<FinancePage> {
                     icon: Icons.payments_outlined,
                     tint: colorScheme.error,
                   ),
+                if (_canReadLedger && _selectedCustomerLedgerSummary != null)
+                  DashboardMetricTile(
+                    label: 'Customer balance',
+                    value: _formatNumber(
+                      _selectedCustomerLedgerSummary!['current_balance'],
+                    ),
+                    caption:
+                        _selectedCustomerLedgerSummary!['party_name']
+                            as String? ??
+                        'Selected customer',
+                    icon: Icons.account_balance_wallet_outlined,
+                    tint: colorScheme.secondary,
+                  ),
+                if (_canReadLedger && _selectedSupplierLedgerSummary != null)
+                  DashboardMetricTile(
+                    label: 'Supplier payable',
+                    value: _formatNumber(
+                      _selectedSupplierLedgerSummary!['current_balance'],
+                    ),
+                    caption:
+                        _selectedSupplierLedgerSummary!['party_name']
+                            as String? ??
+                        'Selected supplier',
+                    icon: Icons.request_quote_outlined,
+                    tint: colorScheme.tertiary,
+                  ),
               ],
             ),
           ),
@@ -1124,9 +1184,14 @@ class _FinancePageState extends State<FinancePage> {
                     setState(() {
                       _selectedCustomerId = value;
                     });
+                    _loadLedgerSummaries();
                   }
                 : null,
           ),
+          if (_canReadLedger && _selectedCustomerLedgerSummary != null) ...[
+            const SizedBox(height: 12),
+            _buildLedgerSummaryBanner(_selectedCustomerLedgerSummary!),
+          ],
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             key: ValueKey<String>(
@@ -1231,9 +1296,14 @@ class _FinancePageState extends State<FinancePage> {
                     setState(() {
                       _selectedSupplierId = value;
                     });
+                    _loadLedgerSummaries();
                   }
                 : null,
           ),
+          if (_canReadLedger && _selectedSupplierLedgerSummary != null) ...[
+            const SizedBox(height: 12),
+            _buildLedgerSummaryBanner(_selectedSupplierLedgerSummary!),
+          ],
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             key: ValueKey<String>(
@@ -1736,6 +1806,33 @@ class _FinancePageState extends State<FinancePage> {
           Text(label, style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 4),
           Text(value, style: Theme.of(context).textTheme.titleSmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLedgerSummaryBanner(Map<String, dynamic> summary) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          Text(
+            '${summary['party_name']}',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          Text('Balance ${_formatNumber(summary['current_balance'])}'),
+          Text('Charges ${_formatNumber(summary['total_charges'])}'),
+          Text('Payments ${_formatNumber(summary['total_payments'])}'),
+          Text('Entries ${summary['transaction_count'] ?? 0}'),
         ],
       ),
     );

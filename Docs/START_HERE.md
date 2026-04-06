@@ -18,7 +18,7 @@ When returning to this project, use these files in this order:
 
 Start with:
 
-- `Phase 3 - Finance, Ledgers, Payroll, Pricing`
+- `Phase 4 - Tanker and Extended Operations`
 
 from:
 
@@ -28,7 +28,8 @@ from:
 
 - `Phase 1 - Setup Hierarchy Foundation`: complete locally
 - `Phase 2 - Operations Core`: complete locally
-- next sequence: continue into `Phase 3 - Finance, Ledgers, Payroll, Pricing`
+- `Phase 3 - Finance, Ledgers, Payroll, Pricing`: complete locally
+- next sequence: continue into `Phase 4 - Tanker and Extended Operations`
 
 ## Important Decision Already Made
 

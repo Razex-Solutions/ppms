@@ -69,7 +69,8 @@ The Flutter app is now beyond simple placeholders. It includes real workspaces f
 Current phased execution status:
 - `Phase 1 - Setup Hierarchy Foundation`: complete locally
 - `Phase 2 - Operations Core`: complete locally
-- `Phase 3 - Finance, Ledgers, Payroll, Pricing`: next in sequence
+- `Phase 3 - Finance, Ledgers, Payroll, Pricing`: complete locally
+- next sequence: `Phase 4 - Tanker and Extended Operations`
 
 Phase 1 completion now includes:
 - setup-foundation backend summary endpoints for organizations and stations
@@ -91,6 +92,16 @@ Phase 2 completion now includes:
 - explicit internal fuel usage records with automatic tank-volume reduction
 - station expenses aligned to direct operational recording by default
 - targeted backend transaction/access/reporting coverage plus clean Flutter analyze/test validation
+
+Phase 3 completion now includes:
+- salary adjustments recorded separately and applied during payroll-run generation
+- payroll workspace updated around monthly runs, line breakdowns, and adjustment-aware totals
+- ledger summary endpoints for customers and suppliers with permission-scoped access
+- parties workspace redesigned to show ledger-first balance snapshots for selected records
+- finance workspace now surfaces selected customer and supplier ledger snapshots during payment work
+- station fuel price history with role-based update/read permissions
+- sales workspace now shows current station pricing and recent price history
+- targeted backend finance/access validation plus clean Flutter analyze/test validation
 
 ### Architecture Direction
 Current direction is:
@@ -857,11 +868,11 @@ Expected purpose:
 ## 16. Recommended Next Steps
 
 ### For product work
-1. execute `Phase 2 - Operations Core`
-2. reshape shift setup toward templates and question-based station operating rules
-3. continue moving fuel workflows from manual-entry patterns toward fact-led meter flows
-4. tighten cash, meter, and reconciliation behavior around the new operations model
-5. keep tightening module-driven visibility and remove remaining CRUD-first rough edges
+1. execute `Phase 4 - Tanker and Extended Operations`
+2. tighten tanker setup, compartments, and trip summary workflows
+3. connect tanker loads, manual sales, and leftover transfer flows more directly to station stock
+4. keep extending module-driven visibility around tanker-enabled organizations only
+5. prepare the next phase boundary review after tanker operations are stable
 
 ### For deployment later
 1. finalize local product behavior
