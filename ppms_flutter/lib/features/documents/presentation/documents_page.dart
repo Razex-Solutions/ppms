@@ -68,11 +68,13 @@ class _DocumentsPageState extends State<DocumentsPage> {
       (_hasAction('fuel_sales', 'create') ||
           _hasAction('fuel_sales', 'reverse'));
   bool get _canViewCustomerPaymentDocs =>
-      _showCustomerPaymentDocs && _hasAction('customer_payments', 'create') ||
-      _hasAction('customer_payments', 'reverse');
+      _showCustomerPaymentDocs &&
+      (_hasAction('customer_payments', 'create') ||
+          _hasAction('customer_payments', 'reverse'));
   bool get _canViewSupplierPaymentDocs =>
-      _showSupplierPaymentDocs && _hasAction('supplier_payments', 'create') ||
-      _hasAction('supplier_payments', 'reverse');
+      _showSupplierPaymentDocs &&
+      (_hasAction('supplier_payments', 'create') ||
+          _hasAction('supplier_payments', 'reverse'));
   bool get _canViewReportExports => _hasAction('reports', 'read');
   bool get _showFuelSaleDocs => _capabilities.featureVisible(
     platformFeature: false,
@@ -528,6 +530,8 @@ class _DocumentsPageState extends State<DocumentsPage> {
             ),
           ),
           const SizedBox(height: 16),
+          _buildWorkspaceReview(context),
+          const SizedBox(height: 16),
           if (_errorMessage != null)
             Text(
               _errorMessage!,
@@ -955,6 +959,109 @@ class _DocumentsPageState extends State<DocumentsPage> {
         if (document['total_amount'] != null)
           _buildInfoChip('Total', _formatNumber(document['total_amount'])),
       ],
+    );
+  }
+
+  Widget _buildWorkspaceReview(BuildContext context) {
+    final selectedLabel = _selectedDocument != null
+        ? '${_selectedDocument!['title'] ?? 'Document'} selected'
+        : _selectedExportPreview != null
+        ? 'Report export #${_selectedEntityId ?? '-'} selected'
+        : 'No document selected yet';
+    final nextAction =
+        _selectedDocument != null || _selectedExportPreview != null
+        ? 'Review the preview, then save or open the generated file for dispatch or local filing.'
+        : 'Choose an invoice, receipt, voucher, or report export to preview before saving it.';
+    final deadLetterDispatches = _dispatchDiagnostics?['dead_letter'] ?? 0;
+    final retryingDispatches = _dispatchDiagnostics?['retrying'] ?? 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Document Review',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(selectedLabel, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(nextAction, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildReviewChip(
+                context,
+                icon: Icons.receipt_long_outlined,
+                label: 'Invoices ${_fuelSales.length}',
+              ),
+              _buildReviewChip(
+                context,
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Receipts ${_customerPayments.length}',
+              ),
+              _buildReviewChip(
+                context,
+                icon: Icons.payments_outlined,
+                label: 'Vouchers ${_supplierPayments.length}',
+              ),
+              _buildReviewChip(
+                context,
+                icon: Icons.table_chart_outlined,
+                label: 'Exports ${_reportExports.length}',
+              ),
+              _buildReviewChip(
+                context,
+                icon: Icons.outbox_outlined,
+                label: 'Dispatches ${_dispatches.length}',
+              ),
+              _buildReviewChip(
+                context,
+                icon: Icons.report_problem_outlined,
+                label:
+                    'Dead $deadLetterDispatches / retrying $retryingDispatches',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+      ),
     );
   }
 
