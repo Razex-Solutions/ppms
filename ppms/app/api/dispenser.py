@@ -6,10 +6,15 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.dispenser import Dispenser
+from app.models.nozzle import Nozzle
 from app.models.station import Station
 from app.schemas.dispenser import DispenserCreate, DispenserUpdate, DispenserResponse
 
 router = APIRouter(prefix="/dispensers", tags=["Dispensers"])
+
+
+def _next_dispenser_index(db: Session, station_id: int) -> int:
+    return db.query(Dispenser).filter(Dispenser.station_id == station_id).count() + 1
 
 
 @router.post("/", response_model=DispenserResponse)
@@ -21,17 +26,20 @@ def create_dispenser(
     require_permission(current_user, "dispensers", "create", detail="You do not have permission to create dispensers")
     require_station_access(current_user, dispenser_data.station_id)
 
-    existing = db.query(Dispenser).filter(Dispenser.code == dispenser_data.code).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Dispenser code already exists")
-
     station = db.query(Station).filter(Station.id == dispenser_data.station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
 
+    dispenser_index = _next_dispenser_index(db, dispenser_data.station_id)
+    generated_name = dispenser_data.name or f"Dispenser {dispenser_index}"
+    generated_code = dispenser_data.code or f"{station.code}-D{dispenser_index}"
+    existing = db.query(Dispenser).filter(Dispenser.code == generated_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Dispenser code already exists")
+
     dispenser = Dispenser(
-        name=dispenser_data.name,
-        code=dispenser_data.code,
+        name=generated_name,
+        code=generated_code,
         location=dispenser_data.location,
         station_id=dispenser_data.station_id,
     )
@@ -68,7 +76,7 @@ def get_dispenser(
     if not dispenser:
         raise HTTPException(status_code=404, detail="Dispenser not found")
 
-    require_permission(current_user, "dispensers", "update", detail="You do not have permission to update dispensers")
+    require_permission(current_user, "dispensers", "read", detail="You do not have permission to view dispensers")
     require_station_access(current_user, dispenser.station_id, detail="Not authorized for this dispenser")
     return dispenser
 
@@ -84,7 +92,7 @@ def update_dispenser(
     if not dispenser:
         raise HTTPException(status_code=404, detail="Dispenser not found")
 
-    require_permission(current_user, "dispensers", "delete", detail="You do not have permission to delete dispensers")
+    require_permission(current_user, "dispensers", "update", detail="You do not have permission to update dispensers")
     require_station_access(current_user, dispenser.station_id, detail="Not authorized for this dispenser")
 
     for field, value in data.model_dump(exclude_unset=True).items():
@@ -104,7 +112,11 @@ def delete_dispenser(
     if not dispenser:
         raise HTTPException(status_code=404, detail="Dispenser not found")
 
+    require_permission(current_user, "dispensers", "delete", detail="You do not have permission to delete dispensers")
     require_station_access(current_user, dispenser.station_id, detail="Not authorized for this dispenser")
+    existing_nozzle = db.query(Nozzle).filter(Nozzle.dispenser_id == dispenser.id).first()
+    if existing_nozzle:
+        raise HTTPException(status_code=400, detail="Dispenser cannot be deleted while nozzles are assigned to it")
 
     db.delete(dispenser)
     db.commit()

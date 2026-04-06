@@ -157,6 +157,89 @@ def test_admin_can_manage_organizations_and_station_ownership(client):
     assert any(station["code"] == "STD" for station in org_stations.json())
 
 
+def test_phase1_setup_foundation_endpoints_and_auto_generated_forecourt_records(client):
+    test_client, session_local = client
+    data = seed_base_data(session_local)
+    admin_headers = login(test_client, "admin", "admin123")
+
+    organization_summary = test_client.get(
+        f"/organizations/{data['organization_id']}/setup-foundation",
+        headers=admin_headers,
+    )
+    assert organization_summary.status_code == 200, organization_summary.text
+    assert organization_summary.json()["organization_code"] == "ORG-A"
+    assert len(organization_summary.json()["stations"]) == 2
+
+    generated_tank = test_client.post(
+        "/tanks/",
+        headers=admin_headers,
+        json={
+            "capacity": 2000,
+            "station_id": data["station_a_id"],
+            "fuel_type_id": data["fuel_type_id"],
+        },
+    )
+    assert generated_tank.status_code == 200, generated_tank.text
+    assert generated_tank.json()["name"] == "Tank 2"
+    assert generated_tank.json()["code"] == "STA-T2"
+
+    generated_dispenser = test_client.post(
+        "/dispensers/",
+        headers=admin_headers,
+        json={
+            "station_id": data["station_a_id"],
+        },
+    )
+    assert generated_dispenser.status_code == 200, generated_dispenser.text
+    assert generated_dispenser.json()["name"] == "Dispenser 2"
+    assert generated_dispenser.json()["code"] == "STA-D2"
+
+    generated_nozzle = test_client.post(
+        "/nozzles/",
+        headers=admin_headers,
+        json={
+            "dispenser_id": generated_dispenser.json()["id"],
+            "tank_id": generated_tank.json()["id"],
+            "fuel_type_id": data["fuel_type_id"],
+            "meter_reading": 55,
+        },
+    )
+    assert generated_nozzle.status_code == 200, generated_nozzle.text
+    assert generated_nozzle.json()["name"] == "Nozzle 1"
+    assert generated_nozzle.json()["code"] == f"D{generated_dispenser.json()['id']}-N1"
+
+    mismatch_fuel_type = test_client.post(
+        "/fuel-types/",
+        headers=admin_headers,
+        json={"name": "Diesel", "description": "Diesel fuel"},
+    )
+    assert mismatch_fuel_type.status_code == 200, mismatch_fuel_type.text
+
+    invalid_nozzle = test_client.post(
+        "/nozzles/",
+        headers=admin_headers,
+        json={
+            "dispenser_id": generated_dispenser.json()["id"],
+            "tank_id": generated_tank.json()["id"],
+            "fuel_type_id": mismatch_fuel_type.json()["id"],
+            "meter_reading": 75,
+        },
+    )
+    assert invalid_nozzle.status_code == 400
+    assert invalid_nozzle.json()["detail"] == "Nozzle fuel type must match the selected tank fuel type"
+
+    station_summary = test_client.get(
+        f"/stations/{data['station_a_id']}/setup-foundation",
+        headers=admin_headers,
+    )
+    assert station_summary.status_code == 200, station_summary.text
+    assert station_summary.json()["tank_count"] == 2
+    assert station_summary.json()["dispenser_count"] == 2
+    assert station_summary.json()["nozzle_count"] == 2
+    assert station_summary.json()["invoice_identity"]["business_name"] == "Station A"
+    assert station_summary.json()["resolved_legal_name"] == "Station A"
+
+
 def test_head_office_can_read_only_own_organization_users_and_stations(client):
     test_client, session_local = client
     data = seed_base_data(session_local)

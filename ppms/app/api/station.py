@@ -14,6 +14,8 @@ from app.models.tank import Tank
 from app.models.tanker import Tanker
 from app.models.user import User
 from app.schemas.station import StationCreate, StationUpdate, StationResponse
+from app.schemas.setup_foundation import StationSetupFoundationResponse
+from app.services.setup_foundation import build_station_setup_foundation
 
 router = APIRouter(prefix="/stations", tags=["Stations"])
 
@@ -151,6 +153,27 @@ def get_station(
     if current_user.station_id != station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     return _serialize_station(station)
+
+
+@router.get("/{station_id}/setup-foundation", response_model=StationSetupFoundationResponse)
+def get_station_setup_foundation(
+    station_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station:
+        raise HTTPException(status_code=404, detail="Station not found")
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
+        return build_station_setup_foundation(db, station)
+    if is_head_office_user(current_user):
+        require_permission(current_user, "stations", "read", detail="You do not have permission to view stations")
+        if station.organization_id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
+        return build_station_setup_foundation(db, station)
+    if current_user.station_id != station_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this station")
+    return build_station_setup_foundation(db, station)
 
 
 @router.put("/{station_id}", response_model=StationResponse)

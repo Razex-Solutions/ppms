@@ -19,6 +19,10 @@ from app.services.nozzle_meter import adjust_nozzle_meter
 router = APIRouter(prefix="/nozzles", tags=["Nozzles"])
 
 
+def _next_nozzle_index(db: Session, dispenser_id: int) -> int:
+    return db.query(Nozzle).filter(Nozzle.dispenser_id == dispenser_id).count() + 1
+
+
 @router.post("/", response_model=NozzleResponse)
 def create_nozzle(
     nozzle_data: NozzleCreate,
@@ -31,21 +35,28 @@ def create_nozzle(
         raise HTTPException(status_code=404, detail="Dispenser not found")
     require_station_access(current_user, dispenser.station_id)
 
-    existing = db.query(Nozzle).filter(Nozzle.code == nozzle_data.code).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Nozzle code already exists")
-
     tank = db.query(Tank).filter(Tank.id == nozzle_data.tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
+    if tank.station_id != dispenser.station_id:
+        raise HTTPException(status_code=400, detail="Nozzle tank must belong to the same station as the dispenser")
 
     fuel_type = db.query(FuelType).filter(FuelType.id == nozzle_data.fuel_type_id).first()
     if not fuel_type:
         raise HTTPException(status_code=404, detail="Fuel type not found")
+    if tank.fuel_type_id != fuel_type.id:
+        raise HTTPException(status_code=400, detail="Nozzle fuel type must match the selected tank fuel type")
+
+    nozzle_index = _next_nozzle_index(db, nozzle_data.dispenser_id)
+    generated_name = nozzle_data.name or f"Nozzle {nozzle_index}"
+    generated_code = nozzle_data.code or f"D{dispenser.id}-N{nozzle_index}"
+    existing = db.query(Nozzle).filter(Nozzle.code == generated_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Nozzle code already exists")
 
     nozzle = Nozzle(
-        name=nozzle_data.name,
-        code=nozzle_data.code,
+        name=generated_name,
+        code=generated_code,
         meter_reading=nozzle_data.meter_reading,
         current_segment_start_reading=nozzle_data.meter_reading,
         dispenser_id=nozzle_data.dispenser_id,
@@ -91,7 +102,7 @@ def get_nozzle(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
-    require_permission(current_user, "nozzles", "update", detail="You do not have permission to update nozzles")
+    require_permission(current_user, "nozzles", "read", detail="You do not have permission to view nozzles")
     require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
     return nozzle
 
@@ -107,12 +118,28 @@ def update_nozzle(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
-    require_permission(current_user, "nozzles", "delete", detail="You do not have permission to delete nozzles")
+    require_permission(current_user, "nozzles", "update", detail="You do not have permission to update nozzles")
     require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
 
     changes = data.model_dump(exclude_unset=True)
     if "meter_reading" in changes:
         raise HTTPException(status_code=400, detail="Use the dedicated meter adjustment endpoint to change nozzle meter readings")
+    new_tank_id = changes.get("tank_id", nozzle.tank_id)
+    new_fuel_type_id = changes.get("fuel_type_id", nozzle.fuel_type_id)
+    if "tank_id" in changes:
+        tank = db.query(Tank).filter(Tank.id == new_tank_id).first()
+        if not tank:
+            raise HTTPException(status_code=404, detail="Tank not found")
+        if tank.station_id != nozzle.dispenser.station_id:
+            raise HTTPException(status_code=400, detail="Nozzle tank must belong to the same station as the dispenser")
+    else:
+        tank = nozzle.tank
+    if "fuel_type_id" in changes:
+        fuel_type = db.query(FuelType).filter(FuelType.id == new_fuel_type_id).first()
+        if not fuel_type:
+            raise HTTPException(status_code=404, detail="Fuel type not found")
+    if tank.fuel_type_id != new_fuel_type_id:
+        raise HTTPException(status_code=400, detail="Nozzle fuel type must match the selected tank fuel type")
     for field, value in changes.items():
         setattr(nozzle, field, value)
     db.commit()
@@ -130,6 +157,7 @@ def delete_nozzle(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
+    require_permission(current_user, "nozzles", "delete", detail="You do not have permission to delete nozzles")
     require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
     db.delete(nozzle)
     db.commit()

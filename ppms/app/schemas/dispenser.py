@@ -2,8 +2,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class DispenserCreate(BaseModel):
-    name: str
-    code: str
+    name: str | None = None
+    code: str | None = None
     location: str | None = None
     station_id: int
 

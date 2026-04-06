@@ -17,6 +17,10 @@ from app.schemas.tank import TankCreate, TankUpdate, TankResponse
 router = APIRouter(prefix="/tanks", tags=["Tanks"])
 
 
+def _next_tank_index(db: Session, station_id: int) -> int:
+    return db.query(Tank).filter(Tank.station_id == station_id).count() + 1
+
+
 @router.post("/", response_model=TankResponse)
 def create_tank(
     tank_data: TankCreate,
@@ -26,10 +30,6 @@ def create_tank(
     require_permission(current_user, "tanks", "create", detail="You do not have permission to create tanks")
     require_station_access(current_user, tank_data.station_id)
 
-    existing = db.query(Tank).filter(Tank.code == tank_data.code).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Tank code already exists")
-
     station = db.query(Station).filter(Station.id == tank_data.station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
@@ -38,9 +38,16 @@ def create_tank(
     if not fuel_type:
         raise HTTPException(status_code=404, detail="Fuel type not found")
 
+    tank_index = _next_tank_index(db, tank_data.station_id)
+    generated_name = tank_data.name or f"Tank {tank_index}"
+    generated_code = tank_data.code or f"{station.code}-T{tank_index}"
+    existing = db.query(Tank).filter(Tank.code == generated_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Tank code already exists")
+
     tank = Tank(
-        name=tank_data.name,
-        code=tank_data.code,
+        name=generated_name,
+        code=generated_code,
         capacity=tank_data.capacity,
         current_volume=tank_data.current_volume,
         low_stock_threshold=tank_data.low_stock_threshold,

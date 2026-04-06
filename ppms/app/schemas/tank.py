@@ -2,8 +2,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class TankCreate(BaseModel):
-    name: str
-    code: str
+    name: str | None = None
+    code: str | None = None
     capacity: float
     current_volume: float = 0
     low_stock_threshold: float = 1000

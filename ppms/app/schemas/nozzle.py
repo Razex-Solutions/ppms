@@ -2,8 +2,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class NozzleCreate(BaseModel):
-    name: str
-    code: str
+    name: str | None = None
+    code: str | None = None
     meter_reading: float = 0
     dispenser_id: int
     tank_id: int

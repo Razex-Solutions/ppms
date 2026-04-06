@@ -10,6 +10,8 @@ from app.models.organization import Organization
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.organization import OrganizationCreate, OrganizationResponse, OrganizationUpdate
+from app.schemas.setup_foundation import OrganizationSetupFoundationResponse
+from app.services.setup_foundation import build_organization_setup_foundation
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
 
@@ -131,6 +133,25 @@ def get_organization(
         if organization.id != get_user_organization_id(current_user):
             raise HTTPException(status_code=403, detail="Not authorized for this organization")
         return _serialize_organization(organization)
+    raise HTTPException(status_code=403, detail="Admin access required")
+
+
+@router.get("/{organization_id}/setup-foundation", response_model=OrganizationSetupFoundationResponse)
+def get_organization_setup_foundation(
+    organization_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
+        return build_organization_setup_foundation(db, organization)
+    if is_head_office_user(current_user):
+        require_permission(current_user, "organizations", "read", detail="You do not have permission to view organizations")
+        if organization.id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this organization")
+        return build_organization_setup_foundation(db, organization)
     raise HTTPException(status_code=403, detail="Admin access required")
 
 
