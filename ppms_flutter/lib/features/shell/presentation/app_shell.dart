@@ -223,27 +223,15 @@ class _AppShellState extends State<AppShell> {
                                 ),
                               ),
                               Expanded(
-                                child: SingleChildScrollView(
-                                  child: NavigationRail(
-                                    selectedIndex: _selectedIndex,
-                                    extended: constraints.maxWidth >= 1480,
-                                    groupAlignment: -1,
-                                    labelType: constraints.maxWidth >= 1480
-                                        ? NavigationRailLabelType.none
-                                        : NavigationRailLabelType.all,
-                                    destinations: [
-                                      for (final destination in destinations)
-                                        NavigationRailDestination(
-                                          icon: Icon(destination.icon),
-                                          label: Text(destination.label),
-                                        ),
-                                    ],
-                                    onDestinationSelected: (index) {
-                                      setState(() {
-                                        _selectedIndex = index;
-                                      });
-                                    },
-                                  ),
+                                child: _RailDestinationList(
+                                  destinations: destinations,
+                                  selectedIndex: _selectedIndex,
+                                  extended: constraints.maxWidth >= 1480,
+                                  onDestinationSelected: (index) {
+                                    setState(() {
+                                      _selectedIndex = index;
+                                    });
+                                  },
                                 ),
                               ),
                             ],
@@ -564,6 +552,80 @@ class _AppShellState extends State<AppShell> {
       'station' => 'Station $stationId • $roleName',
       _ => roleName,
     };
+  }
+}
+
+class _RailDestinationList extends StatelessWidget {
+  const _RailDestinationList({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.extended,
+    required this.onDestinationSelected,
+  });
+
+  final List<_ShellDestination> destinations;
+  final int selectedIndex;
+  final bool extended;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+      itemCount: destinations.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 4),
+      itemBuilder: (context, index) {
+        final destination = destinations[index];
+        final selected = index == selectedIndex;
+        final colorScheme = Theme.of(context).colorScheme;
+        if (extended) {
+          return ListTile(
+            selected: selected,
+            selectedTileColor: colorScheme.primaryContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            leading: Icon(destination.icon),
+            title: Text(destination.label),
+            onTap: () => onDestinationSelected(index),
+          );
+        }
+        return Tooltip(
+          message: destination.label,
+          waitDuration: const Duration(milliseconds: 400),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => onDestinationSelected(index),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: selected ? colorScheme.primaryContainer : null,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    destination.icon,
+                    color: selected ? colorScheme.onPrimaryContainer : null,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    destination.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: selected ? colorScheme.onPrimaryContainer : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
