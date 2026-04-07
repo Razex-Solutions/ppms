@@ -363,10 +363,25 @@ class _AdminPageState extends State<AdminPage> {
 
   List<Map<String, dynamic>> get _creatableRoleOptions {
     final allowedNames = widget.sessionController.creatableRoles;
-    if (allowedNames.isEmpty) {
-      return _roles;
+    final allowedRoles = allowedNames.isEmpty
+        ? _roles
+        : _roles.where((role) => allowedNames.contains(role['name'])).toList();
+    final selectedOrganizationId =
+        _selectedOrganizationId ?? widget.sessionController.organizationId;
+    final stationCount = selectedOrganizationId == null
+        ? _stations.length
+        : _stations
+              .where(
+                (station) =>
+                    _sameId(station['organization_id'], selectedOrganizationId),
+              )
+              .length;
+    if (stationCount <= 1) {
+      return allowedRoles
+          .where((role) => role['name'] != 'StationAdmin')
+          .toList();
     }
-    return _roles.where((role) => allowedNames.contains(role['name'])).toList();
+    return allowedRoles;
   }
 
   int? _preferredWorkerRoleId([List<Map<String, dynamic>>? roleOptions]) {
@@ -832,7 +847,7 @@ class _AdminPageState extends State<AdminPage> {
       setState(() {
         _resetUserForm();
         _feedbackMessage =
-            'The HeadOffice owner account is read-only here. Use the form to create a new Manager, StationAdmin, Accountant, or Operator login.';
+            'The HeadOffice owner account is read-only here. Use the form to create a new Manager, Accountant, or Operator login.';
         _errorMessage = null;
       });
       return;
@@ -1352,7 +1367,12 @@ class _AdminPageState extends State<AdminPage> {
 
   Widget _buildUsersSection(BuildContext context) {
     final creatableRoles = [..._creatableRoleOptions];
+    final selectedUser = _users.cast<Map<String, dynamic>?>().firstWhere(
+      (user) => user?['id'] == _selectedUserId,
+      orElse: () => null,
+    );
     if (_selectedRoleId != null &&
+        selectedUser != null &&
         !creatableRoles.any((role) => role['id'] == _selectedRoleId)) {
       final currentRole = _roles.cast<Map<String, dynamic>?>().firstWhere(
         (role) => role?['id'] == _selectedRoleId,
@@ -1362,10 +1382,6 @@ class _AdminPageState extends State<AdminPage> {
         creatableRoles.add(currentRole);
       }
     }
-    final selectedUser = _users.cast<Map<String, dynamic>?>().firstWhere(
-      (user) => user?['id'] == _selectedUserId,
-      orElse: () => null,
-    );
     final isEditingSelf =
         selectedUser != null &&
         _sameId(

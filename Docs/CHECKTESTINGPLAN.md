@@ -53,6 +53,8 @@ This means:
 - `headoffice` is the tenant organization admin and may inspect only the assigned organization
 - `stationadmin` is station-scoped and should normally exist only for multi-station organizations
 - if the organization has one station, `headoffice` and `stationadmin` responsibilities should be merged into `headoffice`
+- for one-station tenants, do not create a separate `stationadmin` user; the single `headoffice` user acts as both organization admin and station admin
+- for multi-station tenants, the admin count becomes three layers: platform `masteradmin`, tenant `headoffice`, and delegated per-station `stationadmin`
 - `manager`, `operator`, and `accountant` may inspect only their assigned station or permitted organization scope
 - the old generic `admin` account/role has been removed from the active seed and should not appear in testing
 - no tenant user should see stations, users, sales, purchases, reports, or dashboard totals from another organization
@@ -177,7 +179,7 @@ Correct order:
 ```text
 1. masteradmin
 2. headoffice
-3. stationadmin
+3. stationadmin only if the tenant has more than one station
 4. manager
 5. accountant
 6. operator
@@ -189,6 +191,8 @@ Why:
 - `headoffice` proves the tenant organization is correctly configured and scoped
 - `stationadmin` proves multi-station delegation works only when needed
 - `manager`, `accountant`, and `operator` prove day-to-day actions work without leaking setup/admin controls
+
+For the current `check` test tenant, skip `stationadmin` because it has one station. Test `check` as `headoffice`, then create/test `manager`, `accountant`, and `operator`.
 
 Do not start with `operator` or `manager` first unless the tenant setup is already accepted.
 
@@ -444,6 +448,7 @@ Actions:
 
 - confirm the default organization behaves like a single-station organization
 - review whether `HeadOffice` and `StationAdmin` controls are merged or simplified where expected
+- confirm `StationAdmin` is not offered as a new worker role for the one-station tenant
 - check dashboard cards and menu items
 - check whether station-scoped data appears without forcing station selection everywhere
 
@@ -451,6 +456,7 @@ Acceptance:
 
 - single-station flow does not feel like a multi-station setup
 - user is not forced into unnecessary station admin duplication
+- the `headoffice` user can perform needed station-admin setup work for the single station
 - menus and dashboards are simpler than a multi-station business where possible
 
 ## Step 8 - Role Visibility Walkthrough
@@ -459,7 +465,7 @@ Role sequence:
 
 ```text
 headoffice
-stationadmin
+stationadmin only for multi-station tenants
 manager
 operator
 accountant
