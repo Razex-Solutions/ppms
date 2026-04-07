@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "Phase 9 full acceptance dataset",
   "tenant": {
     "organization_name": "check",
@@ -16,7 +16,7 @@
       "role": "HeadOffice",
       "scope_level": "organization"
     },
-    "manager": {
+    "base_manager": {
       "username": "check_manager",
       "password": "manager123",
       "role": "Manager",
@@ -28,31 +28,93 @@
       "role": "Accountant",
       "scope_level": "station"
     },
-    "operator": {
+    "base_operator": {
       "username": "check_operator",
       "password": "operator123",
       "role": "Operator",
       "scope_level": "station"
-    }
+    },
+    "extra_login_users": [
+      {
+        "username_prefix": "p9_manager_a",
+        "password": "manager123",
+        "role": "Manager"
+      },
+      {
+        "username_prefix": "p9_manager_b",
+        "password": "manager123",
+        "role": "Manager"
+      },
+      {
+        "username_prefix": "p9_operator_a",
+        "password": "operator123",
+        "role": "Operator"
+      },
+      {
+        "username_prefix": "p9_operator_b",
+        "password": "operator123",
+        "role": "Operator"
+      },
+      {
+        "username_prefix": "p9_operator_c",
+        "password": "operator123",
+        "role": "Operator"
+      },
+      {
+        "username_prefix": "p9_operator_d",
+        "password": "operator123",
+        "role": "Operator"
+      }
+    ]
   },
   "staff_profiles": [
     {
-      "name": "Phase 9 Pump Attendant",
+      "name": "Phase 9 Pump Attendant A",
       "profile_type": "PumpAttendantProfile",
       "login_allowed": false,
       "monthly_salary": 45000
     },
     {
-      "name": "Phase 9 Tanker Driver",
+      "name": "Phase 9 Pump Attendant B",
+      "profile_type": "PumpAttendantProfile",
+      "login_allowed": false,
+      "monthly_salary": 42000
+    },
+    {
+      "name": "Phase 9 Security Guard A",
+      "profile_type": "SecurityProfile",
+      "login_allowed": false,
+      "monthly_salary": 38000
+    },
+    {
+      "name": "Phase 9 Security Guard B",
+      "profile_type": "SecurityProfile",
+      "login_allowed": false,
+      "monthly_salary": 38000
+    },
+    {
+      "name": "Phase 9 Tanker Driver A",
       "profile_type": "TankerDriverProfile",
       "login_allowed": false,
       "monthly_salary": 55000
     },
     {
-      "name": "Phase 9 Cleaner Helper",
+      "name": "Phase 9 Tanker Driver B",
+      "profile_type": "TankerDriverProfile",
+      "login_allowed": false,
+      "monthly_salary": 52000
+    },
+    {
+      "name": "Phase 9 Cleaner Helper A",
       "profile_type": "CleanerProfile",
       "login_allowed": false,
       "monthly_salary": 30000
+    },
+    {
+      "name": "Phase 9 Cleaner Helper B",
+      "profile_type": "CleanerProfile",
+      "login_allowed": false,
+      "monthly_salary": 28000
     }
   ],
   "forecourt": {
@@ -65,108 +127,316 @@
       "Hi-Octane"
     ]
   },
-  "operations": {
-    "shift": {
-      "opening_cash": 500,
-      "meter_sale_liters": 5,
-      "meter_sale_rate": 250,
-      "cash_submission_amounts": [
-        1000,
-        250
-      ],
-      "actual_cash_collected": 1750,
-      "expected": {
-        "sale_quantity_formula": "closing_meter - opening_meter",
-        "sale_total": 1250,
-        "expected_cash": 1750,
-        "cash_submitted": 1250,
-        "cash_in_hand_after_submission": 500,
-        "difference": 0
-      }
+  "shift_templates": [
+    {
+      "name": "Morning",
+      "start_time": "06:00",
+      "end_time": "14:00"
     },
-    "variance_shift": {
-      "opening_cash": 300,
-      "meter_sale_liters": 2,
-      "meter_sale_rate": 250,
-      "actual_cash_collected": 790,
-      "expected": {
-        "sale_total": 500,
-        "expected_cash": 800,
-        "difference": -10
-      }
+    {
+      "name": "Evening",
+      "start_time": "14:00",
+      "end_time": "22:00"
     },
-    "expense": {
-      "category": "phase9",
-      "amount": 123
-    },
-    "purchase": {
-      "quantity": 50,
-      "rate_per_liter": 240,
-      "expected_total": 12000,
-      "current_backend_status_for_manager": "pending",
-      "preferred_docs_direction": "normal operational purchase should be direct record unless approval policy is enabled"
-    },
-    "tank_dip": {
-      "dip_reading_mm": 100,
-      "expected_loss_gain_when_matching_system_stock": 0
+    {
+      "name": "Night",
+      "start_time": "22:00",
+      "end_time": "06:00"
     }
+  ],
+  "operations": {
+    "shift_scenarios": [
+      {
+        "name": "balanced_shift",
+        "opening_cash": 500,
+        "sales": [
+          {
+            "nozzle_sequence": 1,
+            "liters": 5,
+            "rate": 250
+          },
+          {
+            "nozzle_sequence": 2,
+            "liters": 3,
+            "rate": 250
+          },
+          {
+            "nozzle_sequence": 3,
+            "liters": 7,
+            "rate": 265
+          }
+        ],
+        "cash_submissions": [
+          2000,
+          1855
+        ],
+        "expected_sales_total": 3855,
+        "expected_cash": 4355,
+        "actual_cash_collected": 4355,
+        "expected_difference": 0
+      },
+      {
+        "name": "variance_shift",
+        "opening_cash": 300,
+        "sales": [
+          {
+            "nozzle_sequence": 4,
+            "liters": 4,
+            "rate": 250
+          },
+          {
+            "nozzle_sequence": 5,
+            "liters": 2,
+            "rate": 280
+          }
+        ],
+        "cash_submissions": [
+          1000
+        ],
+        "expected_sales_total": 1560,
+        "expected_cash": 1860,
+        "actual_cash_collected": 1845,
+        "expected_difference": -15
+      },
+      {
+        "name": "open_shift_cash_in_hand",
+        "opening_cash": 1000,
+        "sales": [
+          {
+            "nozzle_sequence": 6,
+            "liters": 6,
+            "rate": 280
+          }
+        ],
+        "cash_submissions": [
+          1000
+        ],
+        "expected_sales_total": 1680,
+        "expected_cash": 2680,
+        "expected_cash_in_hand_after_submission": 1680,
+        "leave_open": true
+      }
+    ],
+    "expenses": [
+      {
+        "category": "phase9",
+        "amount": 123
+      },
+      {
+        "category": "security",
+        "amount": 900
+      }
+    ],
+    "purchases": [
+      {
+        "quantity": 50,
+        "rate_per_liter": 240,
+        "expected_total": 12000,
+        "current_backend_status_for_manager": "pending"
+      },
+      {
+        "quantity": 75,
+        "rate_per_liter": 245,
+        "expected_total": 18375,
+        "current_backend_status_for_manager": "pending"
+      }
+    ],
+    "internal_fuel_usage": {
+      "quantity": 10,
+      "expected_tank_delta": -10
+    },
+    "dip_scenarios": [
+      {
+        "tank_sequence": 1,
+        "readings": [
+          {
+            "name": "matching",
+            "calculated_volume_delta": 0,
+            "expected_loss_gain": 0
+          },
+          {
+            "name": "shortage",
+            "calculated_volume_delta": -15,
+            "expected_loss_gain": -15
+          }
+        ]
+      },
+      {
+        "tank_sequence": 2,
+        "readings": [
+          {
+            "name": "matching",
+            "calculated_volume_delta": 0,
+            "expected_loss_gain": 0
+          },
+          {
+            "name": "gain",
+            "calculated_volume_delta": 20,
+            "expected_loss_gain": 20
+          }
+        ]
+      },
+      {
+        "tank_sequence": 3,
+        "readings": [
+          {
+            "name": "matching",
+            "calculated_volume_delta": 0,
+            "expected_loss_gain": 0
+          },
+          {
+            "name": "shortage",
+            "calculated_volume_delta": -10,
+            "expected_loss_gain": -10
+          }
+        ]
+      }
+    ]
   },
   "credit_and_ledgers": {
-    "customer": {
-      "name": "Phase 9 Credit Customer",
-      "credit_sale_amount": 2000,
-      "payment_amount": 750,
-      "expected_balance_after_payment": 1250
+    "customers": [
+      {
+        "name": "Phase 9 Credit Customer A",
+        "credit_sale_amount": 2000,
+        "payment_amount": 750,
+        "expected_balance_after_payment": 1250
+      },
+      {
+        "name": "Phase 9 Credit Customer B",
+        "credit_sale_amount": 3500,
+        "payment_amount": 1000,
+        "expected_balance_after_payment": 2500
+      }
+    ],
+    "suppliers": [
+      {
+        "name": "Phase 9 Fuel Supplier A",
+        "purchase_total": 12000,
+        "payment_amount": 4000,
+        "expected_balance_after_payment": 8000
+      },
+      {
+        "name": "Phase 9 Fuel Supplier B",
+        "purchase_total": 18375,
+        "payment_amount": 5000,
+        "expected_balance_after_payment": 13375
+      }
+    ]
+  },
+  "payroll": [
+    {
+      "staff_name": "Phase 9 Pump Attendant A",
+      "base_salary": 45000,
+      "bonus": 5000,
+      "loan": 2000,
+      "deduction": 1000,
+      "expected_net_salary": 47000
     },
-    "supplier": {
-      "name": "Phase 9 Fuel Supplier",
-      "purchase_total": 12000,
-      "payment_amount": 4000,
-      "expected_balance_after_payment": 8000
+    {
+      "staff_name": "Phase 9 Security Guard A",
+      "base_salary": 38000,
+      "bonus": 1000,
+      "loan": 0,
+      "deduction": 500,
+      "expected_net_salary": 38500
+    },
+    {
+      "staff_name": "Phase 9 Tanker Driver A",
+      "base_salary": 55000,
+      "bonus": 3000,
+      "loan": 5000,
+      "deduction": 0,
+      "expected_net_salary": 53000
     }
-  },
-  "payroll": {
-    "base_salary": 45000,
-    "bonus": 5000,
-    "loan": 2000,
-    "deduction": 1000,
-    "expected_net_salary": 47000
-  },
-  "attendance": {
-    "check_in": "09:00",
-    "check_out": "17:00",
-    "expected_hours": 8
-  },
+  ],
+  "attendance": [
+    {
+      "staff_name": "Phase 9 Pump Attendant A",
+      "check_in": "06:00",
+      "check_out": "14:00",
+      "expected_hours": 8
+    },
+    {
+      "staff_name": "Phase 9 Security Guard A",
+      "check_in": "14:00",
+      "check_out": "22:00",
+      "expected_hours": 8
+    },
+    {
+      "staff_name": "Phase 9 Cleaner Helper A",
+      "check_in": "09:00",
+      "check_out": "17:00",
+      "expected_hours": 8
+    }
+  ],
   "tankers": {
     "enabled": true,
-    "vehicle_number": "P9-TANKER-001",
-    "compartments": [
-      5000,
-      5000
+    "fleet": [
+      {
+        "vehicle_number": "P9-TANKER-OWN-001",
+        "ownership_type": "own",
+        "driver_profile": "Phase 9 Tanker Driver A",
+        "compartments": [
+          5000,
+          5000
+        ],
+        "loaded_quantity": 8000,
+        "manual_sale_quantity": 3000,
+        "transfer_to_station_tank": 4500,
+        "expense_amount": 1000,
+        "expected_leftover_quantity": 500,
+        "expected_tanker_formula": "loaded_quantity - manual_sale_quantity - transfer_to_station_tank"
+      },
+      {
+        "vehicle_number": "P9-TANKER-HIRED-002",
+        "ownership_type": "hired",
+        "driver_profile": "Phase 9 Tanker Driver B",
+        "compartments": [
+          4000,
+          4000
+        ],
+        "loaded_quantity": 7000,
+        "manual_sale_quantity": 2500,
+        "transfer_to_station_tank": 3000,
+        "expense_amount": 800,
+        "expected_leftover_quantity": 1500,
+        "expected_tanker_formula": "loaded_quantity - manual_sale_quantity - transfer_to_station_tank"
+      }
     ],
-    "loaded_quantity": 8000,
-    "manual_sale_quantity": 3000,
-    "transfer_to_station_tank": 4500,
-    "expense_amount": 1000,
-    "expected_leftover_quantity": 500,
-    "expected_tanker_formula": "loaded_quantity - manual_sale_quantity - transfer_to_station_tank"
+    "expected_total_loaded_quantity": 15000,
+    "expected_total_manual_sale_quantity": 5500,
+    "expected_total_transfer_to_station_tank": 7500,
+    "expected_total_leftover_quantity": 2000
   },
   "pos": {
     "enabled": true,
-    "product_name": "Phase 9 Engine Oil",
-    "stock_before": 20,
-    "quantity_sold": 2,
-    "unit_price": 1200,
-    "expected_sale_total": 2400,
-    "expected_stock_after_sale": 18
+    "products": [
+      {
+        "product_name": "Phase 9 Engine Oil 1L",
+        "stock_before": 20,
+        "quantity_sold": 2,
+        "unit_price": 1200,
+        "expected_sale_total": 2400,
+        "expected_stock_after_sale": 18
+      },
+      {
+        "product_name": "Phase 9 Coolant",
+        "stock_before": 15,
+        "quantity_sold": 3,
+        "unit_price": 700,
+        "expected_sale_total": 2100,
+        "expected_stock_after_sale": 12
+      }
+    ]
   },
   "reports_documents_notifications": {
     "expected": [
       "daily closing report totals match shift sales and cash",
       "stock movement report includes sale, purchase approval state, internal fuel, tanker transfer, and dips",
-      "customer ledger document references the credit customer",
-      "supplier ledger document references the supplier",
+      "customer ledger document references both credit customers",
+      "supplier ledger document references both suppliers",
       "payroll document references the payroll run",
+      "tanker report includes own and hired tanker trips",
       "notification deliveries stay local/mock in Phase 9"
     ]
   }

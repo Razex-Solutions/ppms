@@ -63,6 +63,44 @@ The Phase 9 sample dataset should create operational data for acceptance testing
 - documents
 - report/export records
 
+## Running Pump Dataset Shape
+
+The dataset should feel like an actual operating station, not a tiny demo.
+
+Minimum realistic shape for the current one-station `check` tenant:
+
+- 1 `HeadOffice` tenant admin
+- 2 `Manager` users
+- 1 `Accountant` user
+- 4 `Operator` users
+- 2 pump attendant staff profiles
+- 2 security staff profiles
+- 2 tanker driver staff profiles
+- 2 cleaner/helper staff profiles
+- 3 tanks: petrol, diesel, and hi-octane
+- 3 dispensers
+- 6 nozzles with opening/current meter readings
+- 3 shift templates: Morning, Evening, and Night
+- at least 3 operational shifts: balanced, variance, and current/open
+- multiple fuel sales across different nozzles and fuel types
+- multiple cash submissions per shift
+- at least 2 dips per tank: one matching system stock and one variance reading
+- at least 2 fuel purchases from suppliers
+- at least 2 normal station expenses
+- at least 1 internal fuel usage record
+- at least 2 credit customers
+- at least 2 suppliers
+- customer payments and supplier payments
+- payroll for staff with bonus, loan, and deduction examples
+- attendance for staff and login users
+- 2 tankers: one own tanker and one hired/supplier tanker
+- tanker compartments for both tankers
+- tanker trips with load, manual sale, expense, and leftover transfer
+- POS/shop sample if module is enabled
+- reports/documents/notifications sample records or verification checks
+
+Expected formulas must be stored alongside the sample data so the runner can fail loudly when anything changes unexpectedly.
+
 ## Current Runner Coverage
 
 The current automated runner covers a first operations loop:
@@ -98,8 +136,11 @@ Create:
 - `Accountant`
 - `Operator`
 - profile-only pump attendant
+- profile-only security guard
 - profile-only tanker driver
 - profile-only cleaner/helper
+- second Manager user
+- four Operator users total
 
 Expected checks:
 
@@ -119,6 +160,9 @@ Create:
 - closing cash
 - balanced shift
 - variance shift
+- current/open shift
+- morning/evening/night examples
+- sales across at least three nozzles
 
 Expected formulas:
 
@@ -140,6 +184,8 @@ Create:
 - fuel sale
 - tank dip matching system stock
 - tank dip with positive/negative variance
+- two dips per tank
+- three fuel types represented across tanks/nozzles
 
 Expected formulas:
 
@@ -163,6 +209,7 @@ Create:
 
 - cash customer sale
 - credit customer
+- second credit customer
 - credit fuel sale
 - customer payment
 - customer ledger check
@@ -180,7 +227,9 @@ receivables = sum(customer_balances)
 Create:
 
 - supplier
+- second supplier
 - purchase
+- second purchase
 - supplier payment
 - supplier ledger check
 
@@ -232,8 +281,10 @@ attendance_hours = checkout_time - checkin_time
 Create:
 
 - tanker master
+- second tanker master
 - compartments
 - tanker trip
+- second tanker trip
 - trip load
 - manual tanker sale
 - tanker expense
@@ -248,6 +299,15 @@ tanker_leftover_quantity = loaded_quantity - sold_quantity - transferred_quantit
 tank_volume_after_tanker_transfer = tank_volume_before + transferred_quantity
 tanker_profit = tanker_sales - tanker_purchase_cost - tanker_expenses
 ```
+
+Tanker dataset should include:
+
+- own tanker
+- hired/supplier tanker
+- at least two compartments per tanker
+- one trip with leftover transfer into station tank
+- one trip with leftover still in tanker
+- tanker driver profile reference where supported
 
 ### 9. POS / Shop
 
@@ -290,4 +350,3 @@ Phase 9 full dataset scenario passed.
 ```
 
 It should fail loudly if any expected total, scope rule, permission rule, or module rule is wrong.
-
