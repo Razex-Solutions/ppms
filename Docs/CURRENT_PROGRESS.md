@@ -629,12 +629,12 @@ Reference docs:
   - platform-level access
   - onboarding, support, tenant oversight
 - `HeadOffice`
-  - organization oversight
-  - multi-station review/governance/reporting
-- `Admin`
-  - broad tenant control
+  - organization admin / customer owner role
+  - all stations inside the same organization
+  - also acts as station admin when the organization has only one station
 - `StationAdmin`
   - station-level setup and management
+  - used when the organization has more than one station
 - `Manager`
   - station operations control
 - `Accountant`
@@ -643,6 +643,12 @@ Reference docs:
   - daily operational tasks
 - `Profile-only staff`
   - non-login staff record support through employee profiles
+
+Current role cleanup decision:
+- `MasterAdmin` is the only true platform-wide admin.
+- `HeadOffice` is the tenant organization admin role.
+- `StationAdmin` should be delegated only when a multi-station organization needs station-level control.
+- the old generic `Admin` account/role is legacy/bootstrap compatibility and should not be the target role for new customer organizations.
 
 ### Important UI rule
 Menus, dashboards, and workspaces must be driven by:
@@ -737,12 +743,14 @@ Do not create ad hoc new `.db` files unless there is a special reason.
 
 ### Seeded local users
 - `masteradmin / master123`
-- `admin / admin123`
 - `headoffice / office123`
 - `stationadmin / station123`
 - `manager / manager123`
 - `operator / operator123`
 - `accountant / accountant123`
+
+Legacy compatibility user:
+- `admin / admin123`
 
 ## 11. What To Edit For Common Changes
 

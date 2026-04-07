@@ -491,19 +491,17 @@ Recommended:
 
 - `MasterAdmin` creates organization
 - `MasterAdmin` creates first `HeadOffice`
-- `HeadOffice` creates `StationAdmin`
-- `StationAdmin` creates:
-  - Manager
-  - Accountant
-  - Operator
-  - optional DriverLogin
-  - staff profiles
+- if the organization has one station, `HeadOffice` also acts as the station admin
+- if the organization has more than one station, `HeadOffice` creates `StationAdmin`
+- `HeadOffice` creates Manager, Accountant, Operator, and staff profiles directly for single-station organizations
+- `StationAdmin` creates Manager, Accountant, Operator, optional DriverLogin, and staff profiles for assigned stations in multi-station organizations
 
 This means:
 
 - customer companies do not create platform users
 - station admins do not create organization head-office users
 - lower users do not create higher users
+- the old generic `Admin` role should be treated as legacy/bootstrap compatibility, not the target customer role
 
 ---
 
@@ -517,9 +515,13 @@ Platform owner and global support controller.
 
 Organization-wide owner/controller for one customer company.
 
+For a single-station organization, this role is also the station administrator.
+
 ## 10.3 StationAdmin
 
 Full controller of one station’s setup, staff, modules, and operations.
+
+This role should normally appear only for multi-station organizations.
 
 ## 10.4 Manager
 
@@ -863,7 +865,7 @@ Before writing code, this document should be reviewed and edited to confirm:
 
 1. exact role names
 2. who creates whom
-3. whether `HeadOffice` and `StationAdmin` are separate or merged
+3. `HeadOffice` and `StationAdmin` are merged for single-station organizations and separate for multi-station organizations
 4. whether drivers are login users or profile-only
 5. whether module permissions are fixed by role or editable by superior users
 6. how station setup inheritance should work

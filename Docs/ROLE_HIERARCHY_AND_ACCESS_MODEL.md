@@ -25,9 +25,10 @@ Not every role should be able to create every other role.
 
 Example:
 
-- `HeadOffice` creates `Admin`
-- `Admin` creates `Manager`
-- `Manager` may create some operational staff profiles
+- `MasterAdmin` creates the first tenant `HeadOffice`
+- `HeadOffice` creates `StationAdmin` only when the organization has more than one station
+- `HeadOffice` creates `Manager`, `Accountant`, and `Operator` directly for single-station organizations
+- `StationAdmin` creates station-level `Manager`, `Accountant`, and `Operator` for multi-station organizations
 - lower roles should not create higher roles
 
 ### 2. Scope matters as much as role name
@@ -92,7 +93,7 @@ These roles can sign in to the application.
 Examples:
 
 - HeadOffice
-- Admin
+- StationAdmin
 - Manager
 - Accountant
 - Operator
@@ -123,13 +124,21 @@ These profiles may be used in:
 
 ## Recommended High-Level Hierarchy
 
+### Level 0: Platform Control
+
+- `MasterAdmin`
+
 ### Level 1: Organization Control
 
 - `HeadOffice`
 
+`HeadOffice` is the current code name for the customer organization's main admin/owner role.
+
 ### Level 2: Station Control
 
-- `Admin`
+- `StationAdmin`
+
+`StationAdmin` exists only when station-level delegation is useful, normally for multi-station organizations.
 
 ### Level 3: Station Management
 
@@ -171,7 +180,8 @@ Organization-wide oversight and control.
 
 ### Can Create
 
-- Admin
+- StationAdmin for multi-station organizations
+- Manager, Accountant, and Operator directly for single-station organizations
 - organization-level staff if needed
 - organizations, depending on final SaaS policy
 
@@ -206,16 +216,15 @@ This role is for ownership, directors, or central office supervisors.
 
 ---
 
-## 2. Admin
+## 2. StationAdmin
 
 ### Purpose
 
-Primary station-level administrative controller.
+Primary station-level administrative controller for multi-station organizations.
 
 ### Scope
 
 - assigned station
-- sometimes more than one station if explicitly allowed later
 
 ### Login
 
@@ -258,7 +267,9 @@ Primary station-level administrative controller.
 
 ### Notes
 
-Admin is the main "station owner / station controller" role inside one station.
+For a single-station organization, do not create a separate station-admin layer unless the customer explicitly needs it. In that case, `HeadOffice` should behave as the merged organization and station admin.
+
+The old generic `Admin` role is now considered a legacy/bootstrap compatibility role. It should not be the target business role for new organizations.
 
 ---
 
@@ -278,7 +289,8 @@ Daily operational leadership for the station.
 
 ### Created By
 
-- Admin
+- HeadOffice for single-station organizations
+- StationAdmin for multi-station organizations
 
 ### Can Create
 
@@ -311,7 +323,7 @@ Daily operational leadership for the station.
 ### Cannot Create
 
 - HeadOffice
-- Admin
+- StationAdmin
 
 ### Notes
 
@@ -336,7 +348,8 @@ Finance-focused station user.
 
 ### Created By
 
-- Admin
+- HeadOffice for single-station organizations
+- StationAdmin for multi-station organizations
 
 ### Can View
 
@@ -384,7 +397,8 @@ Daily station operator for forecourt work.
 
 ### Created By
 
-- Admin
+- HeadOffice for single-station organizations
+- StationAdmin for multi-station organizations
 - optionally Manager if allowed
 
 ### Can View
@@ -437,7 +451,8 @@ Two possible models:
 
 ### Created By
 
-- Admin
+- HeadOffice for single-station organizations
+- StationAdmin for multi-station organizations
 - Manager
 
 ### Can View if Login Exists
@@ -509,13 +524,12 @@ This separation is important because payroll and attendance often need many empl
 
 Recommended default creation chain:
 
-- `System bootstrap` creates first `HeadOffice`
-- `HeadOffice` creates `Admin`
-- `Admin` creates `Manager`
-- `Admin` creates `Accountant`
-- `Admin` creates `Operator`
-- `Admin` or `Manager` creates staff profiles
-- `Admin` or `Manager` creates `DriverLogin` only if the business wants real driver login access
+- `MasterAdmin` creates the organization and first `HeadOffice`
+- if the organization has one station, `HeadOffice` creates `Manager`, `Accountant`, `Operator`, and staff profiles
+- if the organization has more than one station, `HeadOffice` creates `StationAdmin`
+- `StationAdmin` creates `Manager`, `Accountant`, `Operator`, and station staff profiles
+- `Manager` may create selected profile-only staff if policy allows
+- `StationAdmin` or `Manager` creates `DriverLogin` only if the business wants real driver login access
 
 This means:
 
@@ -529,7 +543,7 @@ This means:
 | Role | Login Allowed | Notes |
 |---|---|---|
 | HeadOffice | Yes | Organization-wide control |
-| Admin | Yes | Station admin control |
+| StationAdmin | Yes | Station admin control, mainly for multi-station organizations |
 | Manager | Yes | Daily station leadership |
 | Accountant | Yes | Finance-focused |
 | Operator | Yes | Forecourt/daily ops |
@@ -544,7 +558,7 @@ This means:
 ## Dashboard
 
 - HeadOffice: organization-wide
-- Admin: station-wide
+- StationAdmin: station-wide
 - Manager: station-wide operational
 - Accountant: finance-oriented station dashboard
 - Operator: limited station view
@@ -554,7 +568,7 @@ This means:
 
 - Operator: yes
 - Manager: yes
-- Admin: yes
+- StationAdmin: yes
 - Accountant: view mostly, optionally create depending on policy
 - HeadOffice: view only
 
@@ -562,13 +576,13 @@ This means:
 
 - Operator: yes
 - Manager: yes
-- Admin: yes
+- StationAdmin: yes
 - HeadOffice: view only
 
 ## Finance
 
 - Accountant: yes
-- Admin: yes
+- StationAdmin: yes
 - Manager: partial depending on business
 - Operator: limited or no
 - HeadOffice: organization oversight
@@ -576,7 +590,7 @@ This means:
 ## Reports
 
 - HeadOffice: organization reports
-- Admin: station reports
+- StationAdmin: station reports
 - Manager: operational station reports
 - Accountant: finance reports
 - Operator: limited reports only
@@ -584,14 +598,14 @@ This means:
 ## Governance / Approvals
 
 - HeadOffice: yes
-- Admin: yes
+- StationAdmin: station-level governance where delegated
 - Manager: partial depending on workflow
 - Accountant: partial depending on workflow
 - Operator: no
 
 ## Inventory / Setup
 
-- Admin: yes
+- StationAdmin: yes
 - Manager: partial
 - Operator: mostly no
 - Accountant: mostly no
@@ -600,14 +614,14 @@ This means:
 ## Tanker Operations
 
 - HeadOffice: oversight
-- Admin: full station tanker management
+- StationAdmin: full station tanker management
 - Manager: operational control
 - DriverLogin: only assigned trip actions
 - TankerDriverProfile: no login access
 
 ## Payroll / Attendance
 
-- Admin: yes
+- StationAdmin: yes
 - Manager: yes
 - Accountant: payroll view or partial control
 - Operator: self attendance only
@@ -684,7 +698,7 @@ This is especially useful for:
 Keep these login roles:
 
 - HeadOffice
-- Admin
+- StationAdmin
 - Manager
 - Accountant
 - Operator
@@ -709,8 +723,8 @@ Introduce more configurable policy rules and custom permission bundles.
 
 Before implementation, these decisions should be confirmed:
 
-1. Is `Admin` station-only or can one admin manage multiple stations?
-2. Can `Manager` create `Operator`, or only `Admin`?
+1. Confirm that the old generic `Admin` role is legacy/bootstrap only.
+2. Can `Manager` create `Operator`, or only `HeadOffice`/`StationAdmin`?
 3. Should `Accountant` approve anything, or only process records?
 4. Are tanker drivers login users or profile-only employees?
 5. Should attendance require a login, or can profiles be marked by managers/admins?
@@ -726,8 +740,10 @@ Before implementation, these decisions should be confirmed:
 
 For the next implementation phase, the safest business model is:
 
-- `HeadOffice` creates `Admin`
-- `Admin` creates `Manager`, `Accountant`, `Operator`
+- `MasterAdmin` creates the first `HeadOffice`
+- `HeadOffice` creates `StationAdmin` only for multi-station organizations
+- single-station `HeadOffice` creates `Manager`, `Accountant`, and `Operator` directly
+- multi-station `StationAdmin` creates station-level `Manager`, `Accountant`, and `Operator`
 - tanker drivers remain profile-only by default
 - employee profiles become separate from login users
 - access is restricted by both role and scope

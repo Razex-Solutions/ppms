@@ -50,9 +50,11 @@ Tenant roles must not see data outside their organization unless the role is exp
 This means:
 
 - `masteradmin` may inspect every organization and station
-- `admin` may inspect only the admin user's own organization
-- `headoffice` may inspect only the assigned organization
-- `stationadmin`, `manager`, `operator`, and `accountant` may inspect only their assigned station or permitted organization scope
+- `headoffice` is the tenant organization admin and may inspect only the assigned organization
+- `stationadmin` is station-scoped and should normally exist only for multi-station organizations
+- if the organization has one station, `headoffice` and `stationadmin` responsibilities should be merged into `headoffice`
+- `manager`, `operator`, and `accountant` may inspect only their assigned station or permitted organization scope
+- the old generic `admin` account is legacy/bootstrap compatibility and should not be treated as the target business role
 - no tenant user should see stations, users, sales, purchases, reports, or dashboard totals from another organization
 - if a user has no valid scope, the app should show a clear no-access state instead of leaking data
 
@@ -120,13 +122,20 @@ Use these accounts unless we intentionally create new users during testing:
 
 ```text
 masteradmin / master123
-admin / admin123
 headoffice / office123
 stationadmin / station123
 manager / manager123
 operator / operator123
 accountant / accountant123
 ```
+
+Legacy compatibility account:
+
+```text
+admin / admin123
+```
+
+Use the legacy `admin` account only to identify and remove outdated UI/permission behavior.
 
 ## Step 1 - Login And Shell Stability
 
@@ -142,12 +151,13 @@ Actions:
 
 Repeat for:
 
-- `admin`
 - `headoffice`
 - `stationadmin`
 - `manager`
 - `operator`
 - `accountant`
+
+Then test legacy `admin` separately and report every place where it overlaps confusingly with `HeadOffice` or `StationAdmin`.
 
 Acceptance:
 
@@ -189,13 +199,20 @@ Purpose:
 Role sequence:
 
 ```text
-admin
 headoffice
 stationadmin
 manager
 operator
 accountant
 ```
+
+Legacy compatibility check:
+
+```text
+admin
+```
+
+The legacy `admin` role should not become the model for new tenant behavior.
 
 Actions for each role:
 
@@ -228,13 +245,14 @@ Role sequence:
 
 ```text
 masteradmin
-admin
 headoffice
 stationadmin
 manager
 operator
 accountant
 ```
+
+Test legacy `admin` separately after the intended roles.
 
 Actions for each role:
 
@@ -259,7 +277,7 @@ Purpose:
 
 - decide which setup fields should stay, be renamed, be made optional, or be hidden
 
-Role: `admin` or `stationadmin`
+Role: `headoffice` or `stationadmin`
 
 Actions:
 
@@ -301,7 +319,7 @@ Acceptance:
 
 ## Step 6 - Tenant Admin Setup Review
 
-Role: `admin`
+Role: `headoffice`
 
 Actions:
 
@@ -325,12 +343,12 @@ Acceptance:
 
 ## Step 7 - Single-Station Scenario
 
-Role: `admin`
+Role: `headoffice`
 
 Actions:
 
 - confirm the default organization behaves like a single-station organization
-- review whether admin/station-admin controls are merged or simplified where expected
+- review whether `HeadOffice` and `StationAdmin` controls are merged or simplified where expected
 - check dashboard cards and menu items
 - check whether station-scoped data appears without forcing station selection everywhere
 
@@ -345,7 +363,6 @@ Acceptance:
 Role sequence:
 
 ```text
-admin
 headoffice
 stationadmin
 manager
@@ -516,7 +533,6 @@ Acceptance:
 Recommended roles:
 
 ```text
-admin
 headoffice
 accountant
 ```
