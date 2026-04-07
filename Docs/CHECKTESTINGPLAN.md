@@ -89,27 +89,36 @@ If there is no visible error text, describe what changed on screen after the cli
 
 ## Before Starting
 
-Confirm backend is running:
+Restart the full local testing stack after code changes:
 
 ```powershell
 cd C:\Fuel Management System
-venv\Scripts\python.exe run_local_server.py
+.\restart_local_dev.ps1
 ```
 
-Confirm health URL works:
+This restarts the backend, support console, and Flutter Windows app. It also opens support console and Flutter in separate PowerShell windows.
+
+If you only need the backend:
+
+```powershell
+cd C:\Fuel Management System
+.\restart_local_dev.ps1 -SkipSupportConsole -SkipFlutter
+```
+
+Confirm backend health URL works:
 
 ```text
 http://127.0.0.1:8012/health
 ```
 
-Start Flutter:
+Manual Flutter command, only if the restart helper is not used:
 
 ```powershell
 cd C:\Fuel Management System\ppms_flutter
 flutter run -d windows --dart-define=PPMS_API_BASE_URL=http://127.0.0.1:8012
 ```
 
-Optional support console start:
+Manual support console command, only if the restart helper is not used:
 
 ```powershell
 cd C:\Fuel Management System\support_console

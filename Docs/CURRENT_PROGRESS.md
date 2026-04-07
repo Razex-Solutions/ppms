@@ -716,7 +716,25 @@ flutter test
 
 ## 10. Local Runtime And Workflow
 
-### Preferred backend restart
+### Preferred full stack restart
+
+Use after code changes before manual Phase 9 testing:
+```powershell
+.\restart_local_dev.ps1
+```
+
+This helper:
+- restarts the backend on `127.0.0.1:8012`
+- restarts the support console dev server
+- restarts Flutter Windows with `PPMS_API_BASE_URL=http://127.0.0.1:8012`
+- opens support console and Flutter in separate PowerShell windows
+
+Backend-only restart:
+```powershell
+.\restart_local_dev.ps1 -SkipSupportConsole -SkipFlutter
+```
+
+### Backend-only helper
 Use:
 ```powershell
 venv\Scripts\python.exe run_local_server.py
