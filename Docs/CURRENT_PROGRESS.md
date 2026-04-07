@@ -68,9 +68,11 @@ The old Flutter app is beyond simple placeholders. It includes real workspaces f
 
 Current Phase 9 tenant rebuild decision:
 - keep `ppms_flutter` intact as a reference
-- create `ppms_tenant_flutter` as the clean tenant app rebuild
-- rebuild one vertical slice at a time from `TENANT_FLUTTER_REBUILD_PLAN.md`
-- first slice is login, session context, tenant landing page, role-aware navigation, and HeadOffice worker creation
+- keep `ppms_tenant_flutter` intact as the clean tenant app experiment and automation record
+- pause broad Flutter building because screen behavior was moving faster than agreed product rules
+- do not delete either Flutter folder automatically
+- use `FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md` before any new Flutter UI work
+- build future UI from backend/matrix contracts only, after discussing the real workflow first
 
 ### Phase Progress
 

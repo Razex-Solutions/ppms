@@ -17,13 +17,16 @@ When returning to this project, use these files in this order:
 5. [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md)
    - this is the clean tenant Flutter rebuild source of truth
 
-6. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
+6. [FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md](FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md)
+   - this records the paused Flutter automation work and the new matrix-first rebuild strategy
+
+7. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
    - this is the Phase 9 manual testing and fix workflow
 
-7. [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md)
+8. [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md)
    - this defines the large sample data and expected totals for automated Phase 9 acceptance checks
 
-8. [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md)
+9. [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md)
    - this shows what the Phase 9 runner and clean tenant app cover, and what is still missing
 
 ## Current Recommended Next Step
@@ -31,7 +34,8 @@ When returning to this project, use these files in this order:
 Start with:
 
 - `Phase 9 - Local Stabilization and Acceptance`
-- use [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md) for the clean tenant app path
+- use [FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md](FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md) before doing more Flutter work
+- use [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md) only after the next matrix-first UI slice is agreed
 - use [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md) as the step-by-step manual acceptance plan
 - use [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md) when expanding automated scenario data and expected calculations
 - use [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md) to choose the next missing batch without drifting off the roadmap
@@ -57,9 +61,9 @@ from:
 Current direction:
 
 - keep the existing project
-- keep the old Flutter app as a reference for now
-- build the clean tenant Flutter app in `ppms_tenant_flutter`
-- refactor and build phase by phase
+- keep the old Flutter app and clean tenant Flutter experiment in the repo for record/reference
+- pause broad Flutter building until each screen is discussed and defined in a backend/matrix contract
+- use backend scenario data and matrix-first rules as the source of truth
 - complete locally first
 - deploy later to EC2/Vercel after local stabilization
 
