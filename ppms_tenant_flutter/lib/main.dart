@@ -445,6 +445,22 @@ class TenantApiClient {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> customers({
+    required String baseUrl,
+    required String accessToken,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/customers/',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> createSupplier({
     required String baseUrl,
     required String accessToken,
@@ -454,6 +470,34 @@ class TenantApiClient {
       baseUrl: baseUrl,
       method: 'POST',
       path: '/suppliers/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<Map<String, dynamic>> createCustomerPayment({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/customer-payments/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<Map<String, dynamic>> createSupplierPayment({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/supplier-payments/',
       accessToken: accessToken,
       body: body,
     );
@@ -555,6 +599,21 @@ class TenantApiClient {
       method: 'GET',
       path: path,
       accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> postApiPath({
+    required String baseUrl,
+    required String accessToken,
+    required String path,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: path,
+      accessToken: accessToken,
+      body: body,
     );
   }
 
@@ -1472,6 +1531,10 @@ class TenantSessionController extends ChangeNotifier {
     return _apiClient.suppliers(baseUrl: _baseUrl, accessToken: _accessToken());
   }
 
+  Future<List<Map<String, dynamic>>> loadCustomers() {
+    return _apiClient.customers(baseUrl: _baseUrl, accessToken: _accessToken());
+  }
+
   Future<Map<String, dynamic>> createSupplier({
     required String name,
     required String code,
@@ -1530,6 +1593,67 @@ class TenantSessionController extends ChangeNotifier {
       baseUrl: _baseUrl,
       accessToken: _accessToken(),
       path: path,
+    );
+  }
+
+  Future<Map<String, dynamic>> createCustomerPayment({
+    required int customerId,
+    required double amount,
+    String? referenceNo,
+    String? notes,
+  }) {
+    final resolvedStationId = workingStationId;
+    if (resolvedStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    return _apiClient.createCustomerPayment(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {
+        'customer_id': customerId,
+        'station_id': resolvedStationId,
+        'amount': amount,
+        'payment_method': 'cash',
+        'reference_no': referenceNo,
+        'notes': notes,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> createSupplierPayment({
+    required int supplierId,
+    required double amount,
+    String? referenceNo,
+    String? notes,
+  }) {
+    final resolvedStationId = workingStationId;
+    if (resolvedStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    return _apiClient.createSupplierPayment(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {
+        'supplier_id': supplierId,
+        'station_id': resolvedStationId,
+        'amount': amount,
+        'payment_method': 'cash',
+        'reference_no': referenceNo,
+        'notes': notes,
+      },
+    );
+  }
+
+  Future<void> finalizePayrollRun(int payrollRunId) async {
+    await _apiClient.postApiPath(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      path: '/payroll/runs/$payrollRunId/finalize',
+      body: {'notes': 'Finalized from Phase 9 tenant Flutter packet'},
     );
   }
 
@@ -2155,6 +2279,8 @@ class _WorkspaceDetail extends StatelessWidget {
     }.contains(workspace.id);
     final isOperatorFuelWorkspace = workspace.id == 'fuel_sale';
     final isOperatorShiftWorkspace = workspace.id == 'shift';
+    final isAccountantWorkspace = sessionController.roleName == 'Accountant' &&
+        {'finance', 'parties', 'payments', 'payroll'}.contains(workspace.id);
     final isReadOnlyApiWorkspace = {
       'finance',
       'finance_overview',
@@ -2249,8 +2375,16 @@ class _WorkspaceDetail extends StatelessWidget {
           const SizedBox(height: 12),
           _OperatorShiftPanel(sessionController: sessionController),
         ],
+        if (isAccountantWorkspace) ...[
+          const SizedBox(height: 12),
+          _AccountantFinancePanel(
+            sessionController: sessionController,
+            workspaceId: workspace.id,
+          ),
+        ],
         if (isReadOnlyApiWorkspace &&
             !_usesSpecialActionPanel(sessionController.roleName, workspace.id) &&
+            !isAccountantWorkspace &&
             !(sessionController.roleName == 'Operator' &&
                 workspace.id == 'attendance')) ...[
           const SizedBox(height: 12),
@@ -2283,6 +2417,10 @@ class _WorkspaceDetail extends StatelessWidget {
       return true;
     }
     if (roleName == 'Operator' && {'shift', 'fuel_sale'}.contains(workspaceId)) {
+      return true;
+    }
+    if (roleName == 'Accountant' &&
+        {'finance', 'parties', 'payments', 'payroll'}.contains(workspaceId)) {
       return true;
     }
     return false;
@@ -2503,6 +2641,467 @@ class _OverviewDataset {
 
   final String title;
   final List<Map<String, dynamic>> rows;
+}
+
+class _AccountantFinancePanel extends StatefulWidget {
+  const _AccountantFinancePanel({
+    required this.sessionController,
+    required this.workspaceId,
+  });
+
+  final TenantSessionController sessionController;
+  final String workspaceId;
+
+  @override
+  State<_AccountantFinancePanel> createState() => _AccountantFinancePanelState();
+}
+
+class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
+  final _customerAmountController = TextEditingController(text: '100');
+  final _supplierAmountController = TextEditingController(text: '100');
+  final _referenceController = TextEditingController(text: 'P9-UI');
+  final _notesController = TextEditingController(
+    text: 'Phase 9 accountant UI packet',
+  );
+
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _error;
+  String? _message;
+  List<Map<String, dynamic>> _customers = const [];
+  List<Map<String, dynamic>> _suppliers = const [];
+  List<Map<String, dynamic>> _customerPayments = const [];
+  List<Map<String, dynamic>> _supplierPayments = const [];
+  List<Map<String, dynamic>> _payrollRuns = const [];
+  Map<String, dynamic>? _customerLedger;
+  Map<String, dynamic>? _supplierLedger;
+  int? _selectedCustomerId;
+  int? _selectedSupplierId;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AccountantFinancePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workspaceId != widget.workspaceId) {
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _customerAmountController.dispose();
+    _supplierAmountController.dispose();
+    _referenceController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final stationQuery = widget.sessionController.workingStationId == null
+          ? ''
+          : '?station_id=${widget.sessionController.workingStationId}';
+      final customers = await widget.sessionController.loadCustomers();
+      final suppliers = await widget.sessionController.loadSuppliers();
+      final customerPayments = await widget.sessionController
+          .loadListPath('/customer-payments/$stationQuery');
+      final supplierPayments = await widget.sessionController
+          .loadListPath('/supplier-payments/$stationQuery');
+      final payrollRuns = await widget.sessionController
+          .loadListPath('/payroll/runs$stationQuery');
+      final selectedCustomerId = _selectedCustomerId ??
+          (customers.isEmpty ? null : customers.first['id'] as int?);
+      final selectedSupplierId = _selectedSupplierId ??
+          (suppliers.isEmpty ? null : suppliers.first['id'] as int?);
+      final customerLedger = selectedCustomerId == null
+          ? null
+          : await widget.sessionController
+              .loadMapPath('/ledger/customer/$selectedCustomerId');
+      final supplierLedger = selectedSupplierId == null
+          ? null
+          : await widget.sessionController.loadMapPath(
+              '/ledger/supplier/$selectedSupplierId$stationQuery',
+            );
+      if (!mounted) return;
+      setState(() {
+        _customers = customers;
+        _suppliers = suppliers;
+        _customerPayments = customerPayments;
+        _supplierPayments = supplierPayments;
+        _payrollRuns = payrollRuns;
+        _selectedCustomerId = selectedCustomerId;
+        _selectedSupplierId = selectedSupplierId;
+        _customerLedger = customerLedger;
+        _supplierLedger = supplierLedger;
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not load accountant packet: $error';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _createCustomerPayment() async {
+    final customerId = _selectedCustomerId;
+    final amount = double.tryParse(_customerAmountController.text.trim());
+    if (customerId == null || amount == null || amount <= 0) {
+      setState(() {
+        _error = 'Choose a customer and enter a valid customer payment amount.';
+      });
+      return;
+    }
+    await _save(
+      () async {
+        await widget.sessionController.createCustomerPayment(
+          customerId: customerId,
+          amount: amount,
+          referenceNo: _referenceController.text.trim(),
+          notes: _notesController.text.trim(),
+        );
+      },
+      'Customer payment recorded.',
+    );
+  }
+
+  Future<void> _createSupplierPayment() async {
+    final supplierId = _selectedSupplierId;
+    final amount = double.tryParse(_supplierAmountController.text.trim());
+    if (supplierId == null || amount == null || amount <= 0) {
+      setState(() {
+        _error = 'Choose a supplier and enter a valid supplier payment amount.';
+      });
+      return;
+    }
+    await _save(
+      () async {
+        await widget.sessionController.createSupplierPayment(
+          supplierId: supplierId,
+          amount: amount,
+          referenceNo: _referenceController.text.trim(),
+          notes: _notesController.text.trim(),
+        );
+      },
+      'Supplier payment recorded.',
+    );
+  }
+
+  Future<void> _finalizeFirstDraftPayroll() async {
+    Map<String, dynamic>? draftRun;
+    for (final run in _payrollRuns) {
+      if (run['status'] == 'draft') {
+        draftRun = run;
+        break;
+      }
+    }
+    if (draftRun == null || draftRun['id'] is! int) {
+      setState(() => _error = 'No draft payroll run found to finalize.');
+      return;
+    }
+    await _save(
+      () async => widget.sessionController.finalizePayrollRun(
+        draftRun!['id'] as int,
+      ),
+      'Draft payroll run finalized.',
+    );
+  }
+
+  Future<void> _save(
+    Future<void> Function() action,
+    String successMessage,
+  ) async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await action();
+      await _load();
+      if (!mounted) return;
+      setState(() => _message = successMessage);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading accountant packet',
+        body: 'Reading parties, payments, ledgers, and payroll from the backend.',
+      );
+    }
+    final customerSummary = _customerLedger?['summary'];
+    final supplierSummary = _supplierLedger?['summary'];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Accountant Action Packet',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Station: ${widget.sessionController.workingStationLabel}. These are API-backed finance actions and ledger reads.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _SummaryTile(label: 'Customers', value: _customers.length.toString()),
+                _SummaryTile(label: 'Suppliers', value: _suppliers.length.toString()),
+                _SummaryTile(
+                  label: 'Customer payments',
+                  value: _customerPayments.length.toString(),
+                ),
+                _SummaryTile(
+                  label: 'Supplier payments',
+                  value: _supplierPayments.length.toString(),
+                ),
+                _SummaryTile(label: 'Payroll runs', value: _payrollRuns.length.toString()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (widget.workspaceId == 'payments' ||
+                widget.workspaceId == 'finance') ...[
+              _paymentForms(),
+              const SizedBox(height: 16),
+            ],
+            if (widget.workspaceId == 'parties' ||
+                widget.workspaceId == 'finance') ...[
+              _DataCard(
+                title: 'Selected Customer Ledger',
+                rows: [
+                  _DataRowText(
+                    'Customer',
+                    customerSummary is Map ? customerSummary['party_name'] : '-',
+                  ),
+                  _DataRowText(
+                    'Balance',
+                    customerSummary is Map
+                        ? customerSummary['current_balance']
+                        : '-',
+                  ),
+                  _DataRowText(
+                    'Charges',
+                    customerSummary is Map
+                        ? customerSummary['total_charges']
+                        : '-',
+                  ),
+                  _DataRowText(
+                    'Payments',
+                    customerSummary is Map
+                        ? customerSummary['total_payments']
+                        : '-',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _DataCard(
+                title: 'Selected Supplier Ledger',
+                rows: [
+                  _DataRowText(
+                    'Supplier',
+                    supplierSummary is Map ? supplierSummary['party_name'] : '-',
+                  ),
+                  _DataRowText(
+                    'Balance',
+                    supplierSummary is Map
+                        ? supplierSummary['current_balance']
+                        : '-',
+                  ),
+                  _DataRowText(
+                    'Charges',
+                    supplierSummary is Map
+                        ? supplierSummary['total_charges']
+                        : '-',
+                  ),
+                  _DataRowText(
+                    'Payments',
+                    supplierSummary is Map
+                        ? supplierSummary['total_payments']
+                        : '-',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (widget.workspaceId == 'payroll') ...[
+              _SimpleListCard(
+                title: 'Payroll Runs',
+                emptyText: 'No payroll runs found.',
+                items: [
+                  for (final run in _payrollRuns)
+                    'Payroll ${run['id']} - ${run['period_start']} to ${run['period_end']} - ${run['status']} - net ${run['total_net_amount']}',
+                ],
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _isSaving ? null : _finalizeFirstDraftPayroll,
+                icon: const Icon(Icons.verified_outlined),
+                label: const Text('Finalize First Draft Payroll'),
+              ),
+              const SizedBox(height: 16),
+            ],
+            _SimpleListCard(
+              title: 'Recent Customer Payments',
+              emptyText: 'No customer payments found.',
+              items: [
+                for (final payment in _customerPayments.take(8))
+                  'Payment ${payment['id']} - customer ${payment['customer_id']} - ${payment['amount']} - reversed ${payment['is_reversed']}',
+              ],
+            ),
+            const SizedBox(height: 12),
+            _SimpleListCard(
+              title: 'Recent Supplier Payments',
+              emptyText: 'No supplier payments found.',
+              items: [
+                for (final payment in _supplierPayments.take(8))
+                  'Payment ${payment['id']} - supplier ${payment['supplier_id']} - ${payment['amount']} - reversed ${payment['is_reversed']}',
+              ],
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _paymentForms() {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SizedBox(
+          width: 280,
+          child: DropdownButtonFormField<int>(
+            initialValue: _selectedCustomerId,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Customer',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final customer in _customers)
+                DropdownMenuItem<int>(
+                  value: customer['id'] as int?,
+                  child: Text(
+                    '${customer['name']} (${customer['code'] ?? '-'})',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() => _selectedCustomerId = value);
+              _load();
+            },
+          ),
+        ),
+        _amountField(_customerAmountController, 'Customer payment amount'),
+        FilledButton.icon(
+          onPressed: _isSaving ? null : _createCustomerPayment,
+          icon: const Icon(Icons.account_balance_wallet_outlined),
+          label: const Text('Record Customer Payment'),
+        ),
+        SizedBox(
+          width: 280,
+          child: DropdownButtonFormField<int>(
+            initialValue: _selectedSupplierId,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Supplier',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final supplier in _suppliers)
+                DropdownMenuItem<int>(
+                  value: supplier['id'] as int?,
+                  child: Text(
+                    '${supplier['name']} (${supplier['code'] ?? '-'})',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (value) {
+              setState(() => _selectedSupplierId = value);
+              _load();
+            },
+          ),
+        ),
+        _amountField(_supplierAmountController, 'Supplier payment amount'),
+        FilledButton.icon(
+          onPressed: _isSaving ? null : _createSupplierPayment,
+          icon: const Icon(Icons.payments_outlined),
+          label: const Text('Record Supplier Payment'),
+        ),
+        _textField(_referenceController, 'Reference'),
+        _textField(_notesController, 'Notes'),
+      ],
+    );
+  }
+
+  Widget _amountField(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 220,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        keyboardType: TextInputType.number,
+      ),
+    );
+  }
+
+  Widget _textField(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 220,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
 }
 
 class _UserManagementPanel extends StatefulWidget {

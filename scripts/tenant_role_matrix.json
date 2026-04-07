@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "purpose": "Machine-readable Phase 9 tenant Flutter role/screen/API contract.",
+  "rules": {
+    "single_station_tenant": "HeadOffice acts as both organization admin and station admin; StationAdmin is hidden.",
+    "multi_station_tenant": "HeadOffice can see tenant stations; StationAdmin is station-scoped.",
+    "platform_scope": "MasterAdmin stays outside the tenant Flutter app."
+  },
+  "roles": {
+    "HeadOffice": {
+      "screens": {
+        "tenant_setup": {
+          "visible": true,
+          "read_apis": ["GET /organizations/{organization_id}/setup-foundation"]
+        },
+        "users": {
+          "visible": true,
+          "read_apis": ["GET /users/?organization_id={organization_id}", "GET /roles/"],
+          "create_apis": ["POST /users/"],
+          "update_apis": ["PUT /users/{user_id}"],
+          "delete_apis": ["DELETE /users/{user_id}"],
+          "notes": "Create StationAdmin only for multi-station tenants; create Manager, Accountant, Operator for one-station tenants."
+        },
+        "station_setup": {
+          "visible": true,
+          "read_apis": ["GET /stations/{station_id}/setup-foundation"]
+        },
+        "inventory_dips": {
+          "visible": true,
+          "read_apis": ["GET /stations/{station_id}/setup-foundation"]
+        },
+        "tankers": {
+          "visible_when_modules": ["tanker_operations"],
+          "read_apis": ["GET /tankers/?station_id={station_id}", "GET /tankers/trips?station_id={station_id}"]
+        },
+        "pos": {
+          "visible_when_modules": ["pos", "mart"],
+          "read_apis": ["GET /pos-products/?station_id={station_id}", "GET /pos-sales/?station_id={station_id}"]
+        },
+        "reports": {
+          "visible": true,
+          "read_apis": ["GET /reports/daily-closing?report_date={today}&station_id={station_id}", "GET /report-definitions/", "GET /report-exports/"]
+        },
+        "documents": {
+          "visible": true,
+          "read_apis": ["GET /document-templates/{station_id}", "GET /financial-documents/dispatches"]
+        },
+        "notifications": {
+          "visible": true,
+          "read_apis": ["GET /notifications/summary", "GET /notifications/", "GET /notifications/deliveries", "GET /notifications/preferences"]
+        }
+      }
+    },
+    "StationAdmin": {
+      "screens": {
+        "users": {
+          "visible": true,
+          "read_apis": ["GET /users/?station_id={station_id}", "GET /roles/"],
+          "create_apis": ["POST /users/"],
+          "update_apis": ["PUT /users/{user_id}"],
+          "delete_apis": ["DELETE /users/{user_id}"]
+        },
+        "station_setup": {
+          "visible": true,
+          "read_apis": ["GET /stations/{station_id}/setup-foundation"]
+        },
+        "shifts": {
+          "visible": true,
+          "read_apis": ["GET /shifts/?station_id={station_id}"],
+          "create_apis": ["POST /shifts/"],
+          "update_apis": ["POST /shifts/{shift_id}/close"]
+        },
+        "fuel_sales": {
+          "visible": true,
+          "read_apis": ["GET /fuel-sales/?station_id={station_id}"],
+          "create_apis": ["POST /fuel-sales/"]
+        },
+        "cash": {
+          "visible": true,
+          "read_apis": ["GET /shifts/?station_id={station_id}"],
+          "create_apis": ["POST /shifts/{shift_id}/cash-submissions"]
+        },
+        "purchases": {
+          "visible": true,
+          "read_apis": ["GET /purchases/?station_id={station_id}"],
+          "create_apis": ["POST /purchases/"]
+        },
+        "expenses": {
+          "visible": true,
+          "read_apis": ["GET /expenses/?station_id={station_id}"],
+          "create_apis": ["POST /expenses/"]
+        },
+        "tankers": {
+          "visible_when_modules": ["tanker_operations"],
+          "read_apis": ["GET /tankers/?station_id={station_id}", "GET /tankers/trips?station_id={station_id}"]
+        },
+        "pos": {
+          "visible_when_modules": ["pos", "mart"],
+          "read_apis": ["GET /pos-products/?station_id={station_id}", "GET /pos-sales/?station_id={station_id}"]
+        },
+        "attendance": {
+          "visible": true,
+          "read_apis": ["GET /attendance/?station_id={station_id}"]
+        },
+        "reports": {
+          "visible": true,
+          "read_apis": ["GET /reports/daily-closing?report_date={today}&station_id={station_id}"]
+        }
+      }
+    },
+    "Manager": {
+      "screens": {
+        "shifts": {"visible": true, "read_apis": ["GET /shifts/?station_id={station_id}"], "create_apis": ["POST /shifts/"]},
+        "fuel_sales": {"visible": true, "read_apis": ["GET /fuel-sales/?station_id={station_id}"]},
+        "cash": {"visible": true, "read_apis": ["GET /shifts/?station_id={station_id}"], "create_apis": ["POST /shifts/{shift_id}/cash-submissions"]},
+        "purchases": {"visible": true, "read_apis": ["GET /purchases/?station_id={station_id}"], "create_apis": ["POST /purchases/"]},
+        "expenses": {"visible": true, "read_apis": ["GET /expenses/?station_id={station_id}"], "create_apis": ["POST /expenses/"]},
+        "inventory_dips": {"visible": true, "read_apis": ["GET /tank-dips/?station_id={station_id}", "GET /stations/{station_id}/setup-foundation"], "create_apis": ["POST /tank-dips/"]},
+        "tankers": {"visible_when_modules": ["tanker_operations"], "read_apis": ["GET /tankers/?station_id={station_id}", "GET /tankers/trips?station_id={station_id}"]},
+        "pos": {"visible_when_modules": ["pos", "mart"], "read_apis": ["GET /pos-products/?station_id={station_id}", "GET /pos-sales/?station_id={station_id}"]},
+        "attendance": {"visible": true, "read_apis": ["GET /attendance/?station_id={station_id}"]},
+        "reports": {"visible": true, "read_apis": ["GET /reports/daily-closing?report_date={today}&station_id={station_id}"]}
+      }
+    },
+    "Accountant": {
+      "screens": {
+        "finance": {
+          "visible": true,
+          "read_apis": ["GET /purchases/?station_id={station_id}", "GET /expenses/?station_id={station_id}", "GET /customer-payments/?station_id={station_id}", "GET /supplier-payments/?station_id={station_id}"]
+        },
+        "parties": {
+          "visible": true,
+          "read_apis": ["GET /customers/", "GET /suppliers/", "GET /ledger/customer/{customer_id}", "GET /ledger/supplier/{supplier_id}?station_id={station_id}"]
+        },
+        "payments": {
+          "visible": true,
+          "read_apis": ["GET /customer-payments/?station_id={station_id}", "GET /supplier-payments/?station_id={station_id}"],
+          "create_apis": ["POST /customer-payments/", "POST /supplier-payments/"]
+        },
+        "payroll": {
+          "visible": true,
+          "read_apis": ["GET /payroll/runs?station_id={station_id}", "GET /payroll/runs/{payroll_run_id}/lines"],
+          "update_apis": ["POST /payroll/runs/{payroll_run_id}/finalize"]
+        },
+        "attendance": {"visible": true, "read_apis": ["GET /attendance/?station_id={station_id}"]},
+        "tankers": {"visible_when_modules": ["tanker_operations"], "read_apis": ["GET /tankers/?station_id={station_id}", "GET /tankers/trips?station_id={station_id}"]},
+        "documents": {"visible": true, "read_apis": ["GET /document-templates/{station_id}", "GET /financial-documents/dispatches"]},
+        "reports": {"visible": true, "read_apis": ["GET /reports/daily-closing?report_date={today}&station_id={station_id}", "GET /report-definitions/", "GET /report-exports/"]},
+        "notifications": {"visible": true, "read_apis": ["GET /notifications/summary", "GET /notifications/", "GET /notifications/deliveries", "GET /notifications/preferences"]}
+      }
+    },
+    "Operator": {
+      "screens": {
+        "shift": {"visible": true, "read_apis": ["GET /shifts/?station_id={station_id}"], "create_apis": ["POST /shifts/"], "update_apis": ["POST /shifts/{shift_id}/close"]},
+        "fuel_sale": {"visible": true, "read_apis": ["GET /stations/{station_id}/setup-foundation", "GET /fuel-sales/?station_id={station_id}"], "create_apis": ["POST /fuel-sales/"]},
+        "cash": {"visible": true, "read_apis": ["GET /shifts/?station_id={station_id}"], "create_apis": ["POST /shifts/{shift_id}/cash-submissions"]},
+        "inventory_dips": {"visible": true, "read_apis": ["GET /stations/{station_id}/setup-foundation"], "create_apis": ["POST /tank-dips/"]},
+        "pos_sale": {"visible_when_modules": ["pos", "mart"], "read_apis": ["GET /pos-products/?station_id={station_id}", "GET /pos-sales/?station_id={station_id}"], "create_apis": ["POST /pos-sales/"]},
+        "attendance": {"visible": true, "create_apis": ["POST /attendance/check-in", "POST /attendance/{attendance_id}/check-out"], "notes": "Operator should not list all attendance records."}
+      }
+    }
+  }
+}

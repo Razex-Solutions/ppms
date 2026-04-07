@@ -73,6 +73,37 @@ Each slice must have:
 - test notes added to Phase 9 plan
 - commit and push after completion
 
+## Automation-First Rule
+
+The clean tenant app must now follow this automation path:
+
+```text
+Role Matrix JSON
+        ->
+Tenant UI API smoke check
+        ->
+Flutter widget/navigation tests
+        ->
+Manual UI polish only
+```
+
+Machine-readable source:
+
+- [tenant_role_matrix.json](/C:/Fuel%20Management%20System/scripts/tenant_role_matrix.json)
+
+Required checks before manual UI review:
+
+```powershell
+.\run_phase9_scenario.ps1
+.\run_phase9_tenant_ui_api_smoke.ps1
+cd .\ppms_tenant_flutter
+flutter analyze --no-pub
+flutter test --no-pub
+flutter build windows --debug --no-pub --dart-define=PPMS_API_BASE_URL=http://127.0.0.1:8012
+```
+
+Manual checking should focus on layout, wording, and usability. Role visibility, API path access, and module hiding should be automated first.
+
 ## Permission Rules For The Rebuild
 
 Use permission checks by module/action, not just role names.
@@ -400,6 +431,25 @@ Rebuild in this order:
 11. Tankers, if enabled
 12. Documents and notifications
 13. Settings and diagnostics
+
+## Tenant Flutter Phase Matrix
+
+Use this matrix to keep the rebuild from drifting:
+
+| Phase | Main Role | Screens | Goal | Automation |
+|---|---|---|---|---|
+| F1 | all tenant roles | login, session context | token, role, org, station resolution | Flutter widget test |
+| F2 | all tenant roles | shell, navigation | role-aware and module-aware visibility | `tenant_role_matrix.json` |
+| F3 | HeadOffice | users, staff | create/update/delete Manager, Accountant, Operator; hide StationAdmin for one-station | UI API smoke + widget test |
+| F4 | HeadOffice, StationAdmin | tenant/station setup | scoped setup read, then edit/delete setup rows | UI API smoke |
+| F5 | Manager, StationAdmin | shifts, sales review, cash, purchases, expenses, dips | station operations | scenario runner + UI API smoke |
+| F6 | Operator | shift, fuel sale, cash submission, attendance self | frontline shift and meter sale flow | scenario runner + integration test |
+| F7 | Accountant | finance, parties, payments, payroll, attendance | payments, ledgers, payroll review/finalize | scenario runner + UI API smoke |
+| F8 | Manager, Accountant, StationAdmin | tankers, POS | optional modules only when enabled | module-toggle smoke |
+| F9 | HeadOffice, Accountant, StationAdmin | reports, documents, notifications | scoped reports/docs/notifications | scenario runner + UI API smoke |
+| F10 | HeadOffice, StationAdmin, Manager, Accountant, Operator | corrections/reversals/approvals | request/review/reject/approve correction flows | scenario runner |
+| F11 | HeadOffice, StationAdmin | multi-station users and station selection | station admin only in multi-station tenants | scope smoke |
+| F12 | all tenant roles | polish | layout, golden/screenshots, UX wording | Flutter widget/golden tests |
 
 ## Screen Rules
 
