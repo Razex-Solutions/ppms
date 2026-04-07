@@ -14,6 +14,7 @@ from app.services.shifts import create_cash_submission as create_cash_submission
 from app.services.shifts import create_shift as create_shift_service
 from app.services.shifts import ensure_shift_access
 from app.services.shifts import ensure_shift_cash, list_cash_submissions as list_cash_submissions_service
+from app.services.shifts import sync_shift_cash
 
 router = APIRouter(prefix="/shifts", tags=["Shifts"])
 
@@ -30,6 +31,7 @@ def _serialize_shift_cash(shift_cash) -> dict[str, object | None]:
         "cash_submitted": shift_cash.cash_submitted,
         "closing_cash": shift_cash.closing_cash,
         "difference": shift_cash.difference,
+        "cash_in_hand": round((shift_cash.expected_cash or 0.0) - (shift_cash.cash_submitted or 0.0), 2),
         "notes": shift_cash.notes,
         "created_at": shift_cash.created_at,
         "submission_count": len(shift_cash.submissions),
@@ -112,7 +114,7 @@ def get_shift_cash(
         raise HTTPException(status_code=404, detail="Shift not found")
     require_permission(current_user, "shifts", "read", detail="You do not have permission to view shift cash")
     ensure_shift_access(shift, current_user)
-    shift_cash = ensure_shift_cash(db, shift)
+    shift_cash = sync_shift_cash(db, shift)
     return _serialize_shift_cash(shift_cash)
 
 

@@ -144,6 +144,13 @@ def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User)
             customer.credit_override_reviewed_by = None
             customer.credit_override_rejection_reason = None
 
+    if shift_id:
+        from app.services.shifts import sync_shift_cash
+
+        shift = db.query(Shift).filter(Shift.id == shift_id).first()
+        if shift:
+            sync_shift_cash(db, shift)
+
     db.commit()
     db.refresh(sale)
     return sale

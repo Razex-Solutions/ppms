@@ -169,12 +169,12 @@ The current automated runner now covers the first running-pump operations batch:
 
 Known current backend behavior recorded by the runner:
 
-- open shift cash expected does not include live sales until shift close
+- open shift cash-in-hand now includes live meter cash sales and cash submissions
 - closed shift cash expected and variance calculate correctly
-- Manager purchases require HeadOffice approval before stock and supplier payable balances update
+- Manager, StationAdmin, and HeadOffice purchases now post directly as approved operational records
 - payroll runs currently calculate from payroll-enabled login users, not profile-only staff records
 - tanker workspace summary is cumulative for the station, so scenario checks validate newly created trips directly
-- supplier-to-customer tanker trip completion currently transfers all leftover fuel when a transfer tank is provided and still reports the leftover quantity
+- supplier-to-customer tanker trip completion supports partial leftover transfer and remaining leftover tracking
 - HeadOffice meter adjustment is allowed for the one-station tenant case because HeadOffice acts as station admin when there is no separate StationAdmin
 
 Command:
@@ -262,10 +262,9 @@ dip_loss_gain = calculated_volume - system_volume
 
 Current backend rule to remember:
 
-- Manager-created purchases are currently `pending`
-- pending purchases calculate totals but do not update tank stock until approved
-- this conflicts with the preferred docs direction, where normal purchases should be direct operational records
-- Phase 9 should decide whether to keep this approval rule or change it
+- Manager-created purchases now post directly as `approved`
+- approved purchases update tank stock and supplier payable balance immediately
+- approval remains available for workflows where a lower role or later tenant policy creates a pending purchase
 
 ### 4. Customers, Credit, And Receivables
 
@@ -280,7 +279,6 @@ Current automated coverage:
 Still to add:
 
 - cash customer sale if a named cash customer workflow is kept
-- credit limit override rejection path
 
 Expected formulas:
 
@@ -302,9 +300,10 @@ Current automated coverage:
 - supplier payment
 - supplier ledger check
 
-Still to decide:
+Current decision:
 
-- whether normal tenant purchases should remain approval-based or become direct operational records based on tenant/module policy
+- normal Manager/StationAdmin/HeadOffice purchases are direct operational records
+- purchase approval remains as a backend path for lower-role or future policy-based pending purchase workflows
 
 Expected formulas:
 
@@ -434,9 +433,7 @@ Current automated coverage:
 
 Still to add:
 
-- rejection paths for reversal requests
-- rejection path for credit override requests
-- UI workflow for correction notes and approval messages
+- UI workflow for correction notes and approval/rejection messages
 
 Expected formulas:
 

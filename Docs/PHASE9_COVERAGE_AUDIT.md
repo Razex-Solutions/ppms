@@ -41,7 +41,7 @@ The runner at [run_phase9_scenario.py](/C:/Fuel%20Management%20System/scripts/ru
 - cash submissions
 - expenses
 - purchases
-- HeadOffice purchase approval
+- direct Manager purchase posting
 - supplier payments and supplier ledger checks
 - credit customers
 - credit fuel sales
@@ -61,7 +61,9 @@ The runner at [run_phase9_scenario.py](/C:/Fuel%20Management%20System/scripts/ru
 - fuel sale reversal request and approval
 - supplier payment reversal request and approval
 - purchase reversal request and approval
+- reversal rejection paths for fuel sales, purchases, customer payments, and supplier payments
 - credit override request and approval
+- credit override rejection
 - internal fuel usage
 - HeadOffice meter adjustment for the one-station admin rule
 - meter adjustment history and meter segment readback
@@ -103,35 +105,19 @@ The clean tenant Flutter app at [ppms_tenant_flutter](/C:/Fuel%20Management%20Sy
 
 This app is not finished yet.
 
+## Resolved Gap Decisions
+
+These were open in the first audit and are now covered by the runner:
+
+- open shift cash-in-hand now includes live cash sales and cash submissions
+- normal `Manager`, `StationAdmin`, and `HeadOffice` purchases now post directly as approved operational records
+- tanker completion supports partial leftover transfer and remaining leftover tracking
+- reversal rejection paths are covered for fuel sales, purchases, customer payments, and supplier payments
+- credit override rejection is covered
+
 ## Important Known Gaps
 
-### 1. Open Shift Cash In Hand
-
-Current behavior:
-
-- open shift expected cash does not include live sales until shift close
-
-Preferred direction:
-
-- open shift cash-in-hand should show live expected cash from meter sales and submissions
-
-### 2. Purchase Approval Policy
-
-Current behavior:
-
-- Manager-created purchases are pending
-- stock and supplier payable update after HeadOffice approval
-
-Preferred direction:
-
-- normal purchases should probably be direct operational facts
-- approval should become policy-based or exception-based
-
-Decision needed:
-
-- keep approval as default, or make direct purchase posting the default for normal stations
-
-### 3. Profile-Only Staff Payroll
+### 1. Profile-Only Staff Payroll
 
 Current behavior:
 
@@ -143,31 +129,7 @@ Preferred direction:
 - either support profile-only staff payroll
 - or clearly separate staff profiles from payroll users in UI
 
-### 4. Tanker Leftover Transfer
-
-Current behavior:
-
-- supplier-to-customer tanker completion transfers all leftover fuel when a transfer tank is supplied
-- the completed trip can still report leftover quantity
-
-Preferred direction:
-
-- support partial leftover transfer
-- track remaining tanker leftover separately from transferred station stock
-
-### 5. Rejection Paths
-
-Current coverage:
-
-- approval paths exist in the scenario runner
-
-Still needed:
-
-- reversal rejection paths
-- credit override rejection path
-- clear UI for correction notes and approval/rejection messages
-
-### 6. Hardware Simulation Depth
+### 2. Hardware Simulation Depth
 
 Current coverage:
 
@@ -179,7 +141,7 @@ Still needed:
 - live hardware/probe/printer simulation scenario
 - hardware event visibility in the clean tenant app
 
-### 7. Notification And Document Operations
+### 3. Notification And Document Operations
 
 Current coverage:
 
@@ -194,7 +156,7 @@ Still needed:
 - document template edit/preview checks
 - attachment workflow if we keep attachments in Phase 9 scope
 
-### 8. Multi-Station Operations Depth
+### 4. Multi-Station Operations Depth
 
 Current coverage:
 
@@ -205,7 +167,7 @@ Still needed:
 - full operational transactions on each multi-station station
 - station-specific shift, sale, purchase, expense, and report checks for station A vs station B
 
-### 9. Clean Tenant Flutter UI Completion
+### 5. Clean Tenant Flutter UI Completion
 
 Current coverage:
 

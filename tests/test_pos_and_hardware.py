@@ -493,7 +493,7 @@ def test_tanker_module_workflows_and_station_toggle(client):
     assert complete_direct_trip.status_code == 200, complete_direct_trip.text
     assert complete_direct_trip.json()["status"] == "completed"
     assert complete_direct_trip.json()["net_profit"] == 38
-    assert complete_direct_trip.json()["leftover_quantity"] == 5
+    assert complete_direct_trip.json()["leftover_quantity"] == 0
     assert complete_direct_trip.json()["transferred_quantity"] == 5
     assert complete_direct_trip.json()["fuel_transfers"][0]["tank_id"] == data["foreign_tank_id"]
 
@@ -504,7 +504,7 @@ def test_tanker_module_workflows_and_station_toggle(client):
     assert foreign_summary.status_code == 200, foreign_summary.text
     foreign_summary_json = foreign_summary.json()
     assert foreign_summary_json["supplier_to_customer_trip_count"] == 1
-    assert foreign_summary_json["total_leftover_quantity"] == 5
+    assert foreign_summary_json["total_leftover_quantity"] == 0
     assert foreign_summary_json["total_transferred_quantity"] == 5
 
     db = session_local()

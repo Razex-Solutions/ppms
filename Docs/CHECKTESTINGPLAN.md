@@ -103,8 +103,8 @@ What it does:
 - leaves one open shift to capture the current cash-in-hand behavior
 - creates a manager expense
 - creates suppliers
-- creates Manager purchases and verifies the pending state
-- approves purchases through HeadOffice
+- creates Manager purchases and verifies direct operational posting
+- keeps purchase approval/reversal approval paths covered for exception workflows
 - records supplier payments through Accountant
 - verifies supplier ledger totals and payable balances
 - creates credit customers
@@ -139,14 +139,14 @@ What it does:
 
 Important business rule captured by the runner:
 
-- Manager-created purchases are currently `pending`
-- pending purchases calculate purchase totals but do not update tank stock or supplier payable balances until approved
+- Manager-created purchases now post directly as approved operational records
+- approved purchases update tank stock and supplier payable balances immediately
 - meter sales immediately reduce tank stock
 - dip loss/gain should be zero when the physical calculated volume equals system stock
-- open shift cash expected currently does not include live sales until close
+- open shift cash-in-hand includes live cash sales and cash submissions
 - payroll currently runs against payroll-enabled login users, not profile-only staff records
 - tanker workspace summaries are cumulative, so scenario-specific checks validate the new trips directly
-- tanker leftover transfer currently transfers all remaining fuel when a transfer tank is supplied
+- tanker leftover transfer supports partial transfer and remaining leftover tracking
 - HeadOffice can perform meter adjustments for this one-station tenant because HeadOffice acts as station admin when there is no separate StationAdmin
 - multi-station tenants use separate StationAdmin users per station
 - minimal-module tenants should hide disabled optional workspaces in the Flutter rebuild

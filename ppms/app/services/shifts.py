@@ -132,6 +132,32 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
     return shift
 
 
+def sync_shift_cash(db: Session, shift: Shift) -> ShiftCash:
+    shift_cash = ensure_shift_cash(db, shift)
+    sales = db.query(FuelSale).filter(
+        FuelSale.shift_id == shift.id,
+        FuelSale.is_reversed.is_(False),
+    ).all()
+    total_cash = round(sum(s.total_amount for s in sales if s.sale_type == "cash"), 2)
+    total_credit = round(sum(s.total_amount for s in sales if s.sale_type == "credit"), 2)
+    submission_total = round(sum(submission.amount for submission in shift_cash.submissions), 2)
+
+    shift.total_sales_cash = total_cash
+    shift.total_sales_credit = total_credit
+    shift.expected_cash = round((shift.initial_cash or 0.0) + total_cash, 2)
+    shift_cash.cash_sales = total_cash
+    shift_cash.expected_cash = shift.expected_cash
+    shift_cash.cash_submitted = submission_total
+    if shift.status == "closed" and shift.actual_cash_collected is not None:
+        shift_cash.closing_cash = shift.actual_cash_collected
+        shift_cash.difference = round(shift.actual_cash_collected - shift.expected_cash, 2)
+        shift.difference = shift_cash.difference
+    else:
+        shift_cash.difference = round(shift.expected_cash - submission_total, 2)
+    db.flush()
+    return shift_cash
+
+
 def ensure_shift_cash(db: Session, shift: Shift) -> ShiftCash:
     shift_cash = db.query(ShiftCash).filter(ShiftCash.shift_id == shift.id).first()
     if shift_cash:
@@ -184,6 +210,7 @@ def create_cash_submission(
     db.flush()
 
     shift_cash.cash_submitted = (shift_cash.cash_submitted or 0.0) + data.amount
+    sync_shift_cash(db, shift)
 
     log_audit_event(
         db,

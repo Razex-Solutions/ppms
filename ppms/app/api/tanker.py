@@ -178,7 +178,13 @@ def complete_trip_route(
     trip = db.query(TankerTrip).filter(TankerTrip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Tanker trip not found")
-    return complete_trip(db, trip, current_user, transfer_to_tank_id=data.transfer_to_tank_id)
+    return complete_trip(
+        db,
+        trip,
+        current_user,
+        transfer_to_tank_id=data.transfer_to_tank_id,
+        transfer_quantity=data.transfer_quantity,
+    )
 
 
 @router.post("/", response_model=TankerResponse)

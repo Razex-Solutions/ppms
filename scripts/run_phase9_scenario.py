@@ -343,10 +343,13 @@ def approve_purchases_and_pay_suppliers(
     suppliers_after_payment: list[dict[str, Any]] = []
 
     for purchase, supplier_spec in zip(purchases, supplier_specs):
-        approved_purchase = head_office.post(
-            f"/purchases/{purchase['id']}/approve",
-            {"reason": f"{scenario_id} Phase 9 supplier payable check"},
-        )
+        if purchase["status"] == "approved":
+            approved_purchase = purchase
+        else:
+            approved_purchase = head_office.post(
+                f"/purchases/{purchase['id']}/approve",
+                {"reason": f"{scenario_id} Phase 9 supplier payable check"},
+            )
         approved_purchases.append(approved_purchase)
         supplier_payment = accountant.post(
             "/supplier-payments/",
@@ -701,7 +704,11 @@ def create_tanker_flow(
         )
         completed_trip = manager.post(
             f"/tankers/trips/{trip['id']}/complete",
-            {"reason": "Phase 9 tanker trip complete", "transfer_to_tank_id": transfer_tank["id"]},
+            {
+                "reason": "Phase 9 tanker trip complete",
+                "transfer_to_tank_id": transfer_tank["id"],
+                "transfer_quantity": tanker_spec["transfer_to_station_tank"],
+            },
         )
         trips.append(trip)
         completed_trips.append(completed_trip)
@@ -930,7 +937,7 @@ def create_corrections_flow(
             "notes": "Phase 9 reversible purchase",
         },
     )
-    approved_purchase = head_office.post(
+    approved_purchase = purchase if purchase["status"] == "approved" else head_office.post(
         f"/purchases/{purchase['id']}/approve",
         {"reason": "Phase 9 reversible purchase approved"},
     )
@@ -1028,6 +1035,129 @@ def create_corrections_flow(
     )
     override_customer_after_sale = accountant.get(f"/customers/{override_customer['id']}")
 
+    rejected_override_customer = accountant.post(
+        "/customers/",
+        {
+            "name": f"{scenario_id} Rejected Override Customer",
+            "code": f"{scenario_id}-REJ-OVR-CUST",
+            "customer_type": "business",
+            "credit_limit": 100,
+            "station_id": station_id,
+        },
+    )
+    rejected_credit_override_request = manager.post(
+        f"/customers/{rejected_override_customer['id']}/request-credit-override",
+        {"amount": 200, "reason": "Phase 9 rejection path test"},
+    )
+    rejected_credit_override = head_office.post(
+        f"/customers/{rejected_override_customer['id']}/reject-credit-override",
+        {"amount": 200, "reason": "Phase 9 override rejected as expected"},
+    )
+
+    rejection_customer = accountant.post(
+        "/customers/",
+        {
+            "name": f"{scenario_id} Rejected Reversal Customer",
+            "code": f"{scenario_id}-REJ-REV-CUST",
+            "customer_type": "business",
+            "credit_limit": 2000,
+            "station_id": station_id,
+        },
+    )
+    rejection_setup = operator.get(f"/stations/{station_id}/setup-foundation")
+    rejection_nozzle = next(
+        item for item in flatten_nozzles(rejection_setup) if int(item["id"]) == int(nozzles[3]["id"])
+    )
+    rejection_sale = operator.post(
+        "/fuel-sales/",
+        {
+            "nozzle_id": rejection_nozzle["id"],
+            "station_id": station_id,
+            "fuel_type_id": rejection_nozzle["fuel_type_id"],
+            "customer_id": rejection_customer["id"],
+            "closing_meter": float(rejection_nozzle["meter_reading"]) + 1,
+            "rate_per_liter": 250,
+            "sale_type": "credit",
+            "shift_id": reversal_shift["id"],
+        },
+    )
+    rejected_fuel_sale_reversal_request = operator.post(
+        f"/fuel-sales/{rejection_sale['id']}/reverse",
+        {"reason": "Phase 9 rejected fuel sale reversal request"},
+    )
+    rejected_fuel_sale_reversal = head_office.post(
+        f"/fuel-sales/{rejection_sale['id']}/reject-reversal",
+        {"reason": "Phase 9 fuel sale reversal rejected as expected"},
+    )
+    rejection_customer_payment = accountant.post(
+        "/customer-payments/",
+        {
+            "customer_id": rejection_customer["id"],
+            "station_id": station_id,
+            "amount": 50,
+            "payment_method": "cash",
+            "reference_no": f"{scenario_id}-REJ-CPAY",
+            "notes": "Phase 9 rejected customer payment reversal",
+        },
+    )
+    rejected_customer_payment_reversal_request = accountant.post(
+        f"/customer-payments/{rejection_customer_payment['id']}/reverse",
+        {"reason": "Phase 9 rejected customer payment reversal request"},
+    )
+    rejected_customer_payment_reversal = head_office.post(
+        f"/customer-payments/{rejection_customer_payment['id']}/reject-reversal",
+        {"reason": "Phase 9 customer payment reversal rejected as expected"},
+    )
+
+    rejection_supplier = manager.post(
+        "/suppliers/",
+        {
+            "name": f"{scenario_id} Rejected Reversal Supplier",
+            "code": f"{scenario_id}-REJ-REV-SUP",
+            "phone": "000-000",
+            "address": "Phase 9 rejected reversal supplier",
+        },
+    )
+    rejection_purchase = manager.post(
+        "/purchases/",
+        {
+            "supplier_id": rejection_supplier["id"],
+            "tank_id": purchase_tank["id"],
+            "fuel_type_id": purchase_tank["fuel_type_id"],
+            "quantity": 5,
+            "rate_per_liter": 240,
+            "reference_no": f"{scenario_id}-REJ-PUR",
+            "notes": "Phase 9 rejected purchase reversal",
+        },
+    )
+    rejected_purchase_reversal_request = manager.post(
+        f"/purchases/{rejection_purchase['id']}/reverse",
+        {"reason": "Phase 9 rejected purchase reversal request"},
+    )
+    rejected_purchase_reversal = head_office.post(
+        f"/purchases/{rejection_purchase['id']}/reject-reversal",
+        {"reason": "Phase 9 purchase reversal rejected as expected"},
+    )
+    rejection_supplier_payment = accountant.post(
+        "/supplier-payments/",
+        {
+            "supplier_id": rejection_supplier["id"],
+            "station_id": station_id,
+            "amount": 50,
+            "payment_method": "cash",
+            "reference_no": f"{scenario_id}-REJ-SPAY",
+            "notes": "Phase 9 rejected supplier payment reversal",
+        },
+    )
+    rejected_supplier_payment_reversal_request = accountant.post(
+        f"/supplier-payments/{rejection_supplier_payment['id']}/reverse",
+        {"reason": "Phase 9 rejected supplier payment reversal request"},
+    )
+    rejected_supplier_payment_reversal = head_office.post(
+        f"/supplier-payments/{rejection_supplier_payment['id']}/reject-reversal",
+        {"reason": "Phase 9 supplier payment reversal rejected as expected"},
+    )
+
     internal_tank = tanks[1 if len(tanks) > 1 else 0]
     internal_usage = manager.post(
         "/internal-fuel-usage/",
@@ -1083,6 +1213,18 @@ def create_corrections_flow(
         "approved_credit_override": approved_credit_override,
         "override_credit_sale": override_credit_sale,
         "override_customer_after_sale": override_customer_after_sale,
+        "rejected_credit_override_request": rejected_credit_override_request,
+        "rejected_credit_override": rejected_credit_override,
+        "rejection_sale": rejection_sale,
+        "rejected_fuel_sale_reversal_request": rejected_fuel_sale_reversal_request,
+        "rejected_fuel_sale_reversal": rejected_fuel_sale_reversal,
+        "rejected_customer_payment_reversal_request": rejected_customer_payment_reversal_request,
+        "rejected_customer_payment_reversal": rejected_customer_payment_reversal,
+        "rejection_purchase": rejection_purchase,
+        "rejected_purchase_reversal_request": rejected_purchase_reversal_request,
+        "rejected_purchase_reversal": rejected_purchase_reversal,
+        "rejected_supplier_payment_reversal_request": rejected_supplier_payment_reversal_request,
+        "rejected_supplier_payment_reversal": rejected_supplier_payment_reversal,
         "internal_usage": internal_usage,
         "internal_usage_list": internal_usage_list,
         "meter_adjustment": meter_adjustment,
@@ -1371,9 +1513,9 @@ def main() -> int:
             current_cash_in_hand = shift_cash["expected_cash"] - shift_cash["cash_submitted"]
             checks.append(
                 check(
-                    f"{expected['name']} current backend cash in hand after submission",
+                    f"{expected['name']} cash in hand after submission",
                     current_cash_in_hand,
-                    0.0,
+                    expected["expected_cash_in_hand_after_submission"],
                     approximate=True,
                 )
             )
@@ -1559,9 +1701,11 @@ def main() -> int:
 
     expected_loaded_quantity = sum(float(item["loaded_quantity"]) for item in manifest["tankers"]["fleet"])
     expected_manual_sale_quantity = sum(float(item["manual_sale_quantity"]) for item in manifest["tankers"]["fleet"])
-    current_backend_expected_transferred = sum(
-        float(item["loaded_quantity"]) - float(item["manual_sale_quantity"])
-        for item in manifest["tankers"]["fleet"]
+    expected_transferred_quantity = sum(
+        float(item["transfer_to_station_tank"]) for item in manifest["tankers"]["fleet"]
+    )
+    expected_leftover_quantity = sum(
+        float(item["expected_leftover_quantity"]) for item in manifest["tankers"]["fleet"]
     )
     scenario_tanker_loaded_quantity = sum(float(trip["loaded_quantity"] or 0) for trip in tanker_flow["completed_trips"])
     scenario_tanker_delivered_quantity = sum(float(trip["total_quantity"]) for trip in tanker_flow["completed_trips"])
@@ -1587,9 +1731,15 @@ def main() -> int:
                 approximate=True,
             ),
             check(
-                "scenario tanker transferred quantity current backend",
+                "scenario tanker transferred quantity",
                 scenario_tanker_transferred_quantity,
-                current_backend_expected_transferred,
+                expected_transferred_quantity,
+                approximate=True,
+            ),
+            check(
+                "scenario tanker remaining leftover quantity",
+                sum(float(trip["leftover_quantity"]) for trip in tanker_flow["completed_trips"]),
+                expected_leftover_quantity,
                 approximate=True,
             ),
         ]
@@ -1688,10 +1838,60 @@ def main() -> int:
                 "approved",
             ),
             check(
+                "credit override rejection requested",
+                corrections_flow["rejected_credit_override_request"]["credit_override_status"],
+                "pending",
+            ),
+            check(
+                "credit override rejected",
+                corrections_flow["rejected_credit_override"]["credit_override_status"],
+                "rejected",
+            ),
+            check(
                 "credit override sale created above base limit",
                 corrections_flow["override_credit_sale"]["total_amount"],
                 250.0,
                 approximate=True,
+            ),
+            check(
+                "fuel sale reversal rejection requested",
+                corrections_flow["rejected_fuel_sale_reversal_request"]["reversal_request_status"],
+                "pending",
+            ),
+            check(
+                "fuel sale reversal rejected",
+                corrections_flow["rejected_fuel_sale_reversal"]["reversal_request_status"],
+                "rejected",
+            ),
+            check(
+                "customer payment reversal rejection requested",
+                corrections_flow["rejected_customer_payment_reversal_request"]["reversal_request_status"],
+                "pending",
+            ),
+            check(
+                "customer payment reversal rejected",
+                corrections_flow["rejected_customer_payment_reversal"]["reversal_request_status"],
+                "rejected",
+            ),
+            check(
+                "purchase reversal rejection requested",
+                corrections_flow["rejected_purchase_reversal_request"]["reversal_request_status"],
+                "pending",
+            ),
+            check(
+                "purchase reversal rejected",
+                corrections_flow["rejected_purchase_reversal"]["reversal_request_status"],
+                "rejected",
+            ),
+            check(
+                "supplier payment reversal rejection requested",
+                corrections_flow["rejected_supplier_payment_reversal_request"]["reversal_request_status"],
+                "pending",
+            ),
+            check(
+                "supplier payment reversal rejected",
+                corrections_flow["rejected_supplier_payment_reversal"]["reversal_request_status"],
+                "rejected",
             ),
             check(
                 "override customer balance after override sale",
@@ -1801,12 +2001,23 @@ def main() -> int:
     total_sale_liters_by_tank[override_tank_id] = (
         total_sale_liters_by_tank.get(override_tank_id, 0.0) + float(override_sale["quantity"])
     )
+    rejection_sale = corrections_flow["rejection_sale"]
+    rejection_nozzle = next(item for item in nozzles if int(item["id"]) == int(rejection_sale["nozzle_id"]))
+    rejection_tank_id = int(rejection_nozzle["tank_id"])
+    total_sale_liters_by_tank[rejection_tank_id] = (
+        total_sale_liters_by_tank.get(rejection_tank_id, 0.0) + float(rejection_sale["quantity"])
+    )
     total_purchase_liters_by_tank: dict[int, float] = {}
     for purchase in supplier_finance["approved_purchases"]:
         tank_id = int(purchase["tank_id"])
         total_purchase_liters_by_tank[tank_id] = (
             total_purchase_liters_by_tank.get(tank_id, 0.0) + float(purchase["quantity"])
         )
+    rejection_purchase = corrections_flow["rejection_purchase"]
+    total_purchase_liters_by_tank[int(rejection_purchase["tank_id"])] = (
+        total_purchase_liters_by_tank.get(int(rejection_purchase["tank_id"]), 0.0)
+        + float(rejection_purchase["quantity"])
+    )
     total_tanker_transfer_liters_by_tank: dict[int, float] = {}
     for completed_trip in tanker_flow["completed_trips"]:
         tank_id = completed_trip.get("transfer_tank_id")
@@ -1908,25 +2119,10 @@ def main() -> int:
         },
         "known_gaps": [
             {
-                "area": "open shift cash in hand",
-                "current_backend_behavior": "shift_cash.expected_cash stays at opening cash until shift close",
-                "desired_manifest_behavior": "expected cash should include live cash sales on open shifts",
-            },
-            {
-                "area": "purchase approval",
-                "current_backend_behavior": "Manager purchases are pending until HeadOffice approval",
-                "desired_manifest_behavior": "normal purchase direct-vs-approval behavior should become a tenant/module policy",
-            },
-            {
                 "area": "profile-only payroll",
                 "current_backend_behavior": "payroll runs calculate from payroll-enabled login users only",
                 "desired_manifest_behavior": "profile-only staff payroll should be supported or clearly separated in UI",
             },
-            {
-                "area": "tanker leftover transfer",
-                "current_backend_behavior": "supplier-to-customer trip completion transfers all leftover fuel to a tank and still reports leftover_quantity",
-                "desired_manifest_behavior": "partial leftover transfer and remaining tanker leftover should be modeled separately",
-            }
         ],
         "checks": checks,
         "passed": all(item["passed"] for item in checks),

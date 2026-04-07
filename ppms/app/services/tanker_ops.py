@@ -454,7 +454,13 @@ def add_trip_expense(db: Session, trip: TankerTrip, data: TankerTripExpenseCreat
     return _load_trip(db, trip.id)
 
 
-def complete_trip(db: Session, trip: TankerTrip, current_user: User, transfer_to_tank_id: int | None = None) -> TankerTrip:
+def complete_trip(
+    db: Session,
+    trip: TankerTrip,
+    current_user: User,
+    transfer_to_tank_id: int | None = None,
+    transfer_quantity: float | None = None,
+) -> TankerTrip:
     _ensure_trip_access(trip, current_user)
     require_station_module_enabled(db, trip.station_id, MODULE_NAME)
     if trip.status == "completed":
@@ -504,17 +510,23 @@ def complete_trip(db: Session, trip: TankerTrip, current_user: User, transfer_to
                 raise HTTPException(status_code=400, detail="Transfer tank must belong to the same station")
             if transfer_tank.fuel_type_id != trip.fuel_type_id:
                 raise HTTPException(status_code=400, detail="Transfer tank fuel type must match trip fuel type")
-            if transfer_tank.current_volume + trip.leftover_quantity > transfer_tank.capacity:
+            transfer_amount = trip.leftover_quantity if transfer_quantity is None else transfer_quantity
+            if transfer_amount <= 0:
+                raise HTTPException(status_code=400, detail="Transfer quantity must be greater than 0")
+            if transfer_amount > trip.leftover_quantity:
+                raise HTTPException(status_code=400, detail="Transfer quantity cannot exceed trip leftover quantity")
+            if transfer_tank.current_volume + transfer_amount > transfer_tank.capacity:
                 raise HTTPException(status_code=400, detail="Completing this trip would exceed transfer tank capacity")
-            transfer_tank.current_volume += trip.leftover_quantity
+            transfer_tank.current_volume += transfer_amount
             trip.transfer_tank_id = transfer_tank.id
-            trip.transferred_quantity = trip.leftover_quantity
+            trip.transferred_quantity = round((trip.transferred_quantity or 0.0) + transfer_amount, 2)
+            trip.leftover_quantity = round(trip.leftover_quantity - transfer_amount, 2)
             transfer = FuelTransfer(
                 station_id=trip.station_id,
                 tank_id=transfer_tank.id,
                 tanker_trip_id=trip.id,
                 fuel_type_id=trip.fuel_type_id,
-                quantity=trip.leftover_quantity,
+                quantity=transfer_amount,
                 transfer_type="tanker_leftover_to_tank",
                 notes=f"Generated from tanker trip {trip.id}",
             )

@@ -30,6 +30,7 @@ class ShiftCashResponse(BaseModel):
     cash_submitted: float
     closing_cash: float | None = None
     difference: float | None = None
+    cash_in_hand: float
     notes: str | None = None
     created_at: datetime
     submission_count: int

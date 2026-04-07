@@ -486,7 +486,7 @@ The runner uses the live backend API and creates known sample data for:
 - cash submissions
 - manager expenses
 - suppliers
-- manager purchases and HeadOffice purchase approval
+- direct Manager purchases and exception approval/reversal flows
 - supplier payments and supplier ledgers
 - credit customers
 - customer payments and customer ledgers

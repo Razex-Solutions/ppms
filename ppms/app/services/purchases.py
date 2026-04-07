@@ -69,7 +69,7 @@ def _apply_purchase_effects(purchase: Purchase, tank: Tank, supplier: Supplier, 
 
 def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Purchase:
     tank, supplier, _, tanker, total_amount = _validate_purchase_inputs(db, data, current_user)
-    is_auto_approved = current_user.role.name == "Admin" or is_master_admin(current_user)
+    is_auto_approved = current_user.role.name in {"Admin", "HeadOffice", "StationAdmin", "Manager"} or is_master_admin(current_user)
 
     purchase = Purchase(
         supplier_id=data.supplier_id,

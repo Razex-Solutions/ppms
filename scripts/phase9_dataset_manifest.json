@@ -238,13 +238,13 @@
         "quantity": 50,
         "rate_per_liter": 240,
         "expected_total": 12000,
-        "current_backend_status_for_manager": "pending"
+        "current_backend_status_for_manager": "approved"
       },
       {
         "quantity": 75,
         "rate_per_liter": 245,
         "expected_total": 18375,
-        "current_backend_status_for_manager": "pending"
+        "current_backend_status_for_manager": "approved"
       }
     ],
     "internal_fuel_usage": {

@@ -101,6 +101,7 @@ class TankerTripExpenseCreate(BaseModel):
 class TankerTripComplete(BaseModel):
     reason: str | None = None
     transfer_to_tank_id: int | None = None
+    transfer_quantity: float | None = None
 
 
 class FuelTransferResponse(BaseModel):
