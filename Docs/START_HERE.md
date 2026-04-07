@@ -23,6 +23,9 @@ When returning to this project, use these files in this order:
 7. [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md)
    - this defines the large sample data and expected totals for automated Phase 9 acceptance checks
 
+8. [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md)
+   - this shows what the Phase 9 runner and clean tenant app cover, and what is still missing
+
 ## Current Recommended Next Step
 
 Start with:
@@ -31,6 +34,7 @@ Start with:
 - use [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md) for the clean tenant app path
 - use [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md) as the step-by-step manual acceptance plan
 - use [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md) when expanding automated scenario data and expected calculations
+- use [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md) to choose the next missing batch without drifting off the roadmap
 
 from:
 

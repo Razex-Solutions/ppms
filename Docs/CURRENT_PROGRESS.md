@@ -757,9 +757,9 @@ This helper:
 - avoids falling back to the wrong nested DB path
 - checks `/health`
 
-### Flutter run
+### Tenant Flutter run
 ```powershell
-cd C:\Fuel Management System\ppms_flutter
+cd C:\Fuel Management System\ppms_tenant_flutter
 flutter run -d windows --dart-define=PPMS_API_BASE_URL=http://127.0.0.1:8012
 ```
 
@@ -770,13 +770,20 @@ Use:
 
 Do not create ad hoc new `.db` files unless there is a special reason.
 
-### Seeded local users
-- `masteradmin / master123`
-- `headoffice / office123`
-- `stationadmin / station123`
-- `manager / manager123`
-- `operator / operator123`
-- `accountant / accountant123`
+### Phase 9 tenant users
+
+The restart helper prepares these local tenant users by default:
+
+- `check / office123`
+- `check_manager / manager123`
+- `check_accountant / accountant123`
+- `check_operator / operator123`
+- `p9_multi / office123`
+- `p9_multi_station_a_admin / station123`
+- `p9_multi_station_b_admin / station123`
+- `p9_minimal / office123`
+
+`masteradmin / master123` remains the platform/support login for the support console path.
 
 
 ## 11. What To Edit For Common Changes

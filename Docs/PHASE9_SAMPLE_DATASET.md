@@ -183,11 +183,13 @@ Command:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps1
 ```
 
-## Remaining Dataset Blocks
+## Dataset Coverage And Remaining Decisions
 
 The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, POS/shop, tankers, reports, documents, notifications, corrections/reversals, credit override, internal fuel usage, meter adjustments, multi-station scoping, minimal-module toggles, and tank dips at a first acceptance level.
 
-It still needs these blocks added.
+The detailed sections below now separate completed first-pass coverage from remaining decisions and deeper edge cases.
+
+For the latest concise coverage checklist, also read [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md).
 
 ### 1. Users And Staff
 
