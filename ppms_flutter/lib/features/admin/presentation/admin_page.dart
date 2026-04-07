@@ -317,9 +317,7 @@ class _AdminPageState extends State<AdminPage> {
           (_selectedRoleId != null &&
               creatableRoles.any((role) => role['id'] == _selectedRoleId))
           ? _selectedRoleId
-          : (creatableRoles.isNotEmpty
-                ? creatableRoles.first['id'] as int
-                : null);
+          : _preferredWorkerRoleId(creatableRoles);
 
       setState(() {
         _stations = stations;
@@ -371,11 +369,97 @@ class _AdminPageState extends State<AdminPage> {
     return _roles.where((role) => allowedNames.contains(role['name'])).toList();
   }
 
+  int? _preferredWorkerRoleId([List<Map<String, dynamic>>? roleOptions]) {
+    final options = roleOptions ?? _creatableRoleOptions;
+    const preferredNames = [
+      'Manager',
+      'StationAdmin',
+      'Accountant',
+      'Operator',
+    ];
+    for (final preferredName in preferredNames) {
+      for (final role in options) {
+        if (role['name'] == preferredName) {
+          return _asInt(role['id']);
+        }
+      }
+    }
+    return options.isNotEmpty ? _asInt(options.first['id']) : null;
+  }
+
+  int? get _defaultStationId {
+    if (_selectedStationId != null) return _selectedStationId;
+    final organizationId =
+        _selectedOrganizationId ?? widget.sessionController.organizationId;
+    final scopedStations = organizationId == null
+        ? _stations
+        : _stations
+              .where(
+                (station) =>
+                    _sameId(station['organization_id'], organizationId),
+              )
+              .toList();
+    final sessionStationId = widget.sessionController.stationId;
+    if (sessionStationId != null &&
+        scopedStations.any(
+          (station) => _sameId(station['id'], sessionStationId),
+        )) {
+      return sessionStationId;
+    }
+    if (scopedStations.length == 1) {
+      return _asInt(scopedStations.first['id']);
+    }
+    return null;
+  }
+
+  bool _roleRequiresStation(int? roleId) {
+    final role = _roles.cast<Map<String, dynamic>?>().firstWhere(
+      (item) => _sameId(item?['id'], roleId),
+      orElse: () => null,
+    );
+    final roleName = role?['name'] as String?;
+    if (roleName == null) return true;
+    final rules = _permissionCatalog?['role_scope_rules'] as Map?;
+    final rule = rules?[roleName] as Map?;
+    return rule?['requires_station'] as bool? ?? true;
+  }
+
   Future<void> _createUser() async {
     final roleId = _selectedRoleId;
     if (roleId == null) {
       setState(() {
         _feedbackMessage = 'Select a role first.';
+      });
+      return;
+    }
+    final isEditing = _selectedUserId != null;
+    final roleNeedsStation = _roleRequiresStation(roleId);
+    final stationId = roleNeedsStation ? _defaultStationId : null;
+    final organizationId =
+        _selectedOrganizationId ?? widget.sessionController.organizationId;
+    if (organizationId == null) {
+      setState(() {
+        _feedbackMessage = 'Organization scope is not loaded yet.';
+      });
+      return;
+    }
+    if (roleNeedsStation && stationId == null) {
+      setState(() {
+        _feedbackMessage =
+            'A station is required for this worker role. Reload Admin or create/select the tenant station first.';
+      });
+      return;
+    }
+    if (_userFullNameController.text.trim().isEmpty ||
+        _userUsernameController.text.trim().isEmpty) {
+      setState(() {
+        _feedbackMessage = 'Enter the worker full name and username first.';
+      });
+      return;
+    }
+    if (!isEditing && _userPasswordController.text.trim().isEmpty) {
+      setState(() {
+        _feedbackMessage = 'Enter a password for the new worker login.';
       });
       return;
     }
@@ -392,8 +476,9 @@ class _AdminPageState extends State<AdminPage> {
         'username': _userUsernameController.text.trim(),
         'email': _emptyToNull(_userEmailController.text),
         'role_id': roleId,
-        'organization_id': _selectedOrganizationId,
-        'station_id': _selectedStationId,
+        'organization_id': organizationId,
+        'station_id': stationId,
+        'scope_level': roleNeedsStation ? 'station' : 'organization',
         'monthly_salary': double.parse(_userSalaryController.text.trim()),
         'payroll_enabled': _userPayrollEnabled,
       };
@@ -401,7 +486,6 @@ class _AdminPageState extends State<AdminPage> {
       if (password.isNotEmpty) {
         payload['password'] = password;
       }
-      final isEditing = _selectedUserId != null;
       final user = isEditing
           ? await widget.sessionController.updateUser(
               userId: _selectedUserId!,
@@ -744,6 +828,15 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   void _selectUser(Map<String, dynamic> user) {
+    if (_sameId(user['id'], widget.sessionController.currentUser?['id'])) {
+      setState(() {
+        _resetUserForm();
+        _feedbackMessage =
+            'The HeadOffice owner account is read-only here. Use the form to create a new Manager, StationAdmin, Accountant, or Operator login.';
+        _errorMessage = null;
+      });
+      return;
+    }
     setState(() {
       _selectedUserId = user['id'] as int;
       _userFullNameController.text = user['full_name'] as String? ?? '';
@@ -755,6 +848,18 @@ class _AdminPageState extends State<AdminPage> {
       _selectedRoleId = user['role_id'] as int?;
       _userPayrollEnabled = user['payroll_enabled'] as bool? ?? true;
       _feedbackMessage = 'Editing user ${user['username']}.';
+      _errorMessage = null;
+    });
+  }
+
+  void _startNewWorker() {
+    final creatableRoles = _creatableRoleOptions;
+    setState(() {
+      _resetUserForm();
+      if (creatableRoles.isNotEmpty) {
+        _selectedRoleId = _preferredWorkerRoleId(creatableRoles);
+      }
+      _feedbackMessage = 'Ready to create a new tenant worker login.';
       _errorMessage = null;
     });
   }
@@ -811,6 +916,7 @@ class _AdminPageState extends State<AdminPage> {
     _userEmailController.clear();
     _userPasswordController.text = 'admin123';
     _userSalaryController.text = '0';
+    _selectedRoleId = _preferredWorkerRoleId();
     _userPayrollEnabled = true;
   }
 
@@ -1260,6 +1366,22 @@ class _AdminPageState extends State<AdminPage> {
       (user) => user?['id'] == _selectedUserId,
       orElse: () => null,
     );
+    final isEditingSelf =
+        selectedUser != null &&
+        _sameId(
+          selectedUser['id'],
+          widget.sessionController.currentUser?['id'],
+        );
+    final roleDropdownValue =
+        _selectedRoleId != null &&
+            creatableRoles.any((role) => _sameId(role['id'], _selectedRoleId))
+        ? _selectedRoleId
+        : null;
+    final selectedRoleNeedsStation = _roleRequiresStation(roleDropdownValue);
+    final defaultStation = _stations.cast<Map<String, dynamic>?>().firstWhere(
+      (station) => _sameId(station?['id'], _defaultStationId),
+      orElse: () => null,
+    );
     return ResponsiveSplit(
       breakpoint: 1150,
       primary: Column(
@@ -1275,34 +1397,54 @@ class _AdminPageState extends State<AdminPage> {
             _selectedUserId == null ? 'Create User' : 'Edit User',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: _isSubmitting ? null : _startNewWorker,
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                label: const Text('New Worker Login'),
+              ),
+              Text(
+                _selectedUserId == null
+                    ? 'Fill the worker details below.'
+                    : isEditingSelf
+                    ? 'You are viewing the current HeadOffice owner account. Use New Worker Login for manager/operator/accountant users.'
+                    : 'Editing selected tenant user.',
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userFullNameController,
-            enabled: _canManageUsers,
+            enabled: _canManageUsers && !isEditingSelf,
             decoration: const InputDecoration(labelText: 'Full Name'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userUsernameController,
-            enabled: _canManageUsers,
+            enabled: _canManageUsers && _selectedUserId == null,
             decoration: const InputDecoration(labelText: 'Username'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userEmailController,
-            enabled: _canManageUsers,
+            enabled: _canManageUsers && !isEditingSelf,
             decoration: const InputDecoration(labelText: 'Email'),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _userPasswordController,
-            enabled: _canManageUsers,
+            enabled: _canManageUsers && !isEditingSelf,
             decoration: const InputDecoration(labelText: 'Password'),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             key: ValueKey<String>('admin-role-${_selectedRoleId ?? 'none'}'),
-            initialValue: _selectedRoleId,
+            initialValue: roleDropdownValue,
             decoration: const InputDecoration(
               labelText: 'Role',
               helperText: 'Only roles allowed by your current scope are shown.',
@@ -1314,7 +1456,7 @@ class _AdminPageState extends State<AdminPage> {
                   child: Text(role['name'] as String? ?? 'Role'),
                 ),
             ],
-            onChanged: _canManageUsers
+            onChanged: _canManageUsers && !isEditingSelf
                 ? (value) {
                     setState(() {
                       _selectedRoleId = value;
@@ -1323,9 +1465,20 @@ class _AdminPageState extends State<AdminPage> {
                 : null,
           ),
           const SizedBox(height: 12),
+          InputDecorator(
+            decoration: const InputDecoration(labelText: 'Worker Assignment'),
+            child: Text(
+              selectedRoleNeedsStation
+                  ? defaultStation == null
+                        ? 'Station role selected, but no tenant station is loaded yet.'
+                        : 'Will assign to ${defaultStation['name']} (${defaultStation['code']}).'
+                  : 'Organization-level role for $_scopeOrganizationLabel.',
+            ),
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _userSalaryController,
-            enabled: _canManageUsers,
+            enabled: _canManageUsers && !isEditingSelf,
             decoration: const InputDecoration(labelText: 'Monthly Salary'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
@@ -1334,7 +1487,7 @@ class _AdminPageState extends State<AdminPage> {
             contentPadding: EdgeInsets.zero,
             value: _userPayrollEnabled,
             title: const Text('Payroll Enabled'),
-            onChanged: _canManageUsers
+            onChanged: _canManageUsers && !isEditingSelf
                 ? (value) {
                     setState(() {
                       _userPayrollEnabled = value;
@@ -1343,7 +1496,7 @@ class _AdminPageState extends State<AdminPage> {
                 : null,
           ),
           const SizedBox(height: 16),
-          if (_canManageUsers)
+          if (_canManageUsers && !isEditingSelf)
             FilledButton.icon(
               onPressed: _isSubmitting ? null : _createUser,
               icon: Icon(
@@ -1372,10 +1525,11 @@ class _AdminPageState extends State<AdminPage> {
                         },
                   child: const Text('Cancel Edit'),
                 ),
-                OutlinedButton(
-                  onPressed: _isSubmitting ? null : _deleteUser,
-                  child: const Text('Delete User'),
-                ),
+                if (!isEditingSelf)
+                  OutlinedButton(
+                    onPressed: _isSubmitting ? null : _deleteUser,
+                    child: const Text('Delete User'),
+                  ),
               ],
             ),
           ],
@@ -1399,6 +1553,13 @@ class _AdminPageState extends State<AdminPage> {
                     subtitle: Text(
                       'role ${user['role_id']} - salary ${_formatNumber(user['monthly_salary'])}',
                     ),
+                    trailing:
+                        _sameId(
+                          user['id'],
+                          widget.sessionController.currentUser?['id'],
+                        )
+                        ? const Chip(label: Text('Current HeadOffice'))
+                        : const Icon(Icons.edit_outlined),
                     onTap: () => _selectUser(user),
                   ),
               if (selectedUser != null) ...[

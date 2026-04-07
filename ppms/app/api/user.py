@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -72,6 +72,49 @@ def _normalize_user_scope(
         normalized_scope_level = str(scope_rule["scope_level"])
 
     return organization_id, station_id, normalized_scope_level, False
+
+
+def _user_organization_id(user: User) -> int | None:
+    return user.organization_id or (
+        user.station.organization_id if user.station else None
+    )
+
+
+def _require_user_management_scope(
+    *,
+    current_user: User,
+    target_user: User,
+    action: str,
+    organization_id: int | None = None,
+    station_id: int | None = None,
+) -> None:
+    if is_master_admin(current_user):
+        return
+
+    current_organization_id = get_user_organization_id(current_user)
+    target_organization_id = (
+        organization_id if organization_id is not None else _user_organization_id(target_user)
+    )
+    target_station_id = station_id if station_id is not None else target_user.station_id
+    if (
+        current_organization_id is None
+        or target_organization_id != current_organization_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to {action} this user",
+        )
+
+    if is_head_office_user(current_user):
+        return
+
+    if current_user.station_id is None or target_station_id != current_user.station_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to {action} this user",
+        )
+
+
 @router.post("/", response_model=UserResponse)
 def create_user(
     user_data: UserCreate,
@@ -81,6 +124,12 @@ def create_user(
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
+    require_permission(
+        current_user,
+        "users",
+        "create",
+        detail="You do not have permission to create users",
+    )
 
     if user_data.email:
         existing_email = db.query(User).filter(User.email == user_data.email).first()
@@ -200,11 +249,21 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(
+        current_user,
+        "users",
+        "update",
+        detail="You do not have permission to update users",
+    )
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _require_user_management_scope(
+        current_user=current_user,
+        target_user=user,
+        action="update",
+    )
     updates = data.model_dump(exclude_unset=True)
     target_role = user.role
     if "role_id" in updates:
@@ -226,6 +285,13 @@ def update_user(
     updates["station_id"] = station_id
     updates["scope_level"] = scope_level
     updates["is_platform_user"] = is_platform_user
+    _require_user_management_scope(
+        current_user=current_user,
+        target_user=user,
+        action="update",
+        organization_id=organization_id,
+        station_id=station_id,
+    )
     for field, value in updates.items():
         setattr(user, field, value)
     db.commit()
@@ -239,11 +305,23 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(
+        current_user,
+        "users",
+        "delete",
+        detail="You do not have permission to delete users",
+    )
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own active user account")
+    _require_user_management_scope(
+        current_user=current_user,
+        target_user=user,
+        action="delete",
+    )
     db.delete(user)
     db.commit()
     return {"message": "User deleted"}
