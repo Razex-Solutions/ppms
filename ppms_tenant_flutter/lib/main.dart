@@ -227,6 +227,7 @@ class TenantWorkspace {
     required this.id,
     required this.label,
     required this.icon,
+    required this.category,
     required this.purpose,
     required this.nextAction,
   });
@@ -234,6 +235,7 @@ class TenantWorkspace {
   final String id;
   final String label;
   final IconData icon;
+  final String category;
   final String purpose;
   final String nextAction;
 }
@@ -242,6 +244,7 @@ const _contextWorkspace = TenantWorkspace(
   id: 'context',
   label: 'Context',
   icon: Icons.badge_outlined,
+  category: 'System',
   purpose: 'Confirm the current user, role, organization, and working station.',
   nextAction: 'Use this first whenever login or station scope looks wrong.',
 );
@@ -250,6 +253,7 @@ const _settingsWorkspace = TenantWorkspace(
   id: 'settings',
   label: 'Settings',
   icon: Icons.settings_outlined,
+  category: 'System',
   purpose: 'Show local app diagnostics and safe tenant settings later.',
   nextAction: 'Keep this simple until the real tenant flows are stable.',
 );
@@ -262,15 +266,17 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'tenant_setup',
         label: 'Tenant Setup',
         icon: Icons.business_outlined,
+        category: 'Setup',
         purpose:
-            'Review organization and station setup for the current tenant only.',
+            'Review organization, legal identity, brand, station count, and tenant setup questions.',
         nextAction:
-            'Next build: show check organization, check station, tanks, dispensers, and nozzles.',
+            'Wire a read-only tenant setup summary before allowing edits.',
       ),
       TenantWorkspace(
         id: 'users',
         label: 'Users',
         icon: Icons.group_add_outlined,
+        category: 'Admin',
         purpose:
             'Create and manage tenant workers for this organization and station.',
         nextAction:
@@ -280,19 +286,101 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'station_setup',
         label: 'Station Setup',
         icon: Icons.local_gas_station_outlined,
+        category: 'Setup',
         purpose:
-            'Maintain station tanks, dispensers, nozzles, and station defaults.',
+            'Maintain station defaults, invoice profile, fuel types, tanks, dispensers, and nozzles.',
         nextAction:
             'Next build: read-only setup review first, then edit flows one by one.',
+      ),
+      TenantWorkspace(
+        id: 'inventory',
+        label: 'Inventory & Dips',
+        icon: Icons.inventory_2_outlined,
+        category: 'Setup',
+        purpose:
+            'Review tanks, stock position, tank dips, and fuel inventory movement.',
+        nextAction:
+            'Wire tank/nozzle setup summary first, then add dip entry after fuel sale flow.',
+      ),
+      TenantWorkspace(
+        id: 'operations_overview',
+        label: 'Operations',
+        icon: Icons.route_outlined,
+        category: 'Operations',
+        purpose:
+            'Review tenant shift, sale, cash, purchase, and expense readiness.',
+        nextAction:
+            'Use this as a HeadOffice oversight page after Manager and Operator flows exist.',
+      ),
+      TenantWorkspace(
+        id: 'finance_overview',
+        label: 'Finance Overview',
+        icon: Icons.account_balance_wallet_outlined,
+        category: 'Finance',
+        purpose:
+            'Review customer/supplier ledgers, payments, payroll, and finance readiness.',
+        nextAction:
+            'Wire after Accountant finance and parties flows are accepted.',
+      ),
+      TenantWorkspace(
+        id: 'tankers',
+        label: 'Tankers',
+        icon: Icons.local_shipping_outlined,
+        category: 'Optional Modules',
+        purpose:
+            'Review tanker ownership, tanker masters, trips, deliveries, expenses, and leftovers.',
+        nextAction:
+            'Keep module-gated; build after core station sale and purchase flows are stable.',
+      ),
+      TenantWorkspace(
+        id: 'pos',
+        label: 'POS / Shop',
+        icon: Icons.point_of_sale_outlined,
+        category: 'Optional Modules',
+        purpose:
+            'Review shop/POS product and sale flows when the module is enabled.',
+        nextAction:
+            'Keep module-gated; build after fuel operations are accepted.',
+      ),
+      TenantWorkspace(
+        id: 'hardware',
+        label: 'Hardware',
+        icon: Icons.settings_input_component_outlined,
+        category: 'Optional Modules',
+        purpose:
+            'Review hardware devices, vendor context, and meter-related integrations.',
+        nextAction:
+            'Keep optional; manual meter flows must work without hardware first.',
       ),
       TenantWorkspace(
         id: 'reports',
         label: 'Reports',
         icon: Icons.summarize_outlined,
+        category: 'Reporting',
         purpose:
             'Review organization and station reports for this tenant only.',
         nextAction:
             'Build after core actions are working so reports only show proven data.',
+      ),
+      TenantWorkspace(
+        id: 'documents',
+        label: 'Documents',
+        icon: Icons.description_outlined,
+        category: 'Reporting',
+        purpose:
+            'Review generated financial documents and local dispatch state.',
+        nextAction:
+            'Build after sales, payments, and finance records are stable.',
+      ),
+      TenantWorkspace(
+        id: 'notifications',
+        label: 'Notifications',
+        icon: Icons.notifications_outlined,
+        category: 'Reporting',
+        purpose:
+            'Review notification preferences, inbox, delivery logs, and local mock dispatch.',
+        nextAction:
+            'Build after document/report events are stable; real providers come later.',
       ),
     ],
     'manager' => const [
@@ -300,14 +388,24 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'shifts',
         label: 'Shifts',
         icon: Icons.schedule_outlined,
+        category: 'Operations',
         purpose: 'Open, supervise, and close station shifts.',
         nextAction:
             'Next build after users: station shift status and open-shift validation.',
       ),
       TenantWorkspace(
+        id: 'fuel_sales',
+        label: 'Fuel Sales',
+        icon: Icons.local_gas_station_outlined,
+        category: 'Operations',
+        purpose: 'Review and manage station meter-based fuel sale activity.',
+        nextAction: 'Wire after operator fuel-sale entry is stable.',
+      ),
+      TenantWorkspace(
         id: 'sales_review',
         label: 'Sales Review',
         icon: Icons.receipt_long_outlined,
+        category: 'Operations',
         purpose: 'Review station sales entered by operators.',
         nextAction: 'Build after operator fuel-sale entry is stable.',
       ),
@@ -315,22 +413,72 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'cash',
         label: 'Cash',
         icon: Icons.payments_outlined,
+        category: 'Operations',
         purpose: 'Review shift cash submissions and station cash status.',
         nextAction: 'Build after shift and sale flows are stable.',
+      ),
+      TenantWorkspace(
+        id: 'purchases',
+        label: 'Purchases',
+        icon: Icons.shopping_cart_checkout_outlined,
+        category: 'Operations',
+        purpose:
+            'Record and review operational fuel purchases for the assigned station.',
+        nextAction:
+            'Wire after setup confirms tanks and suppliers can be selected safely.',
       ),
       TenantWorkspace(
         id: 'expenses',
         label: 'Expenses',
         icon: Icons.request_quote_outlined,
+        category: 'Operations',
         purpose: 'Record and review station operating expenses.',
         nextAction: 'Build after the shift flow is accepted.',
+      ),
+      TenantWorkspace(
+        id: 'inventory_dips',
+        label: 'Inventory & Dips',
+        icon: Icons.inventory_2_outlined,
+        category: 'Operations',
+        purpose:
+            'Review station tank stock and record tank dip checks when needed.',
+        nextAction:
+            'Wire after fuel sales and purchases are producing stock movement.',
+      ),
+      TenantWorkspace(
+        id: 'tankers',
+        label: 'Tankers',
+        icon: Icons.local_shipping_outlined,
+        category: 'Optional Modules',
+        purpose:
+            'Manage tanker trips, manual tanker sales, expenses, and leftover transfers.',
+        nextAction:
+            'Build only for tanker-enabled tenants after core fuel operations.',
+      ),
+      TenantWorkspace(
+        id: 'pos',
+        label: 'POS / Shop',
+        icon: Icons.point_of_sale_outlined,
+        category: 'Optional Modules',
+        purpose:
+            'Manage POS/shop sales when that module is enabled for the station.',
+        nextAction: 'Build only after core fuel sale flow is accepted.',
       ),
       TenantWorkspace(
         id: 'attendance',
         label: 'Attendance',
         icon: Icons.how_to_reg_outlined,
+        category: 'People',
         purpose: 'Review station staff attendance.',
         nextAction: 'Build after staff profiles are connected to logins.',
+      ),
+      TenantWorkspace(
+        id: 'reports',
+        label: 'Reports',
+        icon: Icons.summarize_outlined,
+        category: 'Reporting',
+        purpose: 'Review station operational reports.',
+        nextAction: 'Build after shifts, sales, cash, expenses, and purchases.',
       ),
     ],
     'accountant' => const [
@@ -338,27 +486,74 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'finance',
         label: 'Finance',
         icon: Icons.account_balance_wallet_outlined,
+        category: 'Finance',
         purpose: 'Manage purchases, payments, expenses, and financial review.',
         nextAction: 'Build after users and parties are stable.',
+      ),
+      TenantWorkspace(
+        id: 'purchases',
+        label: 'Purchases',
+        icon: Icons.shopping_cart_checkout_outlined,
+        category: 'Finance',
+        purpose: 'Review and process tenant purchase records.',
+        nextAction:
+            'Wire after suppliers and tank/fuel selection are proven safe.',
+      ),
+      TenantWorkspace(
+        id: 'expenses',
+        label: 'Expenses',
+        icon: Icons.request_quote_outlined,
+        category: 'Finance',
+        purpose: 'Review and process tenant expenses.',
+        nextAction: 'Wire after Manager expense recording is accepted.',
       ),
       TenantWorkspace(
         id: 'parties',
         label: 'Parties',
         icon: Icons.contacts_outlined,
+        category: 'Finance',
         purpose: 'Manage customers, suppliers, and tenant ledger context.',
         nextAction: 'Build before payment and ledger screens.',
+      ),
+      TenantWorkspace(
+        id: 'payments',
+        label: 'Payments',
+        icon: Icons.currency_exchange_outlined,
+        category: 'Finance',
+        purpose: 'Record customer and supplier payments.',
+        nextAction:
+            'Build after customer/supplier records and ledger summaries load.',
       ),
       TenantWorkspace(
         id: 'payroll',
         label: 'Payroll',
         icon: Icons.price_check_outlined,
+        category: 'People',
         purpose: 'Review payroll for tenant station workers.',
         nextAction: 'Build after staff profiles are connected.',
+      ),
+      TenantWorkspace(
+        id: 'attendance',
+        label: 'Attendance',
+        icon: Icons.how_to_reg_outlined,
+        category: 'People',
+        purpose: 'Review attendance records that affect payroll.',
+        nextAction: 'Wire after staff profile linking is stable.',
+      ),
+      TenantWorkspace(
+        id: 'tankers',
+        label: 'Tankers',
+        icon: Icons.local_shipping_outlined,
+        category: 'Optional Modules',
+        purpose:
+            'Review tanker financial impact, expenses, and purchase value.',
+        nextAction: 'Build after tanker operations are accepted for Manager.',
       ),
       TenantWorkspace(
         id: 'documents',
         label: 'Documents',
         icon: Icons.description_outlined,
+        category: 'Reporting',
         purpose: 'Generate and inspect tenant financial documents.',
         nextAction: 'Build after finance transactions are stable.',
       ),
@@ -366,8 +561,17 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'reports',
         label: 'Reports',
         icon: Icons.summarize_outlined,
+        category: 'Reporting',
         purpose: 'Review accounting and station reports for this tenant only.',
         nextAction: 'Build after finance flows are accepted.',
+      ),
+      TenantWorkspace(
+        id: 'notifications',
+        label: 'Notifications',
+        icon: Icons.notifications_outlined,
+        category: 'Reporting',
+        purpose: 'Review document/report notification delivery state.',
+        nextAction: 'Build after documents are connected.',
       ),
     ],
     'operator' => const [
@@ -375,6 +579,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'shift',
         label: 'Shift',
         icon: Icons.timer_outlined,
+        category: 'Operations',
         purpose: 'See current shift state and assigned station work.',
         nextAction:
             'Build operator shift start/status after Manager shift rules.',
@@ -383,14 +588,43 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'fuel_sale',
         label: 'Fuel Sale',
         icon: Icons.local_gas_station_outlined,
+        category: 'Operations',
         purpose: 'Enter meter-based fuel sales for the assigned station only.',
         nextAction:
             'Build after station nozzles are confirmed through setup review.',
       ),
       TenantWorkspace(
+        id: 'cash_submission',
+        label: 'Cash Submission',
+        icon: Icons.payments_outlined,
+        category: 'Operations',
+        purpose:
+            'Submit cash for the operator shift when policy allows operator cash handover.',
+        nextAction: 'Wire after shift and fuel sale totals are available.',
+      ),
+      TenantWorkspace(
+        id: 'tank_dips',
+        label: 'Tank Dips',
+        icon: Icons.straighten_outlined,
+        category: 'Operations',
+        purpose:
+            'Record assigned physical tank dip checks if the station requires it.',
+        nextAction: 'Build after Manager inventory/dip rules are accepted.',
+      ),
+      TenantWorkspace(
+        id: 'pos_sale',
+        label: 'POS Sale',
+        icon: Icons.point_of_sale_outlined,
+        category: 'Optional Modules',
+        purpose: 'Enter shop/POS sales when the module is enabled.',
+        nextAction:
+            'Keep hidden when POS module is disabled; build after fuel sale flow.',
+      ),
+      TenantWorkspace(
         id: 'attendance',
         label: 'Attendance',
         icon: Icons.how_to_reg_outlined,
+        category: 'People',
         purpose: 'Record or view operator attendance.',
         nextAction: 'Build after staff profiles are connected.',
       ),
@@ -400,6 +634,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         id: 'support',
         label: 'Unsupported Role',
         icon: Icons.warning_amber_outlined,
+        category: 'System',
         purpose: 'This role is not part of the clean tenant app flow yet.',
         nextAction:
             'Confirm the backend role mapping before adding any screens.',
@@ -765,6 +1000,42 @@ class _WorkspaceSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final workspaceTiles = <Widget>[];
+    String? previousCategory;
+    for (final workspace in workspaces) {
+      if (workspace.category != previousCategory) {
+        previousCategory = workspace.category;
+        workspaceTiles.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+            child: Text(
+              workspace.category.toUpperCase(),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        );
+      }
+      workspaceTiles.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: ListTile(
+            selected: workspace.id == selectedWorkspaceId,
+            selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            leading: Icon(workspace.icon),
+            title: Text(workspace.label),
+            onTap: () => onWorkspaceSelected(workspace.id),
+          ),
+        ),
+      );
+    }
+
     return ColoredBox(
       color: Colors.white,
       child: SafeArea(
@@ -779,22 +1050,7 @@ class _WorkspaceSidebar extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            for (final workspace in workspaces)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: ListTile(
-                  selected: workspace.id == selectedWorkspaceId,
-                  selectedTileColor: Theme.of(
-                    context,
-                  ).colorScheme.primaryContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  leading: Icon(workspace.icon),
-                  title: Text(workspace.label),
-                  onTap: () => onWorkspaceSelected(workspace.id),
-                ),
-              ),
+            ...workspaceTiles,
           ],
         ),
       ),
@@ -823,7 +1079,9 @@ class _WorkspaceDetail extends StatelessWidget {
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         const SizedBox(height: 8),
-        const Text('Clean tenant app rebuild. No dashboards, no fake totals.'),
+        Text(
+          '${workspace.category} workspace. Clean tenant app rebuild: no dashboards, no fake totals.',
+        ),
         const SizedBox(height: 24),
         Wrap(
           spacing: 12,

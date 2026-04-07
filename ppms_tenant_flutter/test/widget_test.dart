@@ -15,11 +15,29 @@ void main() {
       'Accountant',
     ).map((workspace) => workspace.id);
 
-    expect(headOfficeIds, containsAll(['context', 'tenant_setup', 'users']));
+    expect(
+      headOfficeIds,
+      containsAll([
+        'context',
+        'tenant_setup',
+        'users',
+        'inventory',
+        'tankers',
+        'pos',
+        'hardware',
+        'reports',
+      ]),
+    );
     expect(headOfficeIds, isNot(contains('station_admin')));
-    expect(operatorIds, containsAll(['context', 'shift', 'fuel_sale']));
+    expect(
+      operatorIds,
+      containsAll(['context', 'shift', 'fuel_sale', 'tank_dips']),
+    );
     expect(operatorIds, isNot(contains('users')));
-    expect(accountantIds, containsAll(['finance', 'parties', 'payroll']));
+    expect(
+      accountantIds,
+      containsAll(['finance', 'parties', 'payments', 'payroll', 'documents']),
+    );
     expect(accountantIds, isNot(contains('fuel_sale')));
   });
 
