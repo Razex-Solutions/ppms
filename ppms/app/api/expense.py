@@ -44,6 +44,7 @@ def list_expenses(
     current_user: User = Depends(get_current_user),
 ):
     q = db.query(Expense)
+    requested_station_id = station_id
     if current_user.role.name == "Admin" or is_master_admin(current_user):
         if station_id is not None and organization_id is not None:
             station = db.query(Station).filter(Station.id == station_id).first()
@@ -58,6 +59,8 @@ def list_expenses(
                 raise HTTPException(status_code=403, detail="Not authorized for this station")
             q = q.filter(Expense.station_id == station_id)
     else:
+        if requested_station_id is not None and requested_station_id != current_user.station_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
         station_id = current_user.station_id
 
     if station_id:

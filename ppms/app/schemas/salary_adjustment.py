@@ -4,7 +4,8 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class SalaryAdjustmentBase(BaseModel):
-    user_id: int
+    user_id: int | None = None
+    employee_profile_id: int | None = None
     effective_date: date
     impact: str
     amount: float
@@ -51,7 +52,8 @@ class SalaryAdjustmentCreate(SalaryAdjustmentBase):
 class SalaryAdjustmentResponse(BaseModel):
     id: int
     station_id: int
-    user_id: int
+    user_id: int | None = None
+    employee_profile_id: int | None = None
     effective_date: date
     impact: str
     amount: float

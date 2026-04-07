@@ -73,9 +73,12 @@ def list_shifts(
     current_user: User = Depends(get_current_user)
 ):
     q = db.query(Shift)
+    requested_station_id = station_id
     
     # Multi-tenancy check
     if current_user.role.name != "Admin" and not is_master_admin(current_user):
+        if requested_station_id is not None and requested_station_id != current_user.station_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
         station_id = current_user.station_id
         
     if station_id:

@@ -9,7 +9,8 @@ class PayrollLine(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     payroll_run_id = Column(Integer, ForeignKey("payroll_runs.id"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    employee_profile_id = Column(Integer, ForeignKey("employee_profiles.id"), nullable=True, index=True)
     present_days = Column(Integer, nullable=False, default=0)
     leave_days = Column(Integer, nullable=False, default=0)
     absent_days = Column(Integer, nullable=False, default=0)
@@ -24,3 +25,4 @@ class PayrollLine(Base):
 
     payroll_run = relationship("PayrollRun", back_populates="lines")
     user = relationship("User")
+    employee_profile = relationship("EmployeeProfile")

@@ -114,60 +114,14 @@ These were open in the first audit and are now covered by the runner:
 - tanker completion supports partial leftover transfer and remaining leftover tracking
 - reversal rejection paths are covered for fuel sales, purchases, customer payments, and supplier payments
 - credit override rejection is covered
+- profile-only staff payroll is now supported through employee-profile payroll lines
+- hardware simulation now covers dispenser and tank-probe devices plus events
+- notification preference, delivery diagnostics, and document template edit/preview checks are covered
+- multi-station operations now cover station-specific shifts, expenses, scoped reads, and cross-station denial checks
 
 ## Important Known Gaps
 
-### 1. Profile-Only Staff Payroll
-
-Current behavior:
-
-- payroll runs calculate from payroll-enabled login users
-- profile-only staff are created but do not enter payroll runs
-
-Preferred direction:
-
-- either support profile-only staff payroll
-- or clearly separate staff profiles from payroll users in UI
-
-### 2. Hardware Simulation Depth
-
-Current coverage:
-
-- module toggle behavior is covered
-- hardware can be hidden for minimal-module tenants
-
-Still needed:
-
-- live hardware/probe/printer simulation scenario
-- hardware event visibility in the clean tenant app
-
-### 3. Notification And Document Operations
-
-Current coverage:
-
-- notification summary/inbox readability
-- report export
-- financial documents for key transaction contexts
-
-Still needed:
-
-- notification preference update
-- due delivery processing/retry checks where useful
-- document template edit/preview checks
-- attachment workflow if we keep attachments in Phase 9 scope
-
-### 4. Multi-Station Operations Depth
-
-Current coverage:
-
-- multi-station scope and StationAdmin leakage checks
-
-Still needed:
-
-- full operational transactions on each multi-station station
-- station-specific shift, sale, purchase, expense, and report checks for station A vs station B
-
-### 5. Clean Tenant Flutter UI Completion
+### 1. Clean Tenant Flutter UI Completion
 
 Current coverage:
 
@@ -230,5 +184,5 @@ After that:
 2. Reports/Documents/Notifications UI packet
 3. Correction/Reversal UI packet
 4. Multi-station HeadOffice + StationAdmin UI packet
-5. Decide/fix the four known backend policy gaps
+5. Support-console Phase 9 walkthrough
 ```

@@ -359,6 +359,24 @@
       "expected_net_salary": 533.33
     }
   ],
+  "profile_payroll": [
+    {
+      "staff_name": "Phase 9 Pump Attendant A",
+      "attendance_status": "present",
+      "monthly_salary": 45000,
+      "addition": 100,
+      "deduction": 50,
+      "expected_net_salary": 1550
+    },
+    {
+      "staff_name": "Phase 9 Cleaner Helper A",
+      "attendance_status": "half_day",
+      "monthly_salary": 30000,
+      "addition": 0,
+      "deduction": 0,
+      "expected_net_salary": 500
+    }
+  ],
   "attendance": [
     {
       "staff_name": "Phase 9 Pump Attendant A",

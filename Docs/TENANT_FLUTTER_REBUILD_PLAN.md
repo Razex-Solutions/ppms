@@ -479,7 +479,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps
 The runner uses the live backend API and creates known sample data for:
 
 - tenant worker logins
-- profile-only staff
+- profile-only staff payroll
 - operator shift open and close
 - meter-based cash fuel sales
 - credit fuel sales
@@ -508,7 +508,7 @@ The runner uses the live backend API and creates known sample data for:
 - minimal-module tenant toggles for POS, mart, tanker, hardware, and meter adjustments
 - tank dips across all tanks
 
-It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, supplier ledger, attendance, payroll, POS, correction/reversal, tanker, multi-station scope, module-toggle, report, document, and notification regressions while rebuilding the Flutter UI.
+It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, supplier ledger, attendance, login-user payroll, profile-only staff payroll, POS, correction/reversal, tanker, multi-station operation scope, module-toggle, hardware simulation, report, document-template/document-dispatch, and notification regressions while rebuilding the Flutter UI.
 
 ## Phase 9 Acceptance For Rebuild
 

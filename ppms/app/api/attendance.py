@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.attendance_record import AttendanceRecord
+from app.models.employee_profile import EmployeeProfile
 from app.models.user import User
 from app.schemas.attendance import (
     AttendanceCheckInRequest,
@@ -78,8 +79,14 @@ def list_attendance(
     if current_user.role.name == "Admin" or is_master_admin(current_user):
         pass
     elif current_user.role.name == "HeadOffice":
-        organization_id = current_user.station.organization_id if current_user.station else None
-        query = query.join(User, User.id == AttendanceRecord.user_id).filter(User.station.has(organization_id=organization_id))
+        organization_id = current_user.organization_id or (current_user.station.organization_id if current_user.station else None)
+        query = query.outerjoin(User, User.id == AttendanceRecord.user_id).outerjoin(
+            EmployeeProfile,
+            EmployeeProfile.id == AttendanceRecord.employee_profile_id,
+        ).filter(
+            (User.station.has(organization_id=organization_id))
+            | (EmployeeProfile.organization_id == organization_id)
+        )
     else:
         station_id = current_user.station_id
     if station_id is not None:

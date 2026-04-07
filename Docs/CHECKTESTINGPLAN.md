@@ -112,6 +112,7 @@ What it does:
 - records customer payments through Accountant
 - verifies customer ledger totals and receivable balances
 - records attendance for payroll-enabled workers
+- records attendance for selected profile-only staff
 - records salary additions and deductions
 - creates and finalizes a payroll run
 - verifies payroll line totals and payroll run net total
@@ -124,6 +125,10 @@ What it does:
 - verifies scoped reports, report definition, and report export
 - verifies financial documents for sale/payment/ledger contexts
 - verifies notification summary is readable
+- verifies notification preference update
+- verifies document template seed/update/preview
+- verifies local document dispatch and delivery diagnostics
+- verifies dispenser and tank-probe hardware simulator events
 - requests and approves reversals for fuel sale, purchase, customer payment, and supplier payment
 - requests and approves a credit limit override
 - records internal fuel usage
@@ -132,6 +137,8 @@ What it does:
 - prepares a multi-station tenant with two StationAdmin users
 - proves StationAdmin is only needed/used in multi-station tenant testing
 - proves StationAdmin cannot read another assigned station or its users
+- proves StationAdmin can create own-station shifts and expenses
+- proves StationAdmin cannot list another station's shifts or expenses
 - prepares a minimal-module tenant
 - proves POS, mart, tanker, hardware, and meter adjustment modules can be disabled
 - records multiple tank dips across all tanks
@@ -144,7 +151,7 @@ Important business rule captured by the runner:
 - meter sales immediately reduce tank stock
 - dip loss/gain should be zero when the physical calculated volume equals system stock
 - open shift cash-in-hand includes live cash sales and cash submissions
-- payroll currently runs against payroll-enabled login users, not profile-only staff records
+- payroll runs against both payroll-enabled login users and selected profile-only staff records
 - tanker workspace summaries are cumulative, so scenario-specific checks validate the new trips directly
 - tanker leftover transfer supports partial transfer and remaining leftover tracking
 - HeadOffice can perform meter adjustments for this one-station tenant because HeadOffice acts as station admin when there is no separate StationAdmin

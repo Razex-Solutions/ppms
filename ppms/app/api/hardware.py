@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import is_master_admin, require_station_access
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.hardware_device import HardwareDevice
 from app.models.hardware_event import HardwareEvent
+from app.models.station import Station
 from app.models.user import User
 from app.schemas.hardware import (
     HardwareDeviceCreate,
@@ -59,10 +60,15 @@ def list_devices(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    query = db.query(HardwareDevice)
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
+        pass
+    elif is_head_office_user(current_user):
+        organization_id = get_user_organization_id(current_user)
+        query = query.join(Station, Station.id == HardwareDevice.station_id).filter(Station.organization_id == organization_id)
+    else:
         station_id = current_user.station_id
 
-    query = db.query(HardwareDevice)
     if station_id is not None:
         query = query.filter(HardwareDevice.station_id == station_id)
     if device_type:
@@ -153,10 +159,15 @@ def list_events(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    query = db.query(HardwareEvent)
+    if current_user.role.name == "Admin" or is_master_admin(current_user):
+        pass
+    elif is_head_office_user(current_user):
+        organization_id = get_user_organization_id(current_user)
+        query = query.join(Station, Station.id == HardwareEvent.station_id).filter(Station.organization_id == organization_id)
+    else:
         station_id = current_user.station_id
 
-    query = db.query(HardwareEvent)
     if station_id is not None:
         query = query.filter(HardwareEvent.station_id == station_id)
     if device_id is not None:

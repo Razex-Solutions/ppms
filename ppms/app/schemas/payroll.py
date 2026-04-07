@@ -17,7 +17,8 @@ class PayrollFinalizeRequest(BaseModel):
 class PayrollLineResponse(BaseModel):
     id: int
     payroll_run_id: int
-    user_id: int
+    user_id: int | None = None
+    employee_profile_id: int | None = None
     present_days: int
     leave_days: int
     absent_days: int

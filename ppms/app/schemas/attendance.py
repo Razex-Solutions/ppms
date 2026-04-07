@@ -13,7 +13,8 @@ class AttendanceCheckOutRequest(BaseModel):
 
 
 class AttendanceRecordCreate(BaseModel):
-    user_id: int
+    user_id: int | None = None
+    employee_profile_id: int | None = None
     station_id: int
     attendance_date: date
     status: str = "present"
@@ -32,7 +33,8 @@ class AttendanceRecordUpdate(BaseModel):
 class AttendanceRecordResponse(BaseModel):
     id: int
     station_id: int
-    user_id: int
+    user_id: int | None = None
+    employee_profile_id: int | None = None
     attendance_date: date
     status: str
     check_in_at: datetime | None = None

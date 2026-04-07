@@ -172,7 +172,7 @@ Known current backend behavior recorded by the runner:
 - open shift cash-in-hand now includes live meter cash sales and cash submissions
 - closed shift cash expected and variance calculate correctly
 - Manager, StationAdmin, and HeadOffice purchases now post directly as approved operational records
-- payroll runs currently calculate from payroll-enabled login users, not profile-only staff records
+- payroll runs include both payroll-enabled login users and profile-only employee profiles
 - tanker workspace summary is cumulative for the station, so scenario checks validate newly created trips directly
 - supplier-to-customer tanker trip completion supports partial leftover transfer and remaining leftover tracking
 - HeadOffice meter adjustment is allowed for the one-station tenant case because HeadOffice acts as station admin when there is no separate StationAdmin
@@ -185,7 +185,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps
 
 ## Dataset Coverage And Remaining Decisions
 
-The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, POS/shop, tankers, reports, documents, notifications, corrections/reversals, credit override, internal fuel usage, meter adjustments, multi-station scoping, minimal-module toggles, and tank dips at a first acceptance level.
+The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, login-user payroll, profile-only staff payroll, POS/shop, tankers, reports, documents, notifications, document templates, hardware simulation, corrections/reversals, credit override, internal fuel usage, meter adjustments, multi-station scoping and station operations, minimal-module toggles, and tank dips at a first acceptance level.
 
 The detailed sections below now separate completed first-pass coverage from remaining decisions and deeper edge cases.
 
@@ -337,15 +337,16 @@ Current automated coverage:
 - salary adjustment bonus
 - salary adjustment deduction
 - monthly payroll run
+- profile-only staff payroll lines
 
 Current backend behavior:
 
 - payroll is calculated from payroll-enabled login users
-- profile-only staff records are created as staff dataset coverage but do not enter payroll runs yet
+- profile-only employee profiles can enter payroll runs without login accounts
 
 Still to add or decide:
 
-- profile-only staff payroll support, or a clear UI separation between staff profiles and payroll users
+- clean tenant Flutter UI for profile-only staff payroll review
 - explicit loan-type salary adjustment if this needs a separate business category instead of a normal deduction
 
 Expected formulas:
@@ -455,14 +456,15 @@ Current automated coverage:
 - notification summary
 - notification inbox/delivery log
 - financial document generation
+- financial document dispatch creation
+- document template seed/update/preview
+- notification preference update
 - report export job
 - saved report definition
 
 Still to add:
 
-- notification preference update
-- due delivery processing/retry where useful
-- direct dispatch send checks if we want to verify local/mock delivery records
+- production provider delivery checks after real WhatsApp/SMS/email credentials exist
 
 Expected checks:
 
@@ -480,9 +482,15 @@ Current automated coverage:
 - prepares one `StationAdmin` per multi-station station
 - verifies HeadOffice can see both multi-station stations
 - verifies StationAdmin A sees only station A
+- verifies StationAdmin A can open an own-station shift
+- verifies StationAdmin B can open an own-station shift
+- verifies StationAdmin A can create an own-station expense
+- verifies StationAdmin B can create an own-station expense
 - verifies StationAdmin A cannot read station B
 - verifies StationAdmin A cannot list station B users
+- verifies StationAdmin A cannot list station B shifts
 - verifies StationAdmin B cannot read station A
+- verifies StationAdmin B cannot list station A expenses
 - verifies one multi-station station can have tankers enabled while another has tankers disabled
 - prepares `phase9_minimal` one-station tenant
 - verifies minimal tenant modules are disabled for POS, mart, tankers, hardware, and meter adjustments

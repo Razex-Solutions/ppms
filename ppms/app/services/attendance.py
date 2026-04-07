@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.core.time import utc_now
 from app.models.attendance_record import AttendanceRecord
+from app.models.employee_profile import EmployeeProfile
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.attendance import AttendanceRecordCreate, AttendanceRecordUpdate
@@ -97,15 +98,25 @@ def check_out(db: Session, *, record: AttendanceRecord, current_user: User, note
 def create_attendance_record(db: Session, *, data: AttendanceRecordCreate, current_user: User) -> AttendanceRecord:
     ensure_attendance_access(db, data.station_id, current_user)
     _validate_status(data.status)
-    user = db.query(User).filter(User.id == data.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.station_id != data.station_id:
-        raise HTTPException(status_code=400, detail="User does not belong to the selected station")
+    if bool(data.user_id) == bool(data.employee_profile_id):
+        raise HTTPException(status_code=400, detail="Provide exactly one of user_id or employee_profile_id")
+    if data.user_id is not None:
+        user = db.query(User).filter(User.id == data.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user.station_id != data.station_id:
+            raise HTTPException(status_code=400, detail="User does not belong to the selected station")
+    if data.employee_profile_id is not None:
+        profile = db.query(EmployeeProfile).filter(EmployeeProfile.id == data.employee_profile_id).first()
+        if not profile:
+            raise HTTPException(status_code=404, detail="Employee profile not found")
+        if profile.station_id != data.station_id:
+            raise HTTPException(status_code=400, detail="Employee profile does not belong to the selected station")
     existing = (
         db.query(AttendanceRecord)
         .filter(
             AttendanceRecord.user_id == data.user_id,
+            AttendanceRecord.employee_profile_id == data.employee_profile_id,
             AttendanceRecord.station_id == data.station_id,
             AttendanceRecord.attendance_date == data.attendance_date,
         )

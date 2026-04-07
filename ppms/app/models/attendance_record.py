@@ -10,7 +10,8 @@ class AttendanceRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     station_id = Column(Integer, ForeignKey("stations.id"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    employee_profile_id = Column(Integer, ForeignKey("employee_profiles.id"), nullable=True, index=True)
     attendance_date = Column(Date, nullable=False, index=True)
     status = Column(String, nullable=False, default="present", index=True)
     check_in_at = Column(DateTime, nullable=True)
@@ -22,4 +23,5 @@ class AttendanceRecord(Base):
 
     station = relationship("Station", foreign_keys=[station_id])
     user = relationship("User", foreign_keys=[user_id], back_populates="attendance_records")
+    employee_profile = relationship("EmployeeProfile", foreign_keys=[employee_profile_id])
     approved_by = relationship("User", foreign_keys=[approved_by_user_id])

@@ -78,6 +78,9 @@ class ApiClient:
     def post(self, path: str, payload: dict[str, Any] | None = None) -> Any:
         return self.request("POST", path, payload=payload or {})
 
+    def put(self, path: str, payload: dict[str, Any] | None = None) -> Any:
+        return self.request("PUT", path, payload=payload or {})
+
     def login(self, username: str, password: str) -> "ApiClient":
         response = self.post("/auth/login", {"username": username, "password": password})
         return ApiClient(self.base_url, response["access_token"])
@@ -483,7 +486,9 @@ def create_payroll_flow(
     timestamp: int,
     station_id: int,
     extra_users: list[dict[str, Any]],
+    employee_profiles: list[dict[str, Any]],
     payroll_specs: list[dict[str, Any]],
+    profile_payroll_specs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     period_start = date(2030, 1, 1) + timedelta(days=timestamp % 3000)
     period_end = period_start
@@ -491,6 +496,7 @@ def create_payroll_flow(
         user["username"].split(f"_{scenario_id.lower().replace('-', '_')}")[0]: user
         for user in extra_users
     }
+    profiles_by_name = {profile["full_name"]: profile for profile in employee_profiles}
 
     attendance_records: list[dict[str, Any]] = []
     salary_adjustments: list[dict[str, Any]] = []
@@ -539,6 +545,53 @@ def create_payroll_flow(
                 )
             )
 
+    profile_target_ids: dict[str, int] = {}
+    for payroll_spec in profile_payroll_specs:
+        profile = profiles_by_name[payroll_spec["staff_name"]]
+        profile_target_ids[payroll_spec["staff_name"]] = profile["id"]
+        attendance_records.append(
+            accountant.post(
+                "/attendance/",
+                {
+                    "employee_profile_id": profile["id"],
+                    "station_id": station_id,
+                    "attendance_date": period_start.isoformat(),
+                    "status": payroll_spec["attendance_status"],
+                    "notes": f"{scenario_id} profile payroll attendance",
+                },
+            )
+        )
+        if float(payroll_spec.get("addition", 0)) > 0:
+            salary_adjustments.append(
+                accountant.post(
+                    "/salary-adjustments/",
+                    {
+                        "station_id": station_id,
+                        "employee_profile_id": profile["id"],
+                        "effective_date": period_start.isoformat(),
+                        "impact": "addition",
+                        "amount": payroll_spec["addition"],
+                        "reason": "Phase 9 profile bonus",
+                        "notes": f"{scenario_id} profile payroll addition",
+                    },
+                )
+            )
+        if float(payroll_spec.get("deduction", 0)) > 0:
+            salary_adjustments.append(
+                accountant.post(
+                    "/salary-adjustments/",
+                    {
+                        "station_id": station_id,
+                        "employee_profile_id": profile["id"],
+                        "effective_date": period_start.isoformat(),
+                        "impact": "deduction",
+                        "amount": payroll_spec["deduction"],
+                        "reason": "Phase 9 profile deduction",
+                        "notes": f"{scenario_id} profile payroll deduction",
+                    },
+                )
+            )
+
     payroll_run = accountant.post(
         "/payroll/runs",
         {
@@ -566,6 +619,7 @@ def create_payroll_flow(
             spec["username_prefix"]: users_by_prefix[spec["username_prefix"]]["id"]
             for spec in payroll_specs
         },
+        "target_profile_ids": profile_target_ids,
     }
 
 
@@ -725,6 +779,7 @@ def create_tanker_flow(
 
 def create_reports_documents_notifications_flow(
     *,
+    head_office: ApiClient,
     accountant: ApiClient,
     scenario_id: str,
     station_id: int,
@@ -790,6 +845,61 @@ def create_reports_documents_notifications_flow(
     }
     notification_summary = accountant.get("/notifications/summary")
     notifications = accountant.get("/notifications/")
+    preferences_before = accountant.get("/notifications/preferences")
+    preference = accountant.put(
+        "/notifications/preferences/report_export.completed",
+        {
+            "event_type": "report_export.completed",
+            "in_app_enabled": True,
+            "email_enabled": False,
+            "sms_enabled": False,
+            "whatsapp_enabled": False,
+        },
+    )
+    document_template_seed = head_office.post(f"/document-templates/{station_id}/seed-defaults")
+    document_templates = head_office.get(f"/document-templates/{station_id}")
+    first_template_type = document_templates[0]["document_type"]
+    template_update = head_office.put(
+        f"/document-templates/{station_id}/{first_template_type}",
+        {
+            "name": f"{scenario_id} {first_template_type} template",
+            "header_html": "<h1>{{station_name}}</h1>",
+            "body_html": "<p>{{document_number}}</p>",
+            "footer_html": "<p>Phase 9 local template</p>",
+            "is_active": True,
+        },
+    )
+    template_preview = head_office.post(
+        f"/document-templates/preview/{first_template_type}",
+        {
+            "header_html": "<h1>{{station_name}}</h1>",
+            "body_html": "<p>{{document_number}}</p>",
+            "footer_html": "<p>Phase 9 local template</p>",
+        },
+    )
+    fuel_sale_dispatch = accountant.post(
+        f"/financial-documents/fuel-sales/{first_cash_sale['id']}/send",
+        {
+            "channel": "email",
+            "format": "pdf",
+            "recipient_name": "Phase 9 Cash Customer",
+            "recipient_contact": "phase9@example.com",
+        },
+    )
+    document_dispatches = accountant.get("/financial-documents/dispatches")
+    document_dispatch_diagnostics = accountant.get("/financial-documents/dispatches/diagnostics")
+    document_dispatch_retry = expect_http_error(
+        "financial document dispatch retry blocks non-retryable dispatch",
+        lambda: accountant.post(f"/financial-documents/dispatches/{fuel_sale_dispatch['id']}/retry"),
+        400,
+    )
+    notification_deliveries = accountant.get("/notifications/deliveries")
+    notification_delivery_diagnostics = accountant.get("/notifications/deliveries/diagnostics")
+    process_notifications = expect_http_error(
+        "tenant user cannot process global notification delivery jobs",
+        lambda: accountant.post("/notifications/deliveries/process-due"),
+        403,
+    )
     return {
         "reports": reports,
         "report_definition": report_definition,
@@ -797,6 +907,91 @@ def create_reports_documents_notifications_flow(
         "documents": documents,
         "notification_summary": notification_summary,
         "notifications": notifications,
+        "preferences_before": preferences_before,
+        "preference": preference,
+        "document_template_seed": document_template_seed,
+        "document_templates": document_templates,
+        "template_update": template_update,
+        "template_preview": template_preview,
+        "fuel_sale_dispatch": fuel_sale_dispatch,
+        "document_dispatches": document_dispatches,
+        "document_dispatch_diagnostics": document_dispatch_diagnostics,
+        "document_dispatch_retry": document_dispatch_retry,
+        "notification_deliveries": notification_deliveries,
+        "notification_delivery_diagnostics": notification_delivery_diagnostics,
+        "process_notifications": process_notifications,
+    }
+
+
+def create_hardware_flow(
+    *,
+    manager: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    setup: dict[str, Any],
+    nozzles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    dispenser = setup["dispensers"][0]
+    tank = setup["tanks"][0]
+    nozzle = nozzles[0]
+    vendors = manager.get("/hardware/vendors")
+    dispenser_device = manager.post(
+        "/hardware/devices",
+        {
+            "name": f"{scenario_id} dispenser simulator",
+            "code": f"{scenario_id}-DISP-HW",
+            "device_type": "dispenser",
+            "vendor_name": "generic",
+            "integration_mode": "simulated",
+            "status": "offline",
+            "station_id": station_id,
+            "dispenser_id": dispenser["id"],
+        },
+    )
+    tank_probe_device = manager.post(
+        "/hardware/devices",
+        {
+            "name": f"{scenario_id} tank probe simulator",
+            "code": f"{scenario_id}-TANK-HW",
+            "device_type": "tank_probe",
+            "vendor_name": "generic",
+            "integration_mode": "simulated",
+            "status": "offline",
+            "station_id": station_id,
+            "tank_id": tank["id"],
+        },
+    )
+    dispenser_event = manager.post(
+        "/hardware/simulate/dispenser-reading",
+        {
+            "device_id": dispenser_device["id"],
+            "nozzle_id": nozzle["id"],
+            "meter_reading": float(nozzle["meter_reading"]) + 12.5,
+            "volume": 12.5,
+            "status": "received",
+            "notes": f"{scenario_id} dispenser simulated meter reading",
+        },
+    )
+    tank_event = manager.post(
+        "/hardware/simulate/tank-probe-reading",
+        {
+            "device_id": tank_probe_device["id"],
+            "volume": float(tank["current_volume"]) - 12.5,
+            "temperature": 31.5,
+            "status": "warning",
+            "notes": f"{scenario_id} tank probe simulated warning reading",
+        },
+    )
+    devices = manager.get("/hardware/devices", query={"station_id": station_id})
+    events = manager.get("/hardware/events", query={"station_id": station_id})
+    return {
+        "vendors": vendors,
+        "dispenser_device": dispenser_device,
+        "tank_probe_device": tank_probe_device,
+        "dispenser_event": dispenser_event,
+        "tank_event": tank_event,
+        "devices": devices,
+        "events": events,
     }
 
 
@@ -1233,7 +1428,7 @@ def create_corrections_flow(
     }
 
 
-def create_scope_and_module_flow(*, anonymous: ApiClient) -> dict[str, Any]:
+def create_scope_and_module_flow(*, anonymous: ApiClient, scenario_id: str) -> dict[str, Any]:
     multi_head_office = anonymous.login("p9_multi", "office123")
     station_a_admin = anonymous.login("p9_multi_station_a_admin", "station123")
     station_b_admin = anonymous.login("p9_multi_station_b_admin", "station123")
@@ -1250,6 +1445,48 @@ def create_scope_and_module_flow(*, anonymous: ApiClient) -> dict[str, Any]:
     station_b = next(item for item in multi_stations_for_head_office if item["code"] == "PHASE9-MULTI-B")
     station_a_modules = multi_head_office.get(f"/station-modules/{station_a['id']}")
     station_b_modules = multi_head_office.get(f"/station-modules/{station_b['id']}")
+    station_a_open_shifts = station_a_admin.get("/shifts/", query={"station_id": station_a["id"], "status": "open"})
+    station_b_open_shifts = station_b_admin.get("/shifts/", query={"station_id": station_b["id"], "status": "open"})
+    station_a_shift = station_a_open_shifts[0] if station_a_open_shifts else station_a_admin.post(
+        "/shifts/",
+        {
+            "station_id": station_a["id"],
+            "initial_cash": 250,
+            "notes": f"{scenario_id} multi-station A operations shift",
+        },
+    )
+    station_b_shift = station_b_open_shifts[0] if station_b_open_shifts else station_b_admin.post(
+        "/shifts/",
+        {
+            "station_id": station_b["id"],
+            "initial_cash": 350,
+            "notes": f"{scenario_id} multi-station B operations shift",
+        },
+    )
+    station_a_expense = station_a_admin.post(
+        "/expenses/",
+        {
+            "station_id": station_a["id"],
+            "title": f"{scenario_id} Station A cleaning",
+            "category": "multi_station",
+            "amount": 111,
+            "notes": "Phase 9 multi-station operation check",
+        },
+    )
+    station_b_expense = station_b_admin.post(
+        "/expenses/",
+        {
+            "station_id": station_b["id"],
+            "title": f"{scenario_id} Station B cleaning",
+            "category": "multi_station",
+            "amount": 222,
+            "notes": "Phase 9 multi-station operation check",
+        },
+    )
+    station_a_shifts = station_a_admin.get("/shifts/", query={"station_id": station_a["id"]})
+    station_b_shifts = station_b_admin.get("/shifts/", query={"station_id": station_b["id"]})
+    station_a_expenses = station_a_admin.get("/expenses/", query={"station_id": station_a["id"]})
+    station_b_expenses = station_b_admin.get("/expenses/", query={"station_id": station_b["id"]})
 
     minimal_orgs = minimal_head_office.get("/organizations/")
     minimal_org = minimal_orgs[0]
@@ -1273,6 +1510,16 @@ def create_scope_and_module_flow(*, anonymous: ApiClient) -> dict[str, Any]:
             lambda: station_b_admin.get(f"/stations/{station_a['id']}"),
             403,
         ),
+        expect_http_error(
+            "StationAdmin A cannot list Station B shifts",
+            lambda: station_a_admin.get("/shifts/", query={"station_id": station_b["id"]}),
+            403,
+        ),
+        expect_http_error(
+            "StationAdmin B cannot list Station A expenses",
+            lambda: station_b_admin.get("/expenses/", query={"station_id": station_a["id"]}),
+            403,
+        ),
     ]
 
     return {
@@ -1283,6 +1530,14 @@ def create_scope_and_module_flow(*, anonymous: ApiClient) -> dict[str, Any]:
         "station_b": station_b,
         "station_a_modules": station_a_modules,
         "station_b_modules": station_b_modules,
+        "station_a_shift": station_a_shift,
+        "station_b_shift": station_b_shift,
+        "station_a_expense": station_a_expense,
+        "station_b_expense": station_b_expense,
+        "station_a_shifts": station_a_shifts,
+        "station_b_shifts": station_b_shifts,
+        "station_a_expenses": station_a_expenses,
+        "station_b_expenses": station_b_expenses,
         "minimal_org": minimal_org,
         "minimal_station": minimal_station,
         "minimal_modules": minimal_modules,
@@ -1411,7 +1666,9 @@ def main() -> int:
         timestamp=timestamp,
         station_id=station_id,
         extra_users=extra_users,
+        employee_profiles=employee_profiles,
         payroll_specs=manifest["payroll"],
+        profile_payroll_specs=manifest["profile_payroll"],
     )
     pos_flow = create_pos_flow(
         manager=manager,
@@ -1435,7 +1692,14 @@ def main() -> int:
         operator_user=operator_users[0],
         station_id=station_id,
     )
-    scope_and_module_flow = create_scope_and_module_flow(anonymous=anonymous)
+    hardware_flow = create_hardware_flow(
+        manager=manager,
+        scenario_id=scenario_id,
+        station_id=station_id,
+        setup=setup_before,
+        nozzles=nozzles,
+    )
+    scope_and_module_flow = create_scope_and_module_flow(anonymous=anonymous, scenario_id=scenario_id)
     setup_after_sales_and_approved_purchases = manager.get(f"/stations/{station_id}/setup-foundation")
     tanks_after_sales_and_approved_purchases_by_id = {
         int(tank["id"]): float(tank["current_volume"])
@@ -1448,6 +1712,7 @@ def main() -> int:
         dip_specs=manifest["operations"]["dip_scenarios"],
     )
     reports_documents_notifications = create_reports_documents_notifications_flow(
+        head_office=head_office,
         accountant=accountant,
         scenario_id=scenario_id,
         station_id=station_id,
@@ -1634,6 +1899,12 @@ def main() -> int:
     lines_by_user_id = {
         int(line["user_id"]): line
         for line in payroll_flow["payroll_lines"]
+        if line.get("user_id") is not None
+    }
+    lines_by_profile_id = {
+        int(line["employee_profile_id"]): line
+        for line in payroll_flow["payroll_lines"]
+        if line.get("employee_profile_id") is not None
     }
     expected_payroll_net_total = 0.0
     for payroll_spec in manifest["payroll"]:
@@ -1656,12 +1927,32 @@ def main() -> int:
                 ),
             ]
         )
+    for payroll_spec in manifest["profile_payroll"]:
+        profile_id = payroll_flow["target_profile_ids"][payroll_spec["staff_name"]]
+        line = lines_by_profile_id[profile_id]
+        expected_payroll_net_total += float(payroll_spec["expected_net_salary"])
+        checks.extend(
+            [
+                check(
+                    f"profile payroll {payroll_spec['staff_name']} monthly salary",
+                    line["monthly_salary"],
+                    payroll_spec["monthly_salary"],
+                    approximate=True,
+                ),
+                check(
+                    f"profile payroll {payroll_spec['staff_name']} net salary",
+                    line["net_amount"],
+                    payroll_spec["expected_net_salary"],
+                    approximate=True,
+                ),
+            ]
+        )
     checks.extend(
         [
             check(
                 "payroll target attendance records",
                 len(payroll_flow["attendance_records"]),
-                len(manifest["payroll"]),
+                len(manifest["payroll"]) + len(manifest["profile_payroll"]),
             ),
             check(
                 "payroll run finalized",
@@ -1773,6 +2064,31 @@ def main() -> int:
             and "total" in reports_documents_notifications["notification_summary"],
             True,
         )
+    )
+    checks.extend(
+        [
+            check("notification preference updated", reports_documents_notifications["preference"]["event_type"], "report_export.completed"),
+            check("document templates seeded", len(reports_documents_notifications["document_template_seed"]) > 0, True),
+            check("document template updated", reports_documents_notifications["template_update"]["name"].startswith(scenario_id), True),
+            check("document template preview rendered", "Phase 9 local template" in reports_documents_notifications["template_preview"]["rendered_html"], True),
+            check("financial document dispatch created", reports_documents_notifications["fuel_sale_dispatch"]["entity_type"], "fuel_sale"),
+            reports_documents_notifications["document_dispatch_retry"],
+            check("document dispatch diagnostics readable", "total" in reports_documents_notifications["document_dispatch_diagnostics"], True),
+            check("notification deliveries readable", isinstance(reports_documents_notifications["notification_deliveries"], list), True),
+            check("notification delivery diagnostics readable", "total" in reports_documents_notifications["notification_delivery_diagnostics"], True),
+            reports_documents_notifications["process_notifications"],
+        ]
+    )
+    checks.extend(
+        [
+            check("hardware vendors readable", "recognized_vendors" in hardware_flow["vendors"], True),
+            check("hardware dispenser device created", hardware_flow["dispenser_device"]["device_type"], "dispenser"),
+            check("hardware tank probe device created", hardware_flow["tank_probe_device"]["device_type"], "tank_probe"),
+            check("hardware dispenser event recorded", hardware_flow["dispenser_event"]["event_type"], "dispenser_reading"),
+            check("hardware tank probe event recorded", hardware_flow["tank_event"]["event_type"], "tank_probe_reading"),
+            check("hardware device list scoped", len(hardware_flow["devices"]) >= 2, True),
+            check("hardware event list scoped", len(hardware_flow["events"]) >= 2, True),
+        ]
     )
     checks.extend(
         [
@@ -1958,6 +2274,30 @@ def main() -> int:
                 scope_and_module_flow["station_a"]["code"],
                 "PHASE9-MULTI-A",
             ),
+            check(
+                "multi-station StationAdmin A opens own station shift",
+                scope_and_module_flow["station_a_shift"]["station_id"],
+                scope_and_module_flow["station_a"]["id"],
+            ),
+            check(
+                "multi-station StationAdmin B opens own station shift",
+                scope_and_module_flow["station_b_shift"]["station_id"],
+                scope_and_module_flow["station_b"]["id"],
+            ),
+            check(
+                "multi-station StationAdmin A records own expense",
+                scope_and_module_flow["station_a_expense"]["amount"],
+                111,
+                approximate=True,
+            ),
+            check(
+                "multi-station StationAdmin B records own expense",
+                scope_and_module_flow["station_b_expense"]["amount"],
+                222,
+                approximate=True,
+            ),
+            check("multi-station StationAdmin A shift list scoped", all(item["station_id"] == scope_and_module_flow["station_a"]["id"] for item in scope_and_module_flow["station_a_shifts"]), True),
+            check("multi-station StationAdmin B expense list scoped", all(item["station_id"] == scope_and_module_flow["station_b"]["id"] for item in scope_and_module_flow["station_b_expenses"]), True),
             check("multi station A tanker enabled", station_a_modules.get("tanker_operations"), True),
             check("multi station B tanker disabled", station_b_modules.get("tanker_operations"), False),
             check("minimal tenant remains one station", scope_and_module_flow["minimal_org"]["station_target_count"], 1),
@@ -2079,6 +2419,14 @@ def main() -> int:
             "report_definition_id": reports_documents_notifications["report_definition"]["id"],
             "report_export_id": reports_documents_notifications["export_job"]["id"],
             "tank_dip_ids": [dip["id"] for dip in dips],
+            "hardware_device_ids": [
+                hardware_flow["dispenser_device"]["id"],
+                hardware_flow["tank_probe_device"]["id"],
+            ],
+            "hardware_event_ids": [
+                hardware_flow["dispenser_event"]["id"],
+                hardware_flow["tank_event"]["id"],
+            ],
             "correction_ids": {
                 "reversed_fuel_sale_id": corrections_flow["reversed_fuel_sale"]["id"],
                 "reversed_purchase_id": corrections_flow["reversed_purchase"]["id"],
@@ -2114,16 +2462,11 @@ def main() -> int:
             "scenario_tanker_transferred_quantity": sum(
                 float(trip["transferred_quantity"]) for trip in tanker_flow["completed_trips"]
             ),
+            "hardware_events": 2,
             "internal_fuel_usage": corrections_flow["internal_usage"]["quantity"],
             "credit_override_sale": corrections_flow["override_credit_sale"]["total_amount"],
         },
-        "known_gaps": [
-            {
-                "area": "profile-only payroll",
-                "current_backend_behavior": "payroll runs calculate from payroll-enabled login users only",
-                "desired_manifest_behavior": "profile-only staff payroll should be supported or clearly separated in UI",
-            },
-        ],
+        "known_gaps": [],
         "checks": checks,
         "passed": all(item["passed"] for item in checks),
     }
