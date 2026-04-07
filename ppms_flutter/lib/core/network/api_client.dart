@@ -728,10 +728,17 @@ class ApiClient {
     );
   }
 
-  Future<List<dynamic>> getUsers(String accessToken, {int? stationId}) async {
+  Future<List<dynamic>> getUsers(
+    String accessToken, {
+    int? stationId,
+    int? organizationId,
+  }) async {
     final params = <String, String>{};
     if (stationId != null) {
       params['station_id'] = '$stationId';
+    }
+    if (organizationId != null) {
+      params['organization_id'] = '$organizationId';
     }
     return _sendList(
       'GET',

@@ -160,7 +160,11 @@ class _AdminPageState extends State<AdminPage> {
           _canReadUsers ||
           _canReadEmployeeProfiles ||
           _canReadModules;
-      final shouldLoadOrganizations = _canReadStations || _canReadModules;
+      final shouldLoadOrganizations =
+          _canReadStations ||
+          _canReadUsers ||
+          _canReadEmployeeProfiles ||
+          _canReadModules;
       final shouldLoadRoles = _canReadRoles || _canManageUsers;
       final shouldLoadPermissionCatalog = _canReadRoles || _canManageUsers;
 
@@ -219,10 +223,14 @@ class _AdminPageState extends State<AdminPage> {
                 ? scopedStations.first['id'] as int
                 : null);
 
+      final userListStationId = widget.sessionController.scopeLevel == 'station'
+          ? stationId
+          : null;
       final users = _canReadUsers
           ? List<Map<String, dynamic>>.from(
               (await widget.sessionController.fetchUsers(
-                stationId: stationId,
+                stationId: userListStationId,
+                organizationId: organizationId,
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             )
           : const <Map<String, dynamic>>[];
@@ -353,6 +361,7 @@ class _AdminPageState extends State<AdminPage> {
         'username': _userUsernameController.text.trim(),
         'email': _emptyToNull(_userEmailController.text),
         'role_id': roleId,
+        'organization_id': _selectedOrganizationId,
         'station_id': _selectedStationId,
         'monthly_salary': double.parse(_userSalaryController.text.trim()),
         'payroll_enabled': _userPayrollEnabled,

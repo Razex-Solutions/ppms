@@ -555,8 +555,15 @@ class SessionController extends ChangeNotifier {
     );
   }
 
-  Future<List<dynamic>> fetchUsers({int? stationId}) async {
-    return _apiClient.getUsers(await _validAccessToken(), stationId: stationId);
+  Future<List<dynamic>> fetchUsers({
+    int? stationId,
+    int? organizationId,
+  }) async {
+    return _apiClient.getUsers(
+      await _validAccessToken(),
+      stationId: stationId,
+      organizationId: organizationId,
+    );
   }
 
   Future<Map<String, dynamic>> createUser(Map<String, dynamic> payload) async {
