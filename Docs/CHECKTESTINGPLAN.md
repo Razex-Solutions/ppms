@@ -139,6 +139,73 @@ operator / operator123
 accountant / accountant123
 ```
 
+## Whole Product Flow Order
+
+Run Phase 9 by role authority, not by app menu order.
+
+Correct order:
+
+```text
+1. masteradmin
+2. headoffice
+3. stationadmin
+4. manager
+5. accountant
+6. operator
+```
+
+Why:
+
+- `masteradmin` proves the platform can create and inspect tenant setup
+- `headoffice` proves the tenant organization is correctly configured and scoped
+- `stationadmin` proves multi-station delegation works only when needed
+- `manager`, `accountant`, and `operator` prove day-to-day actions work without leaking setup/admin controls
+
+Do not start with `operator` or `manager` first unless the tenant setup is already accepted.
+
+## Question-Driven Setup Rule
+
+Setup should feel like an interview that creates useful defaults, not a manual one-by-one database entry screen.
+
+The app should ask simple business questions, then generate the normal records automatically.
+
+Question sequence:
+
+```text
+1. What is the organization name?
+2. Is the legal name the same as the organization name?
+3. Which fuel brand is this station under?
+4. Is this a single-station or multi-station business?
+5. If single-station, should the station use the organization name and code?
+6. How many tanks are on site?
+7. For each tank, what fuel type and capacity?
+8. How many dispensers are on site?
+9. How many nozzles are on each dispenser?
+10. Which tank/fuel type does each nozzle serve?
+11. Does this station use shops, POS, tankers, or hardware?
+12. Who is the HeadOffice user?
+13. For multi-station businesses, who are the station admins?
+```
+
+Expected automation from those answers:
+
+- organization code is generated automatically
+- legal name defaults to organization name when selected
+- single-station setup generates a station from organization details
+- station code is generated from organization/station context
+- tank names/codes are generated from fuel type and sequence
+- dispenser names/codes are generated from station and sequence
+- nozzle codes are generated from dispenser and nozzle number
+- normal HeadOffice or StationAdmin users are created only when the role is actually needed
+- optional modules stay hidden unless the answer enables them
+
+Testing rule:
+
+- if the UI asks for low-level fields before the business questions, report it as setup friction
+- if the UI forces manual codes for normal setup, report it as setup friction
+- if the UI creates duplicates when editing, report it as a blocker
+- if a generated value is wrong, report the question, generated value, and expected value
+
 ## Step 1 - Login And Shell Stability
 
 Role: `masteradmin`
