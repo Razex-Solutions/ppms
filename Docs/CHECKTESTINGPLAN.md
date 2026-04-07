@@ -111,6 +111,10 @@ What it does:
 - records credit fuel sales through Operator
 - records customer payments through Accountant
 - verifies customer ledger totals and receivable balances
+- records attendance for payroll-enabled workers
+- records salary additions and deductions
+- creates and finalizes a payroll run
+- verifies payroll line totals and payroll run net total
 - records multiple tank dips across all tanks
 - prints expected vs actual values as JSON
 
@@ -121,6 +125,7 @@ Important business rule captured by the runner:
 - meter sales immediately reduce tank stock
 - dip loss/gain should be zero when the physical calculated volume equals system stock
 - open shift cash expected currently does not include live sales until close
+- payroll currently runs against payroll-enabled login users, not profile-only staff records
 
 The runner should end with:
 

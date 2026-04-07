@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +141,7 @@ def create_login_user(
             "organization_id": organization_id,
             "station_id": station_id,
             "scope_level": "station",
-            "monthly_salary": 0,
+            "monthly_salary": user_spec.get("monthly_salary", 0),
             "payroll_enabled": True,
         },
     )
@@ -449,6 +450,99 @@ def create_credit_customer_flow(
     }
 
 
+def create_payroll_flow(
+    *,
+    accountant: ApiClient,
+    scenario_id: str,
+    timestamp: int,
+    station_id: int,
+    extra_users: list[dict[str, Any]],
+    payroll_specs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    period_start = date(2030, 1, 1) + timedelta(days=timestamp % 3000)
+    period_end = period_start
+    users_by_prefix = {
+        user["username"].split(f"_{scenario_id.lower().replace('-', '_')}")[0]: user
+        for user in extra_users
+    }
+
+    attendance_records: list[dict[str, Any]] = []
+    salary_adjustments: list[dict[str, Any]] = []
+    for payroll_spec in payroll_specs:
+        user = users_by_prefix[payroll_spec["username_prefix"]]
+        attendance_records.append(
+            accountant.post(
+                "/attendance/",
+                {
+                    "user_id": user["id"],
+                    "station_id": station_id,
+                    "attendance_date": period_start.isoformat(),
+                    "status": payroll_spec["attendance_status"],
+                    "notes": f"{scenario_id} payroll attendance",
+                },
+            )
+        )
+        if float(payroll_spec.get("addition", 0)) > 0:
+            salary_adjustments.append(
+                accountant.post(
+                    "/salary-adjustments/",
+                    {
+                        "station_id": station_id,
+                        "user_id": user["id"],
+                        "effective_date": period_start.isoformat(),
+                        "impact": "addition",
+                        "amount": payroll_spec["addition"],
+                        "reason": "Phase 9 bonus",
+                        "notes": f"{scenario_id} payroll addition",
+                    },
+                )
+            )
+        if float(payroll_spec.get("deduction", 0)) > 0:
+            salary_adjustments.append(
+                accountant.post(
+                    "/salary-adjustments/",
+                    {
+                        "station_id": station_id,
+                        "user_id": user["id"],
+                        "effective_date": period_start.isoformat(),
+                        "impact": "deduction",
+                        "amount": payroll_spec["deduction"],
+                        "reason": "Phase 9 deduction",
+                        "notes": f"{scenario_id} payroll deduction",
+                    },
+                )
+            )
+
+    payroll_run = accountant.post(
+        "/payroll/runs",
+        {
+            "station_id": station_id,
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+            "notes": f"{scenario_id} Phase 9 payroll run",
+        },
+    )
+    payroll_lines = accountant.get(f"/payroll/runs/{payroll_run['id']}/lines")
+    finalized_run = accountant.post(
+        f"/payroll/runs/{payroll_run['id']}/finalize",
+        {"notes": f"{scenario_id} Phase 9 payroll finalized"},
+    )
+
+    return {
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "attendance_records": attendance_records,
+        "salary_adjustments": salary_adjustments,
+        "payroll_run": payroll_run,
+        "payroll_lines": payroll_lines,
+        "finalized_run": finalized_run,
+        "target_user_ids": {
+            spec["username_prefix"]: users_by_prefix[spec["username_prefix"]]["id"]
+            for spec in payroll_specs
+        },
+    }
+
+
 def create_dips(
     *,
     manager: ApiClient,
@@ -596,6 +690,14 @@ def main() -> int:
         station_id=station_id,
         customer_specs=manifest["credit_and_ledgers"]["customers"],
         nozzles=nozzles,
+    )
+    payroll_flow = create_payroll_flow(
+        accountant=accountant,
+        scenario_id=scenario_id,
+        timestamp=timestamp,
+        station_id=station_id,
+        extra_users=extra_users,
+        payroll_specs=manifest["payroll"],
     )
     setup_after_sales_and_approved_purchases = manager.get(f"/stations/{station_id}/setup-foundation")
     tanks_after_sales_and_approved_purchases_by_id = {
@@ -783,6 +885,52 @@ def main() -> int:
             ]
         )
 
+    lines_by_user_id = {
+        int(line["user_id"]): line
+        for line in payroll_flow["payroll_lines"]
+    }
+    expected_payroll_net_total = 0.0
+    for payroll_spec in manifest["payroll"]:
+        user_id = payroll_flow["target_user_ids"][payroll_spec["username_prefix"]]
+        line = lines_by_user_id[user_id]
+        expected_payroll_net_total += float(payroll_spec["expected_net_salary"])
+        checks.extend(
+            [
+                check(
+                    f"payroll {payroll_spec['username_prefix']} monthly salary",
+                    line["monthly_salary"],
+                    payroll_spec["monthly_salary"],
+                    approximate=True,
+                ),
+                check(
+                    f"payroll {payroll_spec['username_prefix']} net salary",
+                    line["net_amount"],
+                    payroll_spec["expected_net_salary"],
+                    approximate=True,
+                ),
+            ]
+        )
+    checks.extend(
+        [
+            check(
+                "payroll target attendance records",
+                len(payroll_flow["attendance_records"]),
+                len(manifest["payroll"]),
+            ),
+            check(
+                "payroll run finalized",
+                payroll_flow["finalized_run"]["status"],
+                "finalized",
+            ),
+            check(
+                "payroll run net amount",
+                payroll_flow["payroll_run"]["total_net_amount"],
+                expected_payroll_net_total,
+                approximate=True,
+            ),
+        ]
+    )
+
     expected_loss_gains = [
         reading["expected_loss_gain"]
         for tank_spec in manifest["operations"]["dip_scenarios"]
@@ -851,6 +999,9 @@ def main() -> int:
             "credit_fuel_sale_ids": [sale["id"] for sale in credit_customer_flow["credit_sales"]],
             "customer_payment_ids": [payment["id"] for payment in credit_customer_flow["customer_payments"]],
             "supplier_payment_ids": [payment["id"] for payment in supplier_finance["supplier_payments"]],
+            "attendance_record_ids": [record["id"] for record in payroll_flow["attendance_records"]],
+            "salary_adjustment_ids": [adjustment["id"] for adjustment in payroll_flow["salary_adjustments"]],
+            "payroll_run_id": payroll_flow["payroll_run"]["id"],
             "tank_dip_ids": [dip["id"] for dip in dips],
         },
         "totals": {
@@ -861,6 +1012,7 @@ def main() -> int:
             "purchase_total": sum(float(purchase["total_amount"]) for purchase in purchases),
             "customer_payments": sum(float(payment["amount"]) for payment in credit_customer_flow["customer_payments"]),
             "supplier_payments": sum(float(payment["amount"]) for payment in supplier_finance["supplier_payments"]),
+            "payroll_net": payroll_flow["payroll_run"]["total_net_amount"],
         },
         "known_gaps": [
             {
@@ -872,6 +1024,11 @@ def main() -> int:
                 "area": "purchase approval",
                 "current_backend_behavior": "Manager purchases are pending until HeadOffice approval",
                 "desired_manifest_behavior": "normal purchase direct-vs-approval behavior should become a tenant/module policy",
+            },
+            {
+                "area": "profile-only payroll",
+                "current_backend_behavior": "payroll runs calculate from payroll-enabled login users only",
+                "desired_manifest_behavior": "profile-only staff payroll should be supported or clearly separated in UI",
             }
         ],
         "checks": checks,

@@ -490,9 +490,12 @@ The runner uses the live backend API and creates known sample data for:
 - supplier payments and supplier ledgers
 - credit customers
 - customer payments and customer ledgers
+- attendance records
+- salary additions and deductions
+- payroll run creation and finalization
 - tank dips across all tanks
 
-It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, and supplier ledger regressions while rebuilding the Flutter UI.
+It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, supplier ledger, attendance, and payroll regressions while rebuilding the Flutter UI.
 
 ## Phase 9 Acceptance For Rebuild
 

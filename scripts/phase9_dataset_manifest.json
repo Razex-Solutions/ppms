@@ -38,32 +38,38 @@
       {
         "username_prefix": "p9_manager_a",
         "password": "manager123",
-        "role": "Manager"
+        "role": "Manager",
+        "monthly_salary": 60000
       },
       {
         "username_prefix": "p9_manager_b",
         "password": "manager123",
-        "role": "Manager"
+        "role": "Manager",
+        "monthly_salary": 0
       },
       {
         "username_prefix": "p9_operator_a",
         "password": "operator123",
-        "role": "Operator"
+        "role": "Operator",
+        "monthly_salary": 45000
       },
       {
         "username_prefix": "p9_operator_b",
         "password": "operator123",
-        "role": "Operator"
+        "role": "Operator",
+        "monthly_salary": 38000
       },
       {
         "username_prefix": "p9_operator_c",
         "password": "operator123",
-        "role": "Operator"
+        "role": "Operator",
+        "monthly_salary": 0
       },
       {
         "username_prefix": "p9_operator_d",
         "password": "operator123",
-        "role": "Operator"
+        "role": "Operator",
+        "monthly_salary": 0
       }
     ]
   },
@@ -329,28 +335,28 @@
   },
   "payroll": [
     {
-      "staff_name": "Phase 9 Pump Attendant A",
-      "base_salary": 45000,
-      "bonus": 5000,
-      "loan": 2000,
-      "deduction": 1000,
-      "expected_net_salary": 47000
+      "username_prefix": "p9_manager_a",
+      "attendance_status": "present",
+      "monthly_salary": 60000,
+      "addition": 500,
+      "deduction": 100,
+      "expected_net_salary": 2400
     },
     {
-      "staff_name": "Phase 9 Security Guard A",
-      "base_salary": 38000,
-      "bonus": 1000,
-      "loan": 0,
-      "deduction": 500,
-      "expected_net_salary": 38500
+      "username_prefix": "p9_operator_a",
+      "attendance_status": "present",
+      "monthly_salary": 45000,
+      "addition": 300,
+      "deduction": 200,
+      "expected_net_salary": 1600
     },
     {
-      "staff_name": "Phase 9 Tanker Driver A",
-      "base_salary": 55000,
-      "bonus": 3000,
-      "loan": 5000,
-      "deduction": 0,
-      "expected_net_salary": 53000
+      "username_prefix": "p9_operator_b",
+      "attendance_status": "half_day",
+      "monthly_salary": 38000,
+      "addition": 0,
+      "deduction": 100,
+      "expected_net_salary": 533.33
     }
   ],
   "attendance": [

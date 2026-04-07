@@ -124,6 +124,10 @@ The current automated runner now covers the first running-pump operations batch:
 - records credit fuel sales through an Operator shift
 - records customer payments through Accountant
 - verifies customer ledger charges, payments, and balances
+- records attendance for payroll-enabled worker login users
+- records salary additions and deductions
+- generates and finalizes a payroll run
+- verifies payroll line net amounts and run net total
 - records multiple tank dips across all tanks
 - prints expected vs actual totals
 
@@ -132,6 +136,7 @@ Known current backend behavior recorded by the runner:
 - open shift cash expected does not include live sales until shift close
 - closed shift cash expected and variance calculate correctly
 - Manager purchases require HeadOffice approval before stock and supplier payable balances update
+- payroll runs currently calculate from payroll-enabled login users, not profile-only staff records
 
 Command:
 
@@ -141,7 +146,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps
 
 ## Remaining Dataset Blocks
 
-The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, and tank dips at a first acceptance level.
+The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, and tank dips at a first acceptance level.
 
 It still needs these blocks added.
 
@@ -286,14 +291,22 @@ profit = sales - purchase_cost - expenses - internal_fuel_cost
 
 ### 7. Payroll And Attendance
 
-Create:
+Current automated coverage:
 
-- employee profiles
 - attendance check-in/check-out
 - salary adjustment bonus
 - salary adjustment deduction
-- salary adjustment loan
 - monthly payroll run
+
+Current backend behavior:
+
+- payroll is calculated from payroll-enabled login users
+- profile-only staff records are created as staff dataset coverage but do not enter payroll runs yet
+
+Still to add or decide:
+
+- profile-only staff payroll support, or a clear UI separation between staff profiles and payroll users
+- explicit loan-type salary adjustment if this needs a separate business category instead of a normal deduction
 
 Expected formulas:
 
