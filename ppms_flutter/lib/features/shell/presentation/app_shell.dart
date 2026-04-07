@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ppms_flutter/core/network/api_exception.dart';
 import 'package:ppms_flutter/core/session/session_capabilities.dart';
 import 'package:ppms_flutter/core/session/session_controller.dart';
 import 'package:ppms_flutter/features/admin/presentation/admin_page.dart';
@@ -52,31 +51,10 @@ class _AppShellState extends State<AppShell> {
       _isLoading = true;
       _loadError = null;
     });
-    if (widget.sessionController.isMasterAdmin) {
-      setState(() {
-        _dashboard = null;
-        _isLoading = false;
-      });
-      return;
-    }
-    try {
-      final dashboard = await widget.sessionController.fetchDashboard();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _dashboard = dashboard;
-        _isLoading = false;
-      });
-    } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loadError = error.message;
-        _isLoading = false;
-      });
-    }
+    setState(() {
+      _dashboard = null;
+      _isLoading = false;
+    });
   }
 
   @override

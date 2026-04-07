@@ -34,6 +34,13 @@ If a field is needed for operations, reporting, invoices, support, or audit, kee
 
 If a field is not needed yet, hide it or move it behind an advanced/support-only path.
 
+Current Phase 9 dashboard decision:
+
+- Flutter dashboard metric cards and charts are intentionally removed/simplified for now
+- dashboard pages should act only as testing landing pages
+- real acceptance should happen inside action workspaces such as Sales, Shifts, Finance, Setup, Reports, Tankers, and Admin
+- rebuild richer dashboards only after action flows and access scopes are proven correct
+
 ## Critical Access Rule
 
 `MasterAdmin` is the true platform admin.
@@ -214,7 +221,7 @@ Acceptance:
 
 Purpose:
 
-- remove dashboard content that does not help the role make a decision
+- confirm dashboards remain simplified during Phase 9
 - prevent fake or dead cards from making the app feel broken
 
 Role sequence:
@@ -232,20 +239,19 @@ accountant
 Actions for each role:
 
 - open dashboard
-- list every card, chart, quick action, warning, and table shown
-- click every quick action
-- note cards showing zero, placeholder, fake, or unrelated data
-- note cards that are not clickable and do not explain what to do next
-- note role-mismatched cards such as operator seeing platform support controls
+- confirm it is only a testing landing page
+- confirm it shows role, scope, organization, and station context where useful
+- confirm it does not show fake metrics, dead charts, or misleading totals
+- confirm it points testers to real action workspaces
+- note role-mismatched instructions such as operator seeing platform support controls
 
 Acceptance:
 
-- every dashboard card has a clear purpose for that role
-- every quick action opens a real useful screen
+- dashboard is not used as the source of truth during Phase 9
 - no placeholder metric remains visible
-- no card shows cross-organization data to tenant roles
+- no dashboard card shows cross-organization data to tenant roles
 - no disabled module appears as a dashboard card
-- low-value cards are removed, hidden, or moved to a better screen
+- testers are directed to real workspaces for action testing
 
 ## Step 5 - Setup Form Field Sanity Check
 
