@@ -149,6 +149,32 @@ class TenantApiClient {
         .toList();
   }
 
+  Future<Map<String, dynamic>> organizationSetupFoundation({
+    required String baseUrl,
+    required String accessToken,
+    required int organizationId,
+  }) async {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/organizations/$organizationId/setup-foundation',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> stationSetupFoundation({
+    required String baseUrl,
+    required String accessToken,
+    required int stationId,
+  }) async {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/stations/$stationId/setup-foundation',
+      accessToken: accessToken,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> roles({
     required String baseUrl,
     required String accessToken,
@@ -797,6 +823,34 @@ class TenantSessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> loadOrganizationSetupFoundation() async {
+    final resolvedOrganizationId = organizationId;
+    if (resolvedOrganizationId == null) {
+      throw TenantApiException(
+        'No organization is available for this session.',
+      );
+    }
+    return _apiClient.organizationSetupFoundation(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      organizationId: resolvedOrganizationId,
+    );
+  }
+
+  Future<Map<String, dynamic>> loadStationSetupFoundation() async {
+    final resolvedStationId = workingStationId;
+    if (resolvedStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    return _apiClient.stationSetupFoundation(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      stationId: resolvedStationId,
+    );
+  }
+
   Future<void> createWorkerUser({
     required String fullName,
     required String username,
@@ -1328,6 +1382,12 @@ class _WorkspaceDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUsersWorkspace = workspace.id == 'users';
+    final isSetupWorkspace = {
+      'tenant_setup',
+      'station_setup',
+      'inventory',
+      'inventory_dips',
+    }.contains(workspace.id);
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1376,6 +1436,13 @@ class _WorkspaceDetail extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _UserManagementPanel(sessionController: sessionController),
+        ],
+        if (isSetupWorkspace) ...[
+          const SizedBox(height: 12),
+          _SetupFoundationPanel(
+            sessionController: sessionController,
+            workspaceId: workspace.id,
+          ),
         ],
         const SizedBox(height: 12),
         const _SectionCard(
@@ -1862,6 +1929,373 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
                     ],
                   ),
                 ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SetupFoundationPanel extends StatefulWidget {
+  const _SetupFoundationPanel({
+    required this.sessionController,
+    required this.workspaceId,
+  });
+
+  final TenantSessionController sessionController;
+  final String workspaceId;
+
+  @override
+  State<_SetupFoundationPanel> createState() => _SetupFoundationPanelState();
+}
+
+class _SetupFoundationPanelState extends State<_SetupFoundationPanel> {
+  Map<String, dynamic>? _organizationSetup;
+  Map<String, dynamic>? _stationSetup;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final organizationSetup = await widget.sessionController
+          .loadOrganizationSetupFoundation();
+      final stationSetup = await widget.sessionController
+          .loadStationSetupFoundation();
+      setState(() {
+        _organizationSetup = organizationSetup;
+        _stationSetup = stationSetup;
+      });
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not load setup data: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: LinearProgressIndicator(),
+        ),
+      );
+    }
+    if (_error != null) {
+      return _StatusCard(
+        title: 'Setup data error',
+        message: _error!,
+        isError: true,
+      );
+    }
+
+    final organizationSetup = _organizationSetup ?? const <String, dynamic>{};
+    final stationSetup = _stationSetup ?? const <String, dynamic>{};
+    final tanks = _list(stationSetup['tanks']);
+    final dispensers = _list(stationSetup['dispensers']);
+    final fuelTypes = _list(stationSetup['fuel_types']);
+    final stationRows = _list(organizationSetup['stations']);
+    final nozzleCount = stationSetup['nozzle_count'] ?? 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _SummaryTile(
+              label: 'Organization',
+              value:
+                  '${organizationSetup['organization_name'] ?? '-'} (${organizationSetup['organization_code'] ?? '-'})',
+            ),
+            _SummaryTile(
+              label: 'Legal name',
+              value: organizationSetup['legal_name']?.toString() ?? '-',
+            ),
+            _SummaryTile(
+              label: 'Brand',
+              value: _nestedText(
+                organizationSetup['resolved_branding'],
+                'brand_name',
+              ),
+            ),
+            _SummaryTile(
+              label: 'Stations',
+              value: stationRows.length.toString(),
+            ),
+            _SummaryTile(label: 'Tanks', value: tanks.length.toString()),
+            _SummaryTile(
+              label: 'Dispensers',
+              value: dispensers.length.toString(),
+            ),
+            _SummaryTile(label: 'Nozzles', value: nozzleCount.toString()),
+            _SummaryTile(
+              label: 'Fuel types',
+              value: fuelTypes.length.toString(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (widget.workspaceId == 'tenant_setup') ...[
+          _DataCard(
+            title: 'Organization Setup',
+            rows: [
+              _DataRowText('ID', organizationSetup['organization_id']),
+              _DataRowText('Name', organizationSetup['organization_name']),
+              _DataRowText('Code', organizationSetup['organization_code']),
+              _DataRowText('Legal name', organizationSetup['legal_name']),
+              _DataRowText(
+                'Onboarding',
+                organizationSetup['onboarding_status'],
+              ),
+              _DataRowText(
+                'Target station count',
+                organizationSetup['station_target_count'],
+              ),
+              _DataRowText(
+                'Branding inherited to stations',
+                organizationSetup['inherit_branding_to_stations'],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SimpleListCard(
+            title: 'Stations In This Tenant',
+            emptyText: 'No stations found.',
+            items: [
+              for (final station in stationRows)
+                '${station['name']} (${station['code']}) - ${station['setup_status']}',
+            ],
+          ),
+        ] else ...[
+          _DataCard(
+            title: 'Station Setup',
+            rows: [
+              _DataRowText('ID', stationSetup['station_id']),
+              _DataRowText('Name', stationSetup['station_name']),
+              _DataRowText('Code', stationSetup['station_code']),
+              _DataRowText('Setup status', stationSetup['setup_status']),
+              _DataRowText(
+                'Resolved legal name',
+                stationSetup['resolved_legal_name'],
+              ),
+              _DataRowText(
+                'Invoice business',
+                _nestedText(stationSetup['invoice_identity'], 'business_name'),
+              ),
+              _DataRowText(
+                'Invoice legal',
+                _nestedText(stationSetup['invoice_identity'], 'legal_name'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SimpleListCard(
+            title: 'Fuel Types',
+            emptyText: 'No fuel types found.',
+            items: [
+              for (final fuelType in fuelTypes)
+                '${fuelType['name']} - ID ${fuelType['id']}',
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SimpleListCard(
+            title: 'Tanks',
+            emptyText: 'No tanks found.',
+            items: [
+              for (final tank in tanks)
+                '${tank['name']} (${tank['code']}) - fuel ${tank['fuel_type_id']} - volume ${tank['current_volume']} / ${tank['capacity']}',
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SimpleListCard(
+            title: 'Dispensers And Nozzles',
+            emptyText: 'No dispensers found.',
+            items: [
+              for (final dispenser in dispensers)
+                '${dispenser['name']} (${dispenser['code']}) - ${_list(dispenser['nozzles']).length} nozzles',
+            ],
+          ),
+        ],
+        const SizedBox(height: 12),
+        _StatusCard(
+          title: 'Phase 9 rule',
+          message:
+              'This packet is read-only on purpose. We first prove tenant setup data is scoped correctly, then add edit/delete setup actions intentionally.',
+        ),
+      ],
+    );
+  }
+
+  static List<dynamic> _list(Object? value) {
+    return value is List ? value : const [];
+  }
+
+  static String _nestedText(Object? value, String key) {
+    if (value is Map<String, dynamic>) {
+      return value[key]?.toString() ?? '-';
+    }
+    if (value is Map) {
+      return value[key]?.toString() ?? '-';
+    }
+    return '-';
+  }
+}
+
+class _DataRowText {
+  const _DataRowText(this.label, this.value);
+
+  final String label;
+  final Object? value;
+}
+
+class _DataCard extends StatelessWidget {
+  const _DataCard({required this.title, required this.rows});
+
+  final String title;
+  final List<_DataRowText> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            for (final row in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 220,
+                      child: Text(
+                        row.label,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Expanded(child: Text(row.value?.toString() ?? '-')),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SimpleListCard extends StatelessWidget {
+  const _SimpleListCard({
+    required this.title,
+    required this.emptyText,
+    required this.items,
+  });
+
+  final String title;
+  final String emptyText;
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            if (items.isEmpty)
+              Text(emptyText)
+            else
+              for (final item in items)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.check_circle_outline),
+                  title: Text(item),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 180,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              Text(value, style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({
+    required this.title,
+    required this.message,
+    this.isError = false,
+  });
+
+  final String title;
+  final String message;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isError
+        ? Theme.of(context).colorScheme.errorContainer
+        : Theme.of(context).colorScheme.primaryContainer;
+    return Card(
+      color: color,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(message),
           ],
         ),
       ),
