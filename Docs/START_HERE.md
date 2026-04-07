@@ -64,6 +64,8 @@ Current direction:
 - keep the old Flutter app and clean tenant Flutter experiment in the repo for record/reference
 - pause broad Flutter building until each screen is discussed and defined in a backend/matrix contract
 - use backend scenario data and matrix-first rules as the source of truth
+- build modules separately first, then integrate after each module is proven
+- optional SaaS modules must hide completely when disabled so the UI looks like the module was never installed
 - complete locally first
 - deploy later to EC2/Vercel after local stabilization
 

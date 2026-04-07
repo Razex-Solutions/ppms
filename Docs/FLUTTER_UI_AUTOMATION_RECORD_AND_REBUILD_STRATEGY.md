@@ -66,6 +66,70 @@ Before building any Flutter screen, we must discuss and lock:
 
 Only after that do we build the Flutter screen.
 
+## Separate First, Integrate Later
+
+Each product domain must be created and tested separately before it is combined into the final tenant experience.
+
+This means:
+
+- build setup as its own foundation
+- build operator/manager operations as their own flow
+- build customers/suppliers as their own flow
+- build hardware/POS/shops as their own optional flow
+- build tankers as their own optional flow
+- build reports/documents/notifications after the data-producing flows
+- build StationAdmin, HeadOffice, and MasterAdmin after the domain workflows are proven
+
+Only after a domain has:
+
+- a backend contract
+- sample data
+- expected calculations
+- matrix rules
+- API smoke coverage
+- UI/action automation
+- an accepted manual UX decision
+
+should it be integrated into the combined app shell.
+
+## SaaS Module Rule
+
+PPMS is a SaaS product. Different tenants will choose different modules.
+
+Every optional module must be able to turn off cleanly.
+
+When a module is disabled:
+
+- its sidebar item must disappear
+- its dashboard/summary card must disappear
+- its forms must disappear
+- its quick actions must disappear
+- its reports/documents/notifications must disappear unless another enabled module needs them
+- no disabled-module API calls should be made from the UI
+- the tenant experience should look like that module was never installed
+
+This applies especially to:
+
+- tankers
+- POS/shop/mart
+- hardware
+- meter adjustments
+- payroll if disabled
+- attendance if disabled
+- financial documents if disabled
+- notifications if disabled
+- reports if disabled
+
+The backend may still keep tables and endpoints available, but the tenant UI must respect module settings at organization/station scope.
+
+Integration rule:
+
+- build a module separately
+- prove it works
+- add its module gate
+- prove it fully hides when disabled
+- only then connect it to shared reports, ledgers, documents, notifications, and dashboards
+
 ## Build Order
 
 ### 1. Setup Foundation
@@ -243,4 +307,3 @@ For every future UI slice:
 4. Build one screen or one tightly connected workflow.
 5. Add automation for that screen.
 6. Only then review UI polish.
-
