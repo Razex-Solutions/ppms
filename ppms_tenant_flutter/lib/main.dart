@@ -13,6 +13,8 @@ class AppConfig {
     'PPMS_API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8012',
   );
+
+  static const backgroundColor = Color(0xFFF4FAF8);
 }
 
 class PpmsTenantApp extends StatefulWidget {
@@ -45,6 +47,8 @@ class _PpmsTenantAppState extends State<PpmsTenantApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF00796B)),
+        canvasColor: AppConfig.backgroundColor,
+        scaffoldBackgroundColor: AppConfig.backgroundColor,
         useMaterial3: true,
       ),
       home: TenantAppRoot(sessionController: _sessionController),
@@ -64,6 +68,7 @@ class TenantAppRoot extends StatelessWidget {
       builder: (context, _) {
         if (sessionController.isRestoring) {
           return const Scaffold(
+            backgroundColor: AppConfig.backgroundColor,
             body: Center(child: CircularProgressIndicator()),
           );
         }
@@ -414,71 +419,77 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppConfig.backgroundColor,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'PPMS Tenant Login',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Use the Phase 9 test tenant first: check / office123.',
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: _baseUrlController,
-                    decoration: const InputDecoration(
-                      labelText: 'Backend URL',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      border: OutlineInputBorder(),
-                    ),
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                      border: OutlineInputBorder(),
-                    ),
-                    obscureText: true,
-                    onSubmitted: (_) => _submit(),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: widget.sessionController.isBusy ? null : _submit,
-                    child: widget.sessionController.isBusy
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Sign In'),
-                  ),
-                  if (widget.sessionController.errorMessage != null) ...[
-                    const SizedBox(height: 12),
+        child: ColoredBox(
+          color: AppConfig.backgroundColor,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Text(
-                      widget.sessionController.errorMessage!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                      'PPMS Tenant Login',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Use the Phase 9 test tenant first: check / office123.',
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _baseUrlController,
+                      decoration: const InputDecoration(
+                        labelText: 'Backend URL',
+                        border: OutlineInputBorder(),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _usernameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Username',
+                        border: OutlineInputBorder(),
+                      ),
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _passwordController,
+                      decoration: const InputDecoration(
+                        labelText: 'Password',
+                        border: OutlineInputBorder(),
+                      ),
+                      obscureText: true,
+                      onSubmitted: (_) => _submit(),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: widget.sessionController.isBusy
+                          ? null
+                          : _submit,
+                      child: widget.sessionController.isBusy
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Sign In'),
+                    ),
+                    if (widget.sessionController.errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.sessionController.errorMessage!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -496,7 +507,9 @@ class TenantHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
+        backgroundColor: AppConfig.backgroundColor,
         title: const Text('PPMS Tenant'),
         actions: [
           IconButton(
@@ -506,53 +519,59 @@ class TenantHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text(
-            'Tenant Context',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'This is the first clean rebuild slice. No dashboards yet.',
-          ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _ContextChip(label: 'User', value: sessionController.username),
-              _ContextChip(label: 'Role', value: sessionController.roleName),
-              _ContextChip(label: 'Scope', value: sessionController.scopeLevel),
-              _ContextChip(
-                label: 'Organization',
-                value: sessionController.organizationId?.toString() ?? '-',
-              ),
-              _ContextChip(
-                label: 'Station',
-                value: sessionController.workingStationLabel,
-              ),
-              _ContextChip(
-                label: 'Station count',
-                value: sessionController.stations.length.toString(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _SectionCard(
-            title: 'Allowed next roles',
-            body: sessionController.creatableRoles.isEmpty
-                ? 'No role-creation capabilities returned for this session.'
-                : sessionController.creatableRoles.join(', '),
-          ),
-          const SizedBox(height: 12),
-          const _SectionCard(
-            title: 'Next slice',
-            body:
-                'Add simple role-aware navigation, then HeadOffice worker creation for Manager, Accountant, and Operator.',
-          ),
-        ],
+      body: ColoredBox(
+        color: AppConfig.backgroundColor,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            Text(
+              'Tenant Context',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'This is the first clean rebuild slice. No dashboards yet.',
+            ),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _ContextChip(label: 'User', value: sessionController.username),
+                _ContextChip(label: 'Role', value: sessionController.roleName),
+                _ContextChip(
+                  label: 'Scope',
+                  value: sessionController.scopeLevel,
+                ),
+                _ContextChip(
+                  label: 'Organization',
+                  value: sessionController.organizationId?.toString() ?? '-',
+                ),
+                _ContextChip(
+                  label: 'Station',
+                  value: sessionController.workingStationLabel,
+                ),
+                _ContextChip(
+                  label: 'Station count',
+                  value: sessionController.stations.length.toString(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _SectionCard(
+              title: 'Allowed next roles',
+              body: sessionController.creatableRoles.isEmpty
+                  ? 'No role-creation capabilities returned for this session.'
+                  : sessionController.creatableRoles.join(', '),
+            ),
+            const SizedBox(height: 12),
+            const _SectionCard(
+              title: 'Next slice',
+              body:
+                  'Add simple role-aware navigation, then HeadOffice worker creation for Manager, Accountant, and Operator.',
+            ),
+          ],
+        ),
       ),
     );
   }

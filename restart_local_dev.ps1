@@ -108,7 +108,12 @@ if (-not $SkipSupportConsole) {
 
 if (-not $SkipFlutter) {
     Write-Host "Starting Flutter Windows app from $FlutterDir in a new window..."
-    Start-DevWindow -Title $FlutterWindowTitle -WorkingDirectory $FlutterDir -Command "flutter run -d windows --dart-define=PPMS_API_BASE_URL=$ApiBaseUrl"
+    $flutterRunCommand = if ($UseOldFlutter) {
+        "flutter run -d windows --dart-define=PPMS_API_BASE_URL=$ApiBaseUrl"
+    } else {
+        "flutter run -d windows --enable-software-rendering --dart-define=PPMS_API_BASE_URL=$ApiBaseUrl"
+    }
+    Start-DevWindow -Title $FlutterWindowTitle -WorkingDirectory $FlutterDir -Command $flutterRunCommand
 }
 
 Write-Host "Restart command finished. Backend health: $ApiBaseUrl/health"
