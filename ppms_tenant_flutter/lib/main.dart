@@ -2232,7 +2232,7 @@ class _WorkspaceDetail extends StatelessWidget {
           ),
         ],
         if (isManagerOperationsWorkspace &&
-            sessionController.roleName == 'Manager') ...[
+            {'Manager', 'StationAdmin'}.contains(sessionController.roleName)) ...[
           const SizedBox(height: 12),
           _ManagerOperationsPanel(
             sessionController: sessionController,
@@ -2250,7 +2250,9 @@ class _WorkspaceDetail extends StatelessWidget {
           _OperatorShiftPanel(sessionController: sessionController),
         ],
         if (isReadOnlyApiWorkspace &&
-            !_usesSpecialActionPanel(sessionController.roleName, workspace.id)) ...[
+            !_usesSpecialActionPanel(sessionController.roleName, workspace.id) &&
+            !(sessionController.roleName == 'Operator' &&
+                workspace.id == 'attendance')) ...[
           const SizedBox(height: 12),
           _ApiBackedOverviewPanel(
             sessionController: sessionController,
@@ -2268,7 +2270,7 @@ class _WorkspaceDetail extends StatelessWidget {
   }
 
   bool _usesSpecialActionPanel(String roleName, String workspaceId) {
-    if (roleName == 'Manager' &&
+    if ({'Manager', 'StationAdmin'}.contains(roleName) &&
         {
           'shifts',
           'fuel_sales',
@@ -3020,8 +3022,11 @@ class _SetupFoundationPanelState extends State<_SetupFoundationPanel> {
       _error = null;
     });
     try {
-      final organizationSetup = await widget.sessionController
-          .loadOrganizationSetupFoundation();
+      final shouldLoadOrganizationSetup =
+          widget.sessionController.roleName == 'HeadOffice';
+      final organizationSetup = shouldLoadOrganizationSetup
+          ? await widget.sessionController.loadOrganizationSetupFoundation()
+          : <String, dynamic>{};
       final stationSetup = await widget.sessionController
           .loadStationSetupFoundation();
       setState(() {

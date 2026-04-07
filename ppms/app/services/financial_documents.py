@@ -599,8 +599,11 @@ def list_document_dispatches_filtered(
     if current_user.role.name == "Admin" or is_master_admin(current_user):
         pass
     elif current_user.role.name == "HeadOffice":
+        organization_id = get_user_organization_id(current_user)
+        if organization_id is None:
+            raise HTTPException(status_code=403, detail="Head office user must belong to an organization")
         query = query.join(Station, Station.id == FinancialDocumentDispatch.station_id).filter(
-            Station.organization_id == current_user.station.organization_id
+            Station.organization_id == organization_id
         )
     else:
         query = query.filter(FinancialDocumentDispatch.station_id == current_user.station_id)

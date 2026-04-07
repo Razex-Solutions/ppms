@@ -19,7 +19,7 @@ def ensure_invoice_profile_access(db: Session, station_id: int, current_user: Us
         if station.organization_id == get_user_organization_id(current_user):
             return station
         raise HTTPException(status_code=403, detail="Not authorized for this station")
-    if current_user.station_id != station_id or current_user.role.name not in {"StationAdmin", "Manager"}:
+    if current_user.station_id != station_id or current_user.role.name not in {"StationAdmin", "Manager", "Accountant"}:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     return station
 
