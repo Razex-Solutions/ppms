@@ -74,6 +74,14 @@ class _AdminPageState extends State<AdminPage> {
   SessionCapabilities get _capabilities =>
       SessionCapabilities(widget.sessionController);
 
+  bool _sameId(dynamic left, dynamic right) =>
+      left != null && right != null && left.toString() == right.toString();
+
+  int? _asInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '');
+  }
+
   bool get _canReadUsers =>
       _hasAction('users', 'read') || _hasAction('users', 'create');
   bool get _canManageUsers =>
@@ -205,22 +213,23 @@ class _AdminPageState extends State<AdminPage> {
           ? stations
           : stations
                 .where(
-                  (station) => station['organization_id'] == organizationId,
+                  (station) =>
+                      _sameId(station['organization_id'], organizationId),
                 )
                 .toList();
       final stationId =
           (_selectedStationId != null &&
               scopedStations.any(
-                (station) => station['id'] == _selectedStationId,
+                (station) => _sameId(station['id'], _selectedStationId),
               ))
           ? _selectedStationId
           : (preferredStationId != null &&
                 scopedStations.any(
-                  (station) => station['id'] == preferredStationId,
+                  (station) => _sameId(station['id'], preferredStationId),
                 ))
           ? preferredStationId
           : (scopedStations.isNotEmpty
-                ? scopedStations.first['id'] as int
+                ? _asInt(scopedStations.first['id'])
                 : null);
 
       final userListStationId = widget.sessionController.scopeLevel == 'station'
@@ -930,7 +939,7 @@ class _AdminPageState extends State<AdminPage> {
 
   Map<String, dynamic>? get _selectedOrganization {
     for (final organization in _organizations) {
-      if (organization['id'] == _selectedOrganizationId) {
+      if (_sameId(organization['id'], _selectedOrganizationId)) {
         return organization;
       }
     }
@@ -939,7 +948,7 @@ class _AdminPageState extends State<AdminPage> {
 
   Map<String, dynamic>? get _selectedStation {
     for (final station in _stations) {
-      if (station['id'] == _selectedStationId) {
+      if (_sameId(station['id'], _selectedStationId)) {
         return station;
       }
     }
@@ -968,9 +977,7 @@ class _AdminPageState extends State<AdminPage> {
       return 'Station $stationId (session scope)';
     }
     if (widget.sessionController.scopeLevel == 'organization') {
-      return _stations.isEmpty
-          ? 'Organization scope - no station loaded'
-          : 'Organization scope';
+      return 'Organization scope - station optional here';
     }
     return 'No station selected';
   }
@@ -1084,28 +1091,7 @@ class _AdminPageState extends State<AdminPage> {
                   const SizedBox(height: 16),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final stationField = DropdownButtonFormField<int>(
-                        key: ValueKey<String>(
-                          'admin-station-${_selectedStationId ?? 'none'}',
-                        ),
-                        initialValue:
-                            _stations.any(
-                              (station) => station['id'] == _selectedStationId,
-                            )
-                            ? _selectedStationId
-                            : null,
-                        decoration: const InputDecoration(labelText: 'Station'),
-                        items: [
-                          for (final station in _stations)
-                            DropdownMenuItem<int>(
-                              value: station['id'] as int,
-                              child: Text(
-                                '${station['name']} (${station['code']})',
-                              ),
-                            ),
-                        ],
-                        onChanged: _changeStation,
-                      );
+                      final stationField = _buildAdminScopeSelector(context);
                       final sections = SegmentedButton<_AdminSection>(
                         segments: [
                           if (_canReadUsers)
@@ -1209,6 +1195,31 @@ class _AdminPageState extends State<AdminPage> {
       case _AdminSection.modules:
         return _buildModulesSection(context);
     }
+  }
+
+  Widget _buildAdminScopeSelector(BuildContext context) {
+    if (widget.sessionController.scopeLevel == 'organization') {
+      return InputDecorator(
+        decoration: const InputDecoration(labelText: 'Tenant scope'),
+        child: Text('$_scopeOrganizationLabel - $_scopeStationLabel'),
+      );
+    }
+    return DropdownButtonFormField<int>(
+      key: ValueKey<String>('admin-station-${_selectedStationId ?? 'none'}'),
+      initialValue:
+          _stations.any((station) => _sameId(station['id'], _selectedStationId))
+          ? _selectedStationId
+          : null,
+      decoration: const InputDecoration(labelText: 'Station'),
+      items: [
+        for (final station in _stations)
+          DropdownMenuItem<int>(
+            value: _asInt(station['id']),
+            child: Text('${station['name']} (${station['code']})'),
+          ),
+      ],
+      onChanged: _changeStation,
+    );
   }
 
   Widget _buildUsersSection(BuildContext context) {
