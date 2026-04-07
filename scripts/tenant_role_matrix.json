@@ -55,6 +55,10 @@
           "read_apis": [
             "GET /pos-products/?station_id={station_id}",
             "GET /pos-sales/?station_id={station_id}"
+          ],
+          "create_apis": [
+            "POST /pos-products/",
+            "POST /pos-sales/"
           ]
         },
         "reports": {
@@ -63,13 +67,17 @@
             "GET /reports/daily-closing?report_date={today}&station_id={station_id}",
             "GET /report-definitions/",
             "GET /report-exports/"
+          ],
+          "create_apis": [
+            "POST /report-exports/"
           ]
         },
         "documents": {
           "visible": true,
           "read_apis": [
             "GET /document-templates/{station_id}",
-            "GET /financial-documents/dispatches"
+            "GET /financial-documents/dispatches",
+            "GET /financial-documents/dispatches/diagnostics"
           ]
         },
         "notifications": {
@@ -79,6 +87,12 @@
             "GET /notifications/",
             "GET /notifications/deliveries",
             "GET /notifications/preferences"
+          ],
+          "create_apis": [
+            "POST /notifications/read-all"
+          ],
+          "update_apis": [
+            "PUT /notifications/preferences/report_export.completed"
           ]
         },
         "inventory": {
@@ -178,6 +192,10 @@
           "read_apis": [
             "GET /pos-products/?station_id={station_id}",
             "GET /pos-sales/?station_id={station_id}"
+          ],
+          "create_apis": [
+            "POST /pos-products/",
+            "POST /pos-sales/"
           ]
         },
         "attendance": {
@@ -265,6 +283,10 @@
           "read_apis": [
             "GET /pos-products/?station_id={station_id}",
             "GET /pos-sales/?station_id={station_id}"
+          ],
+          "create_apis": [
+            "POST /pos-products/",
+            "POST /pos-sales/"
           ]
         },
         "attendance": {
@@ -341,7 +363,8 @@
           "visible": true,
           "read_apis": [
             "GET /document-templates/{station_id}",
-            "GET /financial-documents/dispatches"
+            "GET /financial-documents/dispatches",
+            "GET /financial-documents/dispatches/diagnostics"
           ]
         },
         "reports": {
@@ -350,6 +373,9 @@
             "GET /reports/daily-closing?report_date={today}&station_id={station_id}",
             "GET /report-definitions/",
             "GET /report-exports/"
+          ],
+          "create_apis": [
+            "POST /report-exports/"
           ]
         },
         "notifications": {
@@ -359,6 +385,12 @@
             "GET /notifications/",
             "GET /notifications/deliveries",
             "GET /notifications/preferences"
+          ],
+          "create_apis": [
+            "POST /notifications/read-all"
+          ],
+          "update_apis": [
+            "PUT /notifications/preferences/report_export.completed"
           ]
         }
       }
@@ -397,6 +429,7 @@
             "GET /pos-sales/?station_id={station_id}"
           ],
           "create_apis": [
+            "POST /pos-products/",
             "POST /pos-sales/"
           ]
         },

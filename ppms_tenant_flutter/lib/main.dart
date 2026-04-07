@@ -617,6 +617,21 @@ class TenantApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> putApiPath({
+    required String baseUrl,
+    required String accessToken,
+    required String path,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'PUT',
+      path: path,
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -1596,6 +1611,30 @@ class TenantSessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> postPath(
+    String path, {
+    Map<String, dynamic> body = const {},
+  }) {
+    return _apiClient.postApiPath(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      path: path,
+      body: body,
+    );
+  }
+
+  Future<Map<String, dynamic>> putPath(
+    String path, {
+    Map<String, dynamic> body = const {},
+  }) {
+    return _apiClient.putApiPath(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      path: path,
+      body: body,
+    );
+  }
+
   Future<Map<String, dynamic>> createCustomerPayment({
     required int customerId,
     required double amount,
@@ -2279,8 +2318,19 @@ class _WorkspaceDetail extends StatelessWidget {
     }.contains(workspace.id);
     final isOperatorFuelWorkspace = workspace.id == 'fuel_sale';
     final isOperatorShiftWorkspace = workspace.id == 'shift';
+    final isOperatorActionWorkspace = sessionController.roleName == 'Operator' &&
+        {'cash_submission', 'tank_dips', 'attendance', 'pos_sale'}
+            .contains(workspace.id);
     final isAccountantWorkspace = sessionController.roleName == 'Accountant' &&
         {'finance', 'parties', 'payments', 'payroll'}.contains(workspace.id);
+    final isPosActionWorkspace = {'Manager', 'StationAdmin', 'HeadOffice'}
+            .contains(sessionController.roleName) &&
+        workspace.id == 'pos';
+    final isReportingActionWorkspace = {
+      'reports',
+      'documents',
+      'notifications',
+    }.contains(workspace.id);
     final isReadOnlyApiWorkspace = {
       'finance',
       'finance_overview',
@@ -2375,6 +2425,17 @@ class _WorkspaceDetail extends StatelessWidget {
           const SizedBox(height: 12),
           _OperatorShiftPanel(sessionController: sessionController),
         ],
+        if (isOperatorActionWorkspace) ...[
+          const SizedBox(height: 12),
+          _OperatorUtilityPanel(
+            sessionController: sessionController,
+            workspaceId: workspace.id,
+          ),
+        ],
+        if (isPosActionWorkspace) ...[
+          const SizedBox(height: 12),
+          _PosActionPanel(sessionController: sessionController),
+        ],
         if (isAccountantWorkspace) ...[
           const SizedBox(height: 12),
           _AccountantFinancePanel(
@@ -2382,11 +2443,19 @@ class _WorkspaceDetail extends StatelessWidget {
             workspaceId: workspace.id,
           ),
         ],
+        if (isReportingActionWorkspace) ...[
+          const SizedBox(height: 12),
+          _ReportingActionPanel(
+            sessionController: sessionController,
+            workspaceId: workspace.id,
+          ),
+        ],
         if (isReadOnlyApiWorkspace &&
             !_usesSpecialActionPanel(sessionController.roleName, workspace.id) &&
             !isAccountantWorkspace &&
-            !(sessionController.roleName == 'Operator' &&
-                workspace.id == 'attendance')) ...[
+            !isOperatorActionWorkspace &&
+            !isPosActionWorkspace &&
+            !isReportingActionWorkspace) ...[
           const SizedBox(height: 12),
           _ApiBackedOverviewPanel(
             sessionController: sessionController,
@@ -2419,8 +2488,20 @@ class _WorkspaceDetail extends StatelessWidget {
     if (roleName == 'Operator' && {'shift', 'fuel_sale'}.contains(workspaceId)) {
       return true;
     }
+    if (roleName == 'Operator' &&
+        {'cash_submission', 'tank_dips', 'attendance', 'pos_sale'}
+            .contains(workspaceId)) {
+      return true;
+    }
     if (roleName == 'Accountant' &&
         {'finance', 'parties', 'payments', 'payroll'}.contains(workspaceId)) {
+      return true;
+    }
+    if ({'Manager', 'StationAdmin', 'HeadOffice'}.contains(roleName) &&
+        workspaceId == 'pos') {
+      return true;
+    }
+    if ({'reports', 'documents', 'notifications'}.contains(workspaceId)) {
       return true;
     }
     return false;
@@ -4896,6 +4977,854 @@ class _OperatorFuelSalePanelState extends State<_OperatorFuelSalePanel> {
     }
     return null;
   }
+}
+
+class _OperatorUtilityPanel extends StatefulWidget {
+  const _OperatorUtilityPanel({
+    required this.sessionController,
+    required this.workspaceId,
+  });
+
+  final TenantSessionController sessionController;
+  final String workspaceId;
+
+  @override
+  State<_OperatorUtilityPanel> createState() => _OperatorUtilityPanelState();
+}
+
+class _OperatorUtilityPanelState extends State<_OperatorUtilityPanel> {
+  final _amountController = TextEditingController(text: '100');
+  final _dipMmController = TextEditingController(text: '100');
+  final _dipVolumeController = TextEditingController(text: '1000');
+  final _notesController = TextEditingController(text: 'Phase 9 operator action');
+
+  Map<String, dynamic>? _setup;
+  List<Map<String, dynamic>> _rows = const [];
+  int? _selectedTankId;
+  int? _lastAttendanceId;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OperatorUtilityPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workspaceId != widget.workspaceId) {
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _dipMmController.dispose();
+    _dipVolumeController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final stationId = widget.sessionController.workingStationId;
+      final stationQuery = stationId == null ? '' : '?station_id=$stationId';
+      final setup = widget.workspaceId == 'tank_dips'
+          ? await widget.sessionController.loadStationSetupFoundation()
+          : null;
+      final rows = switch (widget.workspaceId) {
+        'cash_submission' => await widget.sessionController.loadShifts(),
+        'tank_dips' => await widget.sessionController.loadListPath(
+            '/tank-dips/$stationQuery',
+          ),
+        'pos_sale' => await widget.sessionController.loadListPath(
+            '/pos-sales/$stationQuery',
+          ),
+        _ => const <Map<String, dynamic>>[],
+      };
+      final tanks = _tanks(setup);
+      if (!mounted) return;
+      setState(() {
+        _setup = setup;
+        _rows = rows;
+        _selectedTankId ??= tanks.isEmpty ? null : tanks.first['id'] as int?;
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _save(String action) async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      switch (action) {
+        case 'cash':
+          final shift = _openOwnShift();
+          if (shift == null || shift['id'] is! int) {
+            throw TenantApiException('Open your operator shift first.');
+          }
+          await widget.sessionController.createCashSubmission(
+            shiftId: shift['id'] as int,
+            amount: double.tryParse(_amountController.text.trim()) ?? 0,
+            notes: _notesController.text,
+          );
+          _message = 'Cash submission recorded.';
+        case 'dip':
+          final tank = _selectedTank();
+          if (tank == null || tank['id'] is! int) {
+            throw TenantApiException('Choose a tank first.');
+          }
+          await widget.sessionController.createTankDip(
+            tankId: tank['id'] as int,
+            dipReadingMm: double.tryParse(_dipMmController.text.trim()) ?? 0,
+            calculatedVolume:
+                double.tryParse(_dipVolumeController.text.trim()) ?? 0,
+            notes: _notesController.text,
+          );
+          _message = 'Tank dip recorded.';
+        case 'check_in':
+          final response = await widget.sessionController.postPath(
+            '/attendance/check-in',
+            body: {
+              'station_id': widget.sessionController.workingStationId,
+              'notes': _notesController.text,
+            },
+          );
+          _lastAttendanceId = response['id'] as int?;
+          _message = 'Attendance check-in recorded.';
+        case 'check_out':
+          final attendanceId = _lastAttendanceId;
+          if (attendanceId == null) {
+            throw TenantApiException(
+              'Check in from this screen first so checkout has a record id.',
+            );
+          }
+          await widget.sessionController.postPath(
+            '/attendance/$attendanceId/check-out',
+            body: {'notes': _notesController.text},
+          );
+          _message = 'Attendance check-out recorded.';
+        case 'pos_sale':
+          await _createPosSale();
+          _message = 'POS sale recorded.';
+      }
+      await _load();
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _createPosSale() async {
+    final stationId = widget.sessionController.workingStationId;
+    if (stationId == null) {
+      throw TenantApiException('No working station is available.');
+    }
+    var products = await widget.sessionController.loadListPath(
+      '/pos-products/?station_id=$stationId',
+    );
+    if (products.isEmpty) {
+      final suffix = DateTime.now().millisecondsSinceEpoch;
+      final product = await widget.sessionController.postPath(
+        '/pos-products/',
+        body: {
+          'station_id': stationId,
+          'name': 'Phase 9 POS Item',
+          'code': 'P9-POS-$suffix',
+          'category': 'general',
+          'module': 'pos',
+          'price': 100,
+          'stock_quantity': 20,
+          'track_inventory': true,
+          'is_active': true,
+        },
+      );
+      products = [product];
+    }
+    final product = products.first;
+    await widget.sessionController.postPath(
+      '/pos-sales/',
+      body: {
+        'station_id': stationId,
+        'module': product['module'] ?? 'pos',
+        'payment_method': 'cash',
+        'customer_name': 'Walk-in POS customer',
+        'notes': _notesController.text,
+        'items': [
+          {'product_id': product['id'], 'quantity': 1},
+        ],
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading operator action packet',
+        body: 'Reading the scoped station data needed for this action.',
+      );
+    }
+    final tanks = _tanks(_setup);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Operator Action Packet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text('Station: ${widget.sessionController.workingStationLabel}'),
+            const SizedBox(height: 16),
+            if (widget.workspaceId == 'cash_submission') ...[
+              _field(_amountController, 'Cash amount'),
+              const SizedBox(height: 8),
+              _field(_notesController, 'Notes'),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _isSaving ? null : () => _save('cash'),
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Submit Cash'),
+              ),
+            ],
+            if (widget.workspaceId == 'tank_dips') ...[
+              _tankDropdown(tanks),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _field(_dipMmController, 'Dip reading mm'),
+                  _field(_dipVolumeController, 'Calculated volume'),
+                  _field(_notesController, 'Notes'),
+                ],
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _isSaving ? null : () => _save('dip'),
+                icon: const Icon(Icons.straighten_outlined),
+                label: const Text('Record Dip'),
+              ),
+            ],
+            if (widget.workspaceId == 'attendance') ...[
+              _field(_notesController, 'Notes'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _isSaving ? null : () => _save('check_in'),
+                    icon: const Icon(Icons.login_outlined),
+                    label: const Text('Check In'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSaving ? null : () => _save('check_out'),
+                    icon: const Icon(Icons.logout_outlined),
+                    label: const Text('Check Out Last Check-In'),
+                  ),
+                ],
+              ),
+            ],
+            if (widget.workspaceId == 'pos_sale') ...[
+              _field(_notesController, 'Notes'),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _isSaving ? null : () => _save('pos_sale'),
+                icon: const Icon(Icons.point_of_sale_outlined),
+                label: const Text('Record POS Sale'),
+              ),
+            ],
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            _SimpleListCard(
+              title: _listTitle,
+              emptyText: 'No records found for this action yet.',
+              items: _rows.take(8).map((row) => row.toString()).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String get _listTitle => switch (widget.workspaceId) {
+    'cash_submission' => 'Operator shifts',
+    'tank_dips' => 'Recent tank dips',
+    'pos_sale' => 'Recent POS sales',
+    _ => 'Recent records',
+  };
+
+  Widget _field(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 260,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Widget _tankDropdown(List<Map<String, dynamic>> tanks) {
+    return SizedBox(
+      width: 300,
+      child: DropdownButtonFormField<int>(
+        initialValue: _selectedTankId,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Tank',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          for (final tank in tanks)
+            DropdownMenuItem<int>(
+              value: tank['id'] as int?,
+              child: Text(
+                '${tank['name']} (${tank['code']})',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: (value) => setState(() => _selectedTankId = value),
+      ),
+    );
+  }
+
+  Map<String, dynamic>? _openOwnShift() {
+    for (final shift in _rows) {
+      if (shift['status'] == 'open' &&
+          shift['user_id'] == widget.sessionController.currentUserId) {
+        return shift;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _selectedTank() {
+    for (final tank in _tanks(_setup)) {
+      if (tank['id'] == _selectedTankId) return tank;
+    }
+    return null;
+  }
+}
+
+class _PosActionPanel extends StatefulWidget {
+  const _PosActionPanel({required this.sessionController});
+
+  final TenantSessionController sessionController;
+
+  @override
+  State<_PosActionPanel> createState() => _PosActionPanelState();
+}
+
+class _PosActionPanelState extends State<_PosActionPanel> {
+  final _nameController = TextEditingController(text: 'Phase 9 POS Item');
+  final _priceController = TextEditingController(text: '100');
+  final _stockController = TextEditingController(text: '10');
+  final _qtyController = TextEditingController(text: '1');
+  final _notesController = TextEditingController(text: 'Phase 9 POS packet');
+
+  List<Map<String, dynamic>> _products = const [];
+  List<Map<String, dynamic>> _sales = const [];
+  int? _selectedProductId;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    _stockController.dispose();
+    _qtyController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final stationId = widget.sessionController.workingStationId;
+      final query = stationId == null ? '' : '?station_id=$stationId';
+      final products = await widget.sessionController.loadListPath(
+        '/pos-products/$query',
+      );
+      final sales = await widget.sessionController.loadListPath('/pos-sales/$query');
+      if (!mounted) return;
+      setState(() {
+        _products = products;
+        _sales = sales;
+        _selectedProductId ??= products.isEmpty ? null : products.first['id'] as int?;
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _createProduct() async {
+    final stationId = widget.sessionController.workingStationId;
+    if (stationId == null) throw TenantApiException('No working station found.');
+    await _save(() async {
+      final suffix = DateTime.now().millisecondsSinceEpoch;
+      final product = await widget.sessionController.postPath(
+        '/pos-products/',
+        body: {
+          'station_id': stationId,
+          'name': _nameController.text.trim(),
+          'code': 'P9-POS-$suffix',
+          'category': 'general',
+          'module': 'pos',
+          'price': double.tryParse(_priceController.text.trim()) ?? 0,
+          'stock_quantity': double.tryParse(_stockController.text.trim()) ?? 0,
+          'track_inventory': true,
+          'is_active': true,
+        },
+      );
+      _selectedProductId = product['id'] as int?;
+      _message = 'POS product created.';
+    });
+  }
+
+  Future<void> _createSale() async {
+    final stationId = widget.sessionController.workingStationId;
+    if (stationId == null) throw TenantApiException('No working station found.');
+    if (_selectedProductId == null) {
+      await _createProduct();
+    }
+    final productId = _selectedProductId;
+    if (productId == null) throw TenantApiException('Create a product first.');
+    await _save(() async {
+      await widget.sessionController.postPath(
+        '/pos-sales/',
+        body: {
+          'station_id': stationId,
+          'module': 'pos',
+          'payment_method': 'cash',
+          'customer_name': 'Walk-in POS customer',
+          'notes': _notesController.text,
+          'items': [
+            {
+              'product_id': productId,
+              'quantity': double.tryParse(_qtyController.text.trim()) ?? 1,
+            },
+          ],
+        },
+      );
+      _message = 'POS sale recorded.';
+    });
+  }
+
+  Future<void> _save(Future<void> Function() action) async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await action();
+      await _load();
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading POS packet',
+        body: 'Reading products and sales from the backend.',
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('POS Action Packet', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text('Station: ${widget.sessionController.workingStationLabel}'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _field(_nameController, 'Product name'),
+                _field(_priceController, 'Price'),
+                _field(_stockController, 'Starting stock'),
+                _productDropdown(),
+                _field(_qtyController, 'Sale quantity'),
+                _field(_notesController, 'Notes'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: _isSaving ? null : _createProduct,
+                  icon: const Icon(Icons.add_box_outlined),
+                  label: const Text('Create Product'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _isSaving ? null : _createSale,
+                  icon: const Icon(Icons.point_of_sale_outlined),
+                  label: const Text('Record POS Sale'),
+                ),
+              ],
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            _SimpleListCard(
+              title: 'Products',
+              emptyText: 'No POS products yet.',
+              items: [
+                for (final product in _products.take(8))
+                  'Product ${product['id']} - ${product['name']} - price ${product['price']} - stock ${product['stock_quantity']}',
+              ],
+            ),
+            const SizedBox(height: 12),
+            _SimpleListCard(
+              title: 'POS sales',
+              emptyText: 'No POS sales yet.',
+              items: [
+                for (final sale in _sales.take(8))
+                  'Sale ${sale['id']} - total ${sale['total_amount']} - reversed ${sale['is_reversed']}',
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 220,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Widget _productDropdown() {
+    return SizedBox(
+      width: 280,
+      child: DropdownButtonFormField<int>(
+        initialValue: _selectedProductId,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Sale product',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          for (final product in _products)
+            DropdownMenuItem<int>(
+              value: product['id'] as int?,
+              child: Text(
+                '${product['name']} (${product['code']})',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: (value) => setState(() => _selectedProductId = value),
+      ),
+    );
+  }
+}
+
+class _ReportingActionPanel extends StatefulWidget {
+  const _ReportingActionPanel({
+    required this.sessionController,
+    required this.workspaceId,
+  });
+
+  final TenantSessionController sessionController;
+  final String workspaceId;
+
+  @override
+  State<_ReportingActionPanel> createState() => _ReportingActionPanelState();
+}
+
+class _ReportingActionPanelState extends State<_ReportingActionPanel> {
+  List<Map<String, dynamic>> _rows = const [];
+  Map<String, dynamic>? _summary;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReportingActionPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workspaceId != widget.workspaceId) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final stationId = widget.sessionController.workingStationId;
+      final query = stationId == null ? '' : '?station_id=$stationId';
+      final rows = switch (widget.workspaceId) {
+        'reports' => await widget.sessionController.loadListPath(
+            '/report-exports/$query',
+          ),
+        'documents' => await widget.sessionController.loadListPath(
+            '/financial-documents/dispatches$query',
+          ),
+        'notifications' => await widget.sessionController.loadListPath(
+            '/notifications/',
+          ),
+        _ => const <Map<String, dynamic>>[],
+      };
+      final summary = widget.workspaceId == 'notifications'
+          ? await widget.sessionController.loadMapPath('/notifications/summary')
+          : null;
+      if (!mounted) return;
+      setState(() {
+        _rows = rows;
+        _summary = summary;
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _save(String action) async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final stationId = widget.sessionController.workingStationId;
+      switch (action) {
+        case 'export':
+          final body = <String, dynamic>{
+            'report_type': 'daily_closing',
+            'format': 'csv',
+            'report_date': DateTime.now().toIso8601String().split('T').first,
+          };
+          if (stationId != null) {
+            body['station_id'] = stationId;
+          }
+          final organizationId = widget.sessionController.organizationId;
+          if (organizationId != null) {
+            body['organization_id'] = organizationId;
+          }
+          await widget.sessionController.postPath(
+            '/report-exports/',
+            body: body,
+          );
+          _message = 'Report export requested.';
+        case 'dispatch_diag':
+          final diagnostics = await widget.sessionController.loadMapPath(
+            '/financial-documents/dispatches/diagnostics',
+          );
+          _message = 'Dispatch diagnostics: $diagnostics';
+        case 'read_all':
+          await widget.sessionController.postPath('/notifications/read-all');
+          _message = 'Notifications marked read.';
+        case 'preference':
+          await widget.sessionController.putPath(
+            '/notifications/preferences/report_export.completed',
+            body: {
+              'event_type': 'report_export.completed',
+              'in_app_enabled': true,
+              'email_enabled': false,
+              'sms_enabled': false,
+              'whatsapp_enabled': false,
+            },
+          );
+          _message = 'Notification preference saved.';
+      }
+      await _load();
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading reporting packet',
+        body: 'Reading report, document, and notification data.',
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Reporting Action Packet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text('Workspace: ${widget.workspaceId}'),
+            if (_summary != null) ...[
+              const SizedBox(height: 8),
+              Text('Summary: $_summary'),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                if (widget.workspaceId == 'reports')
+                  FilledButton.icon(
+                    onPressed: _isSaving ? null : () => _save('export'),
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: const Text('Create Daily Closing Export'),
+                  ),
+                if (widget.workspaceId == 'documents')
+                  FilledButton.icon(
+                    onPressed: _isSaving ? null : () => _save('dispatch_diag'),
+                    icon: const Icon(Icons.health_and_safety_outlined),
+                    label: const Text('Load Dispatch Diagnostics'),
+                  ),
+                if (widget.workspaceId == 'notifications') ...[
+                  FilledButton.icon(
+                    onPressed: _isSaving ? null : () => _save('read_all'),
+                    icon: const Icon(Icons.done_all_outlined),
+                    label: const Text('Mark All Read'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSaving ? null : () => _save('preference'),
+                    icon: const Icon(Icons.tune_outlined),
+                    label: const Text('Save Report Preference'),
+                  ),
+                ],
+              ],
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            _SimpleListCard(
+              title: 'Recent Records',
+              emptyText: 'No records found.',
+              items: _rows.take(8).map((row) => row.toString()).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+List<Map<String, dynamic>> _tanks(Map<String, dynamic>? setup) {
+  final tanks = setup?['tanks'];
+  if (tanks is! List) return const [];
+  return [
+    for (final tank in tanks)
+      if (tank is Map) Map<String, dynamic>.from(tank),
+  ];
 }
 
 class _ContextChip extends StatelessWidget {
