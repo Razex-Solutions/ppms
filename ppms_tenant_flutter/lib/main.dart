@@ -124,6 +124,26 @@ class TenantApiClient {
     );
   }
 
+  Future<List<Map<String, dynamic>>> stations({
+    required String baseUrl,
+    required String accessToken,
+    int? organizationId,
+  }) async {
+    final query = organizationId == null
+        ? ''
+        : '?organization_id=$organizationId';
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/stations/$query',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -158,6 +178,34 @@ class TenantApiClient {
     }
     return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
   }
+
+  Future<List<dynamic>> _sendList({
+    required String baseUrl,
+    required String method,
+    required String path,
+    String? accessToken,
+  }) async {
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+    };
+    final uri = _uri(baseUrl, path);
+    final response = switch (method) {
+      'GET' => await _httpClient.get(uri, headers: headers),
+      _ => throw TenantApiException('Unsupported API method $method'),
+    };
+
+    final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = decoded is Map<String, dynamic>
+          ? decoded['detail']?.toString()
+          : null;
+      throw TenantApiException(
+        message ?? 'Request failed with ${response.statusCode}',
+      );
+    }
+    return decoded is List ? decoded : const [];
+  }
 }
 
 class TenantApiException implements Exception {
@@ -179,6 +227,7 @@ class TenantSessionController extends ChangeNotifier {
   String _baseUrl = AppConfig.defaultBaseUrl;
   Map<String, dynamic>? _tokens;
   Map<String, dynamic>? _currentUser;
+  List<Map<String, dynamic>> _stations = const [];
   bool _isRestoring = true;
   bool _isBusy = false;
   String? _errorMessage;
@@ -189,11 +238,34 @@ class TenantSessionController extends ChangeNotifier {
   String get baseUrl => _baseUrl;
   String? get errorMessage => _errorMessage;
   Map<String, dynamic>? get currentUser => _currentUser;
+  List<Map<String, dynamic>> get stations => _stations;
   String get roleName => _currentUser?['role_name'] as String? ?? 'Unknown';
   String get scopeLevel => _currentUser?['scope_level'] as String? ?? 'unknown';
   String get username => _currentUser?['username'] as String? ?? '-';
   int? get organizationId => _currentUser?['organization_id'] as int?;
   int? get stationId => _currentUser?['station_id'] as int?;
+  Map<String, dynamic>? get workingStation {
+    if (_stations.isEmpty) return null;
+    if (stationId != null) {
+      for (final station in _stations) {
+        if (station['id'] == stationId) return station;
+      }
+    }
+    return _stations.length == 1 ? _stations.first : null;
+  }
+
+  String get workingStationLabel {
+    final station = workingStation;
+    if (station == null) {
+      return roleName == 'HeadOffice' && stationId == null
+          ? 'Organization scope - no single station resolved'
+          : '-';
+    }
+    final name = station['name'] as String? ?? 'Station ${station['id']}';
+    final code = station['code'] as String?;
+    return code == null || code.isEmpty ? name : '$name ($code)';
+  }
+
   List<String> get creatableRoles =>
       List<String>.from(_currentUser?['creatable_roles'] as List? ?? const []);
 
@@ -263,6 +335,7 @@ class TenantSessionController extends ChangeNotifier {
   Future<void> clear() async {
     _tokens = null;
     _currentUser = null;
+    _stations = const [];
     _errorMessage = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
@@ -277,6 +350,11 @@ class TenantSessionController extends ChangeNotifier {
     _currentUser = await _apiClient.currentUser(
       baseUrl: _baseUrl,
       accessToken: accessToken,
+    );
+    _stations = await _apiClient.stations(
+      baseUrl: _baseUrl,
+      accessToken: accessToken,
+      organizationId: organizationId,
     );
   }
 
@@ -453,7 +531,11 @@ class TenantHomePage extends StatelessWidget {
               ),
               _ContextChip(
                 label: 'Station',
-                value: sessionController.stationId?.toString() ?? '-',
+                value: sessionController.workingStationLabel,
+              ),
+              _ContextChip(
+                label: 'Station count',
+                value: sessionController.stations.length.toString(),
               ),
             ],
           ),
