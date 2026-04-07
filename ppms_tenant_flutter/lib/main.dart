@@ -286,6 +286,66 @@ class TenantApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> closeShift({
+    required String baseUrl,
+    required String accessToken,
+    required int shiftId,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/shifts/$shiftId/close',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<Map<String, dynamic>> shiftCash({
+    required String baseUrl,
+    required String accessToken,
+    required int shiftId,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/shifts/$shiftId/cash',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> cashSubmissions({
+    required String baseUrl,
+    required String accessToken,
+    required int shiftId,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/shifts/$shiftId/cash-submissions',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createCashSubmission({
+    required String baseUrl,
+    required String accessToken,
+    required int shiftId,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/shifts/$shiftId/cash-submissions',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> expenses({
     required String baseUrl,
     required String accessToken,
@@ -1087,6 +1147,54 @@ class TenantSessionController extends ChangeNotifier {
     );
   }
 
+  Future<void> closeShift({
+    required int shiftId,
+    required double actualCashCollected,
+    String? notes,
+  }) async {
+    await _apiClient.closeShift(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      shiftId: shiftId,
+      body: {
+        'actual_cash_collected': actualCashCollected,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> loadShiftCash(int shiftId) {
+    return _apiClient.shiftCash(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      shiftId: shiftId,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadCashSubmissions(int shiftId) {
+    return _apiClient.cashSubmissions(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      shiftId: shiftId,
+    );
+  }
+
+  Future<void> createCashSubmission({
+    required int shiftId,
+    required double amount,
+    String? notes,
+  }) async {
+    await _apiClient.createCashSubmission(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      shiftId: shiftId,
+      body: {
+        'amount': amount,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+  }
+
   Future<List<Map<String, dynamic>>> loadExpenses() {
     return _apiClient.expenses(
       baseUrl: _baseUrl,
@@ -1774,11 +1882,15 @@ class _WorkspaceDetail extends StatelessWidget {
     }.contains(workspace.id);
     final isManagerOperationsWorkspace = {
       'shifts',
+      'fuel_sales',
+      'sales_review',
+      'cash',
       'purchases',
       'expenses',
       'inventory_dips',
     }.contains(workspace.id);
     final isOperatorFuelWorkspace = workspace.id == 'fuel_sale';
+    final isOperatorShiftWorkspace = workspace.id == 'shift';
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1847,6 +1959,11 @@ class _WorkspaceDetail extends StatelessWidget {
             sessionController.roleName == 'Operator') ...[
           const SizedBox(height: 12),
           _OperatorFuelSalePanel(sessionController: sessionController),
+        ],
+        if (isOperatorShiftWorkspace &&
+            sessionController.roleName == 'Operator') ...[
+          const SizedBox(height: 12),
+          _OperatorShiftPanel(sessionController: sessionController),
         ],
         const SizedBox(height: 12),
         const _SectionCard(
@@ -2775,6 +2892,9 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
           .loadStationSetupFoundation();
       final rows = switch (widget.workspaceId) {
         'shifts' => await widget.sessionController.loadShifts(),
+        'fuel_sales' ||
+        'sales_review' => await widget.sessionController.loadFuelSales(),
+        'cash' => await widget.sessionController.loadShifts(),
         'purchases' => await widget.sessionController.loadPurchases(),
         'expenses' => await widget.sessionController.loadExpenses(),
         'inventory_dips' => await widget.sessionController.loadTankDips(),
@@ -2818,6 +2938,21 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
             notes: _notesController.text,
           );
           _message = 'Opened shift.';
+        case 'cash':
+          final openShift = _openShiftForCurrentManager();
+          if (openShift == null) {
+            throw TenantApiException(
+              'Open a Manager shift before submitting cash.',
+            );
+          }
+          await widget.sessionController.createCashSubmission(
+            shiftId: openShift['id'] as int,
+            amount: double.tryParse(_cashController.text.trim()) ?? 0,
+            notes: _notesController.text,
+          );
+          _message = 'Recorded cash submission.';
+        case 'fuel_sales' || 'sales_review':
+          throw TenantApiException('Sales review is read-only in this packet.');
         case 'expenses':
           await widget.sessionController.createExpense(
             title: _expenseTitleController.text.trim(),
@@ -2954,6 +3089,20 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
         _field(_cashController, 'Initial cash'),
         _field(_notesController, 'Notes'),
       ]);
+    } else if (widget.workspaceId == 'cash') {
+      fields.addAll([
+        _field(_cashController, 'Cash submission amount'),
+        _field(_notesController, 'Notes'),
+      ]);
+    } else if (widget.workspaceId == 'fuel_sales' ||
+        widget.workspaceId == 'sales_review') {
+      fields.add(
+        const _StatusCard(
+          title: 'Read-only sales review',
+          message:
+              'Operator records meter sales. Manager reviews station sales here.',
+        ),
+      );
     } else if (widget.workspaceId == 'expenses') {
       fields.addAll([
         _field(_expenseTitleController, 'Title'),
@@ -3063,6 +3212,8 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
 
   String _buttonLabel() => switch (widget.workspaceId) {
     'shifts' => 'Open Shift',
+    'cash' => 'Submit Cash',
+    'fuel_sales' || 'sales_review' => 'Read-only',
     'expenses' => 'Create Expense',
     'inventory_dips' => 'Record Dip',
     'purchases' => 'Create Purchase',
@@ -3071,6 +3222,8 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
 
   String _listTitle() => switch (widget.workspaceId) {
     'shifts' => 'Recent Shifts',
+    'cash' => 'Open And Recent Shifts',
+    'fuel_sales' || 'sales_review' => 'Recent Fuel Sales',
     'expenses' => 'Recent Expenses',
     'inventory_dips' => 'Recent Tank Dips',
     'purchases' => 'Recent Purchases',
@@ -3080,6 +3233,10 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
   String _describeRow(Map<String, dynamic> row) => switch (widget.workspaceId) {
     'shifts' =>
       'Shift ${row['id']} - ${row['status']} - opening ${row['initial_cash']} - expected ${row['expected_cash']}',
+    'cash' =>
+      'Shift ${row['id']} - ${row['status']} - expected ${row['expected_cash']} - actual ${row['actual_cash_collected'] ?? '-'}',
+    'fuel_sales' || 'sales_review' =>
+      'Sale ${row['id']} - nozzle ${row['nozzle_id']} - ${row['quantity']} L - total ${row['total_amount']} - shift ${row['shift_id'] ?? '-'}',
     'expenses' =>
       'Expense ${row['id']} - ${row['title']} - ${row['amount']} - ${row['status']}',
     'inventory_dips' =>
@@ -3090,6 +3247,231 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
   };
 
   static List<dynamic> _list(Object? value) => value is List ? value : const [];
+
+  Map<String, dynamic>? _openShiftForCurrentManager() {
+    for (final shift in _rows) {
+      if (shift['status'] == 'open' &&
+          shift['user_id'] == widget.sessionController.currentUserId) {
+        return shift;
+      }
+    }
+    return null;
+  }
+}
+
+class _OperatorShiftPanel extends StatefulWidget {
+  const _OperatorShiftPanel({required this.sessionController});
+
+  final TenantSessionController sessionController;
+
+  @override
+  State<_OperatorShiftPanel> createState() => _OperatorShiftPanelState();
+}
+
+class _OperatorShiftPanelState extends State<_OperatorShiftPanel> {
+  final _cashController = TextEditingController(text: '0');
+  final _actualCashController = TextEditingController(text: '0');
+  final _notesController = TextEditingController();
+
+  List<Map<String, dynamic>> _shifts = const [];
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _cashController.dispose();
+    _actualCashController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final shifts = await widget.sessionController.loadShifts();
+      setState(() {
+        _shifts = shifts;
+        final openShift = _openShift;
+        if (openShift != null) {
+          _actualCashController.text = '${openShift['expected_cash'] ?? 0}';
+        }
+      });
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not load operator shifts: $error');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _open() async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await widget.sessionController.openShift(
+        initialCash: double.tryParse(_cashController.text.trim()) ?? 0,
+        notes: _notesController.text,
+      );
+      await _load();
+      setState(() => _message = 'Opened operator shift.');
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not open shift: $error');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _close() async {
+    final openShift = _openShift;
+    if (openShift == null) {
+      setState(() => _error = 'No open operator shift to close.');
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await widget.sessionController.closeShift(
+        shiftId: openShift['id'] as int,
+        actualCashCollected:
+            double.tryParse(_actualCashController.text.trim()) ?? 0,
+        notes: _notesController.text,
+      );
+      await _load();
+      setState(() => _message = 'Closed operator shift.');
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not close shift: $error');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: LinearProgressIndicator(),
+        ),
+      );
+    }
+    final openShift = _openShift;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Operator Shift',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              openShift == null
+                  ? 'No open operator shift. Open this before recording fuel sales so sales attach to the shift.'
+                  : 'Open shift ${openShift['id']} with expected cash ${openShift['expected_cash']}.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _field(_cashController, 'Opening cash'),
+                _field(_actualCashController, 'Actual closing cash'),
+                _field(_notesController, 'Notes'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: _isSaving || openShift != null ? null : _open,
+                  icon: const Icon(Icons.play_arrow_outlined),
+                  label: const Text('Open Shift'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _isSaving || openShift == null ? null : _close,
+                  icon: const Icon(Icons.stop_outlined),
+                  label: const Text('Close Shift'),
+                ),
+              ],
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 24),
+            _SimpleListCard(
+              title: 'Recent Operator Shifts',
+              emptyText: 'No shifts yet.',
+              items: [
+                for (final shift in _shifts)
+                  'Shift ${shift['id']} - ${shift['status']} - opening ${shift['initial_cash']} - expected ${shift['expected_cash']} - actual ${shift['actual_cash_collected'] ?? '-'}',
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 220,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic>? get _openShift {
+    for (final shift in _shifts) {
+      if (shift['status'] == 'open' &&
+          shift['user_id'] == widget.sessionController.currentUserId) {
+        return shift;
+      }
+    }
+    return null;
+  }
 }
 
 class _OperatorFuelSalePanel extends StatefulWidget {
