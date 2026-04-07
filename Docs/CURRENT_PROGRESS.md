@@ -725,6 +725,7 @@ Use after code changes before manual Phase 9 testing:
 
 This helper:
 - restarts the backend on `127.0.0.1:8012`
+- opens a backend log monitor so HTTP `200`, `400`, `403`, and server errors are visible while testing
 - restarts the support console dev server
 - restarts Flutter Windows with `PPMS_API_BASE_URL=http://127.0.0.1:8012`
 - opens support console and Flutter in separate PowerShell windows

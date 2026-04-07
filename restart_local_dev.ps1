@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipBackend,
+    [switch]$SkipBackendLogs,
     [switch]$SkipSupportConsole,
     [switch]$SkipFlutter,
     [string]$ApiBaseUrl = "http://127.0.0.1:8012",
@@ -72,11 +73,20 @@ if (-not $SkipFlutter) {
 }
 
 if (-not $SkipBackend) {
+    if (-not $SkipBackendLogs) {
+        Stop-ProcessByCommandLineMatch -Label "backend log monitor" -Needle "watch_backend_logs.ps1"
+    }
+
     if (-not (Test-Path -LiteralPath $PythonExe)) {
         throw "Python virtual environment not found at $PythonExe"
     }
     Write-Host "Restarting backend on $ApiBaseUrl..."
     & $PythonExe (Join-Path $RepoRoot "run_local_server.py")
+
+    if (-not $SkipBackendLogs) {
+        Write-Host "Opening backend log monitor in a new window..."
+        Start-DevWindow -Title "PPMS Backend Logs" -WorkingDirectory $RepoRoot -Command ".\watch_backend_logs.ps1 -HealthUrl $ApiBaseUrl/health"
+    }
 }
 
 if (-not $SkipSupportConsole) {

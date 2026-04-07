@@ -97,6 +97,7 @@ cd C:\Fuel Management System
 ```
 
 This restarts the backend, support console, and Flutter Windows app. It also opens support console and Flutter in separate PowerShell windows.
+It opens a backend log monitor window too, so HTTP `200`, validation errors, authorization failures, and server errors are visible during manual testing.
 
 If you only need the backend:
 
