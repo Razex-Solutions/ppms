@@ -117,7 +117,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "create": {"HeadOffice"},
         "update": {"HeadOffice"},
         "delete": {"HeadOffice"},
-        "read": {"HeadOffice"},
+        "read": {"HeadOffice", "StationAdmin"},
     },
     "stations": {
         "create": {"HeadOffice"},
