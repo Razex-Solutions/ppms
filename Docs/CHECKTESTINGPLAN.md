@@ -139,6 +139,35 @@ operator / operator123
 accountant / accountant123
 ```
 
+## Current Phase 9 Test Tenant
+
+MasterAdmin has created the current manual-test tenant in the local DB:
+
+```text
+organization_id: 4
+organization_name: check
+organization_code: CHECK-PSO-004
+legal_name: check
+brand: PSO
+station_count: 1
+station_id: 4
+station_name: check
+station_code: CHECK-PSO-004
+station_setup_status: draft
+head_office_user: check
+head_office_scope: organization
+```
+
+Current generated setup counts:
+
+```text
+tanks: 3
+dispensers: 3
+nozzles: 6
+```
+
+Use this tenant for the next role-flow tests unless we intentionally create a new one.
+
 ## Whole Product Flow Order
 
 Run Phase 9 by role authority, not by app menu order.
