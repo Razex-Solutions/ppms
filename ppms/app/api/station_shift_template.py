@@ -3,7 +3,7 @@ from datetime import time
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -25,9 +25,7 @@ def _ensure_station_access(
     current_user: User,
     write: bool = False,
 ) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
-        if write:
-            require_admin(current_user)
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         require_permission(current_user, "stations", "read", detail="You do not have permission to view shift setup")
@@ -38,7 +36,7 @@ def _ensure_station_access(
         return
     if current_user.station_id != station.id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
-    if write:
+    if write and current_user.role.name != "StationAdmin":
         raise HTTPException(status_code=403, detail="Only admins can manage shift setup")
 
 

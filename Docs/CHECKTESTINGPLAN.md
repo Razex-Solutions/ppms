@@ -54,7 +54,7 @@ This means:
 - `stationadmin` is station-scoped and should normally exist only for multi-station organizations
 - if the organization has one station, `headoffice` and `stationadmin` responsibilities should be merged into `headoffice`
 - `manager`, `operator`, and `accountant` may inspect only their assigned station or permitted organization scope
-- the old generic `admin` account is legacy/bootstrap compatibility and should not be treated as the target business role
+- the old generic `admin` account/role has been removed from the active seed and should not appear in testing
 - no tenant user should see stations, users, sales, purchases, reports, or dashboard totals from another organization
 - if a user has no valid scope, the app should show a clear no-access state instead of leaking data
 
@@ -129,14 +129,6 @@ operator / operator123
 accountant / accountant123
 ```
 
-Legacy compatibility account:
-
-```text
-admin / admin123
-```
-
-Use the legacy `admin` account only to identify and remove outdated UI/permission behavior.
-
 ## Step 1 - Login And Shell Stability
 
 Role: `masteradmin`
@@ -156,8 +148,6 @@ Repeat for:
 - `manager`
 - `operator`
 - `accountant`
-
-Then test legacy `admin` separately and report every place where it overlaps confusingly with `HeadOffice` or `StationAdmin`.
 
 Acceptance:
 
@@ -206,14 +196,6 @@ operator
 accountant
 ```
 
-Legacy compatibility check:
-
-```text
-admin
-```
-
-The legacy `admin` role should not become the model for new tenant behavior.
-
 Actions for each role:
 
 - open dashboard
@@ -251,8 +233,6 @@ manager
 operator
 accountant
 ```
-
-Test legacy `admin` separately after the intended roles.
 
 Actions for each role:
 

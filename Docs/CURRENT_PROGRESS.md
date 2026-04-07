@@ -648,7 +648,7 @@ Current role cleanup decision:
 - `MasterAdmin` is the only true platform-wide admin.
 - `HeadOffice` is the tenant organization admin role.
 - `StationAdmin` should be delegated only when a multi-station organization needs station-level control.
-- the old generic `Admin` account/role is legacy/bootstrap compatibility and should not be the target role for new customer organizations.
+- the old generic `Admin` account/role has been removed from active seed data and should not be used for new customer organizations.
 
 ### Important UI rule
 Menus, dashboards, and workspaces must be driven by:
@@ -749,8 +749,6 @@ Do not create ad hoc new `.db` files unless there is a special reason.
 - `operator / operator123`
 - `accountant / accountant123`
 
-Legacy compatibility user:
-- `admin / admin123`
 
 ## 11. What To Edit For Common Changes
 

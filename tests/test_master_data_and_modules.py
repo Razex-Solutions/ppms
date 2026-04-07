@@ -43,7 +43,8 @@ def test_module_toggle_can_disable_routes(tmp_path):
 def test_master_data_delete_is_blocked_when_history_exists(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
     manager_headers = login(test_client, "manager", "manager123")
     operator_headers = login(test_client, "operator", "operator123")
 
@@ -97,14 +98,15 @@ def test_master_data_delete_is_blocked_when_history_exists(client):
     fuel_type_delete = test_client.delete(f"/fuel-types/{data['fuel_type_id']}", headers=admin_headers)
     assert fuel_type_delete.status_code == 400
 
-    station_delete = test_client.delete(f"/stations/{data['station_a_id']}", headers=admin_headers)
+    station_delete = test_client.delete(f"/stations/{data['station_a_id']}", headers=head_office_headers)
     assert station_delete.status_code == 400
 
 
-def test_admin_can_manage_organizations_and_station_ownership(client):
+def test_master_admin_can_manage_organizations_and_head_office_can_manage_station_ownership(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    master_admin_headers = login(test_client, "masteradmin", "master123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
     manager_headers = login(test_client, "manager", "manager123")
 
     forbidden_org_create = test_client.post(
@@ -116,7 +118,7 @@ def test_admin_can_manage_organizations_and_station_ownership(client):
 
     org_response = test_client.post(
         "/organizations/",
-        headers=admin_headers,
+        headers=master_admin_headers,
         json={"name": "Org C", "code": "ORG-C", "description": "Secondary org"},
     )
     assert org_response.status_code == 200, org_response.text
@@ -124,35 +126,35 @@ def test_admin_can_manage_organizations_and_station_ownership(client):
 
     station_response = test_client.post(
         "/stations/",
-        headers=admin_headers,
+        headers=head_office_headers,
         json={
             "name": "Station D",
             "code": "STD",
             "address": "Addr C",
             "city": "City C",
-            "organization_id": organization_id,
-            "is_head_office": True,
+            "organization_id": data["organization_id"],
+            "is_head_office": False,
         },
     )
     assert station_response.status_code == 200, station_response.text
-    assert station_response.json()["organization_id"] == organization_id
-    assert station_response.json()["is_head_office"] is True
+    assert station_response.json()["organization_id"] == data["organization_id"]
+    assert station_response.json()["is_head_office"] is False
 
     duplicate_head_office = test_client.post(
         "/stations/",
-        headers=admin_headers,
+        headers=head_office_headers,
         json={
             "name": "Station D",
-            "code": "STD",
+            "code": "STE",
             "address": "Addr D",
             "city": "City D",
-            "organization_id": organization_id,
+            "organization_id": data["organization_id"],
             "is_head_office": True,
         },
     )
     assert duplicate_head_office.status_code == 400
 
-    org_stations = test_client.get(f"/stations/?organization_id={organization_id}", headers=admin_headers)
+    org_stations = test_client.get(f"/stations/?organization_id={data['organization_id']}", headers=head_office_headers)
     assert org_stations.status_code == 200
     assert any(station["code"] == "STD" for station in org_stations.json())
 
@@ -160,11 +162,12 @@ def test_admin_can_manage_organizations_and_station_ownership(client):
 def test_phase1_setup_foundation_endpoints_and_auto_generated_forecourt_records(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
 
     organization_summary = test_client.get(
         f"/organizations/{data['organization_id']}/setup-foundation",
-        headers=admin_headers,
+        headers=head_office_headers,
     )
     assert organization_summary.status_code == 200, organization_summary.text
     assert organization_summary.json()["organization_code"] == "ORG-A"
@@ -243,7 +246,7 @@ def test_phase1_setup_foundation_endpoints_and_auto_generated_forecourt_records(
 def test_phase1_setup_foundation_resolves_inherited_branding_and_invoice_identity(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
 
     db = session_local()
     try:
@@ -283,7 +286,7 @@ def test_phase1_setup_foundation_resolves_inherited_branding_and_invoice_identit
 def test_phase1_setup_foundation_resolves_station_overrides_and_invoice_profile_overrides(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
 
     db = session_local()
     try:
@@ -413,20 +416,20 @@ def test_head_office_can_manage_station_modules_per_station(client):
 def test_permission_catalog_and_core_role_governance(client):
     test_client, session_local = client
     seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")
 
     me_response = test_client.get("/auth/me", headers=admin_headers)
     assert me_response.status_code == 200, me_response.text
-    assert me_response.json()["role_name"] == "Admin"
+    assert me_response.json()["role_name"] == "StationAdmin"
     assert "users" in me_response.json()["permissions"]
-    assert me_response.json()["role_summary"]["scope"] == "System-wide"
-    assert "StationAdmin" in me_response.json()["creatable_roles"]
-    assert me_response.json()["role_scope_rule"]["scope_level"] == "organization"
+    assert me_response.json()["role_summary"]["scope"] == "Station-wide"
+    assert "Manager" in me_response.json()["creatable_roles"]
+    assert me_response.json()["role_scope_rule"]["scope_level"] == "station"
 
     catalog_response = test_client.get("/roles/permission-catalog", headers=head_office_headers)
     assert catalog_response.status_code == 200, catalog_response.text
-    assert "Admin" in catalog_response.json()["core_roles"]
+    assert "Admin" not in catalog_response.json()["core_roles"]
     assert "roles" in catalog_response.json()["permission_matrix"]
 
     manager_policy = test_client.get("/roles/permission-catalog/Manager", headers=head_office_headers)
@@ -438,26 +441,26 @@ def test_permission_catalog_and_core_role_governance(client):
     try:
         from app.models.role import Role
 
-        admin_role = db.query(Role).filter(Role.name == "Admin").first()
-        admin_role_id = admin_role.id
+        station_admin_role = db.query(Role).filter(Role.name == "StationAdmin").first()
+        admin_role_id = station_admin_role.id
     finally:
         db.close()
 
     rename_response = test_client.put(
         f"/roles/{admin_role_id}",
-        headers=admin_headers,
-        json={"name": "SuperAdmin"},
+        headers=head_office_headers,
+        json={"name": "SuperStationAdmin"},
     )
     assert rename_response.status_code == 400
 
-    delete_response = test_client.delete(f"/roles/{admin_role_id}", headers=admin_headers)
+    delete_response = test_client.delete(f"/roles/{admin_role_id}", headers=head_office_headers)
     assert delete_response.status_code == 400
 
 
 def test_auth_me_returns_effective_module_visibility(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     operator_headers = login(test_client, "operator", "operator123")
 
     before_response = test_client.get("/auth/me", headers=operator_headers)
@@ -481,7 +484,7 @@ def test_auth_me_returns_effective_module_visibility(client):
 def test_role_creation_hierarchy_is_enforced(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")
 
     db = session_local()
@@ -574,7 +577,7 @@ def test_employee_profiles_follow_station_scope_and_allow_profile_only_staff(cli
 def test_phase2_station_shift_templates_support_hourly_and_24h_setup(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")
 
     morning_template = test_client.post(
@@ -634,7 +637,7 @@ def test_phase2_station_shift_templates_support_hourly_and_24h_setup(client):
 def test_phase2_runtime_shift_can_use_station_shift_template(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     operator_headers = login(test_client, "operator", "operator123")
 
     template_response = test_client.post(

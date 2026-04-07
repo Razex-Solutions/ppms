@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import require_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import (
@@ -49,7 +48,7 @@ def get_role_permission_summary(
 
 @router.post("/", response_model=RoleResponse)
 def create_role(role_data: RoleCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_admin(current_user)
+    require_permission(current_user, "roles", "create", detail="You do not have permission to create roles")
 
     existing_role = db.query(Role).filter(Role.name == role_data.name).first()
     if existing_role:
@@ -72,13 +71,13 @@ def list_roles(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(current_user, "roles", "read", detail="You do not have permission to view roles")
     return db.query(Role).offset(skip).limit(limit).all()
 
 
 @router.get("/{role_id}", response_model=RoleResponse)
 def get_role(role_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_admin(current_user)
+    require_permission(current_user, "roles", "read", detail="You do not have permission to view roles")
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -92,7 +91,7 @@ def update_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(current_user, "roles", "update", detail="You do not have permission to update roles")
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -107,7 +106,7 @@ def update_role(
 
 @router.delete("/{role_id}")
 def delete_role(role_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_admin(current_user)
+    require_permission(current_user, "roles", "delete", detail="You do not have permission to delete roles")
     role = db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")

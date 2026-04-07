@@ -269,7 +269,7 @@ Primary station-level administrative controller for multi-station organizations.
 
 For a single-station organization, do not create a separate station-admin layer unless the customer explicitly needs it. In that case, `HeadOffice` should behave as the merged organization and station admin.
 
-The old generic `Admin` role is now considered a legacy/bootstrap compatibility role. It should not be the target business role for new organizations.
+The old generic `Admin` role has been removed from active seed data and should not be the target business role for new organizations.
 
 ---
 
@@ -723,7 +723,7 @@ Introduce more configurable policy rules and custom permission bundles.
 
 Before implementation, these decisions should be confirmed:
 
-1. Confirm that the old generic `Admin` role is legacy/bootstrap only.
+1. Confirm the old generic `Admin` role remains removed from active seed data and UI flows.
 2. Can `Manager` create `Operator`, or only `HeadOffice`/`StationAdmin`?
 3. Should `Accountant` approve anything, or only process records?
 4. Are tanker drivers login users or profile-only employees?

@@ -501,7 +501,7 @@ This means:
 - customer companies do not create platform users
 - station admins do not create organization head-office users
 - lower users do not create higher users
-- the old generic `Admin` role should be treated as legacy/bootstrap compatibility, not the target customer role
+- the old generic `Admin` role has been removed from active seed data and should not be the target customer role
 
 ---
 

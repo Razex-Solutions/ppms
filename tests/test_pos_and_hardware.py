@@ -304,7 +304,7 @@ def test_vendor_api_hardware_adapter_poll_flow(client):
 def test_tanker_module_workflows_and_station_toggle(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     manager_headers = login(test_client, "manager", "manager123")
     foreign_manager_headers = login(test_client, "foreignmanager", "foreign123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")

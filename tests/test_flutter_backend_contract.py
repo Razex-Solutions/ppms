@@ -10,7 +10,7 @@ def test_flutter_contract_for_auth_dashboard_and_reference_lists(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
 
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     operator_headers = login(test_client, "operator", "operator123")
     manager_headers = login(test_client, "manager", "manager123")
 
@@ -153,7 +153,7 @@ def test_flutter_contract_for_admin_setup_finance_and_governance_lists(client):
     test_client, session_local = client
     data = seed_base_data(session_local)
 
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     operator_headers = login(test_client, "operator", "operator123")
     manager_headers = login(test_client, "manager", "manager123")
 

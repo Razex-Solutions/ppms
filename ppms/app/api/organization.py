@@ -104,7 +104,7 @@ def list_organizations(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Organization)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         if is_active is not None:
             query = query.filter(Organization.is_active == is_active)
         return [_serialize_organization(item) for item in query.offset(skip).limit(limit).all()]
@@ -126,7 +126,7 @@ def get_organization(
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return _serialize_organization(organization)
     if is_head_office_user(current_user):
         require_permission(current_user, "organizations", "read", detail="You do not have permission to view organizations")
@@ -145,7 +145,7 @@ def get_organization_setup_foundation(
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return build_organization_setup_foundation(db, organization)
     if is_head_office_user(current_user):
         require_permission(current_user, "organizations", "read", detail="You do not have permission to view organizations")

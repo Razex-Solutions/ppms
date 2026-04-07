@@ -114,9 +114,10 @@ def test_backend_alignment_smoke_for_major_routes(client):
     }:
         assert required_path in paths
 
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     operator_headers = login(test_client, "operator", "operator123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")
+    master_admin_headers = login(test_client, "masteradmin", "master123")
 
     invoice_profile_put = test_client.put(
         f"/invoice-profiles/{data['station_a_id']}",
@@ -151,10 +152,10 @@ def test_backend_alignment_smoke_for_major_routes(client):
     route_checks = [
         ("auth me", "GET", "/auth/me", admin_headers),
         ("dashboard", "GET", f"/dashboard/?station_id={data['station_a_id']}", operator_headers),
-        ("roles", "GET", "/roles/", admin_headers),
-        ("permission catalog", "GET", "/roles/permission-catalog", admin_headers),
-        ("organizations", "GET", "/organizations/", admin_headers),
-        ("org modules", "GET", f"/organization-modules/{data['organization_id']}", admin_headers),
+        ("roles", "GET", "/roles/", head_office_headers),
+        ("permission catalog", "GET", "/roles/permission-catalog", head_office_headers),
+        ("organizations", "GET", "/organizations/", head_office_headers),
+        ("org modules", "GET", f"/organization-modules/{data['organization_id']}", head_office_headers),
         ("stations", "GET", "/stations/", admin_headers),
         ("station modules", "GET", f"/station-modules/{data['station_a_id']}", admin_headers),
         ("users", "GET", f"/users/?station_id={data['station_a_id']}", admin_headers),
@@ -185,14 +186,14 @@ def test_backend_alignment_smoke_for_major_routes(client):
         ("reports stock movement", "GET", f"/reports/stock-movement?station_id={data['station_a_id']}", admin_headers),
         ("reports customer balances", "GET", f"/reports/customer-balances?station_id={data['station_a_id']}", admin_headers),
         ("reports supplier balances", "GET", f"/reports/supplier-balances?station_id={data['station_a_id']}", admin_headers),
-        ("report exports", "GET", "/report-exports/", admin_headers),
+        ("report exports", "GET", "/report-exports/", head_office_headers),
         ("invoice profile", "GET", f"/invoice-profiles/{data['station_a_id']}", admin_headers),
         ("invoice presets", "GET", "/invoice-profiles/compliance-presets", admin_headers),
         ("document templates", "GET", f"/document-templates/{data['station_a_id']}", admin_headers),
         ("document placeholders", "GET", "/document-templates/placeholders/fuel_sale_invoice", admin_headers),
-        ("maintenance snapshot", "GET", "/maintenance/snapshot", admin_headers),
-        ("maintenance backups", "GET", "/maintenance/backups", admin_headers),
-        ("maintenance integrity", "GET", "/maintenance/integrity", admin_headers),
+        ("maintenance snapshot", "GET", "/maintenance/snapshot", head_office_headers),
+        ("maintenance backups", "GET", "/maintenance/backups", head_office_headers),
+        ("maintenance integrity", "GET", "/maintenance/integrity", head_office_headers),
         ("hardware devices", "GET", f"/hardware/devices?station_id={data['station_a_id']}", admin_headers),
         ("hardware events", "GET", f"/hardware/events?station_id={data['station_a_id']}", admin_headers),
         ("hardware vendors", "GET", "/hardware/vendors", admin_headers),
@@ -200,12 +201,12 @@ def test_backend_alignment_smoke_for_major_routes(client):
         ("tanker trips", "GET", f"/tankers/trips?station_id={data['station_a_id']}", admin_headers),
         ("pos products", "GET", f"/pos-products/?station_id={data['station_a_id']}", admin_headers),
         ("pos sales", "GET", f"/pos-sales/?station_id={data['station_a_id']}", admin_headers),
-        ("saas plans", "GET", "/saas/plans", admin_headers),
-        ("saas subscription", "GET", f"/saas/organizations/{data['organization_id']}/subscription", admin_headers),
-        ("online hooks", "GET", f"/online-api-hooks/{data['organization_id']}", admin_headers),
-        ("online hook event types", "GET", "/online-api-hooks/event-types", admin_headers),
-        ("online hook diagnostics", "GET", f"/online-api-hooks/{data['organization_id']}/diagnostics", admin_headers),
-        ("online hook inbound events", "GET", f"/online-api-hooks/{data['organization_id']}/inbound-events", admin_headers),
+        ("saas plans", "GET", "/saas/plans", master_admin_headers),
+        ("saas subscription", "GET", f"/saas/organizations/{data['organization_id']}/subscription", head_office_headers),
+        ("online hooks", "GET", f"/online-api-hooks/{data['organization_id']}", head_office_headers),
+        ("online hook event types", "GET", "/online-api-hooks/event-types", head_office_headers),
+        ("online hook diagnostics", "GET", f"/online-api-hooks/{data['organization_id']}/diagnostics", head_office_headers),
+        ("online hook inbound events", "GET", f"/online-api-hooks/{data['organization_id']}/inbound-events", head_office_headers),
         ("head office stations", "GET", "/stations/", head_office_headers),
         ("head office users", "GET", "/users/", head_office_headers),
     ]

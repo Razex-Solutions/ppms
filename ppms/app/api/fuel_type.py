@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin, require_station_access
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -57,7 +57,7 @@ def create_fuel_type(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(current_user, "fuel_types", "create", detail="You do not have permission to create fuel types")
     existing = db.query(FuelType).filter(FuelType.name == fuel_data.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="Fuel type already exists")
@@ -101,7 +101,7 @@ def update_fuel_type(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(current_user, "fuel_types", "update", detail="You do not have permission to update fuel types")
     ft = db.query(FuelType).filter(FuelType.id == fuel_type_id).first()
     if not ft:
         raise HTTPException(status_code=404, detail="Fuel type not found")
@@ -118,7 +118,7 @@ def delete_fuel_type(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(current_user, "fuel_types", "delete", detail="You do not have permission to delete fuel types")
     ft = db.query(FuelType).filter(FuelType.id == fuel_type_id).first()
     if not ft:
         raise HTTPException(status_code=404, detail="Fuel type not found")

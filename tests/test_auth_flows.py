@@ -29,10 +29,10 @@ def test_user_can_change_own_password_and_log_in_with_new_password(client):
     assert new_login.status_code == 200
 
 
-def test_admin_can_reset_password_but_non_admin_cannot(client):
+def test_head_office_can_reset_password_but_non_admin_cannot(client):
     test_client, session_local = client
     seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    head_office_headers = login(test_client, "headoffice", "headoffice123")
     operator_headers = login(test_client, "operator", "operator123")
 
     db = session_local()
@@ -51,7 +51,7 @@ def test_admin_can_reset_password_but_non_admin_cannot(client):
 
     reset_response = test_client.post(
         f"/auth/admin-reset-password/{manager_id}",
-        headers=admin_headers,
+        headers=head_office_headers,
         json={"new_password": "manager456"},
     )
     assert reset_response.status_code == 200, reset_response.text

@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, require_admin
+from app.core.access import get_user_organization_id, is_master_admin, require_organization_access
 from app.core.database import get_db
 from app.core.permissions import (
     ROLE_CAPABILITY_SUMMARY,
     get_creatable_roles,
     get_effective_permissions,
     get_role_scope_rule,
+    require_permission,
 )
 from app.core.security import verify_password, create_access_token, decode_token, hash_password
 from app.core.dependencies import get_current_user
@@ -254,10 +255,17 @@ def admin_reset_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_admin(current_user)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    require_permission(current_user, "users", "update", detail="You do not have permission to reset user passwords")
+    if not is_master_admin(current_user):
+        target_organization_id = get_user_organization_id(user)
+        if target_organization_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this user")
+        require_organization_access(current_user, target_organization_id, detail="Not authorized for this user")
+        if current_user.role.name != "HeadOffice" and current_user.station_id != user.station_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this user")
 
     try:
         user.hashed_password = hash_password(payload.new_password)

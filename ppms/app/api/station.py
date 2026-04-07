@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -77,7 +77,7 @@ def create_station(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
+    require_permission(current_user, "stations", "create", detail="You do not have permission to create stations")
 
     existing_station = db.query(Station).filter(Station.code == station_data.code).first()
     if existing_station:
@@ -85,6 +85,8 @@ def create_station(
     organization = db.query(Organization).filter(Organization.id == station_data.organization_id).first()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
+    if not is_master_admin(current_user) and organization.id != get_user_organization_id(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized for this organization")
     if station_data.is_head_office:
         existing_head_office = db.query(Station).filter(
             Station.organization_id == station_data.organization_id,
@@ -183,10 +185,12 @@ def update_station(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
+    require_permission(current_user, "stations", "update", detail="You do not have permission to update stations")
+    if not is_master_admin(current_user) and station.organization_id != get_user_organization_id(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized for this station")
     updates = data.model_dump(exclude_unset=True)
     new_organization_id = updates.get("organization_id", station.organization_id)
     if new_organization_id is not None:
@@ -223,10 +227,12 @@ def delete_station(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    require_admin(current_user)
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
+    require_permission(current_user, "stations", "delete", detail="You do not have permission to delete stations")
+    if not is_master_admin(current_user) and station.organization_id != get_user_organization_id(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized for this station")
     if station.users:
         raise HTTPException(status_code=400, detail="Station cannot be deleted while users are assigned to it")
     has_tanks = db.query(Tank).filter(Tank.station_id == station.id).first()

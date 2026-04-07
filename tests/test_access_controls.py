@@ -14,7 +14,7 @@ def test_non_admin_cannot_manage_users(client):
     response = test_client.get("/users/", headers=headers)
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Admin access required"
+    assert response.json()["detail"] == "You do not have permission to view users"
 
 
 def test_shift_details_are_scoped_by_station(client):

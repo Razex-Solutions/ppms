@@ -16,7 +16,7 @@ def test_audit_logs_capture_transaction_and_report_activity(client):
     data = seed_base_data(session_local)
     operator_headers = login(test_client, "operator", "operator123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     manager_headers = login(test_client, "manager", "manager123")
     sale_response = test_client.post(
         "/fuel-sales/",
@@ -712,7 +712,7 @@ def test_notifications_cover_approval_export_and_meter_events(client):
     manager_headers = login(test_client, "manager", "manager123")
     head_office_headers = login(test_client, "headoffice", "headoffice123")
     accountant_headers = login(test_client, "accountant", "accountant123")
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
 
     expense_response = test_client.post(
         "/expenses/",
@@ -769,7 +769,7 @@ def test_notification_preferences_and_financial_documents(client):
     data = seed_base_data(session_local)
     manager_headers = login(test_client, "manager", "manager123")
     accountant_headers = login(test_client, "accountant", "accountant123")
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
 
     pref_response = test_client.put(
         "/notifications/preferences/report_export.completed",
@@ -1133,7 +1133,7 @@ def test_process_due_notification_deliveries_endpoint(client, monkeypatch):
     test_client, session_local = client
     seed_base_data(session_local)
     accountant_headers = login(test_client, "accountant", "accountant123")
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
 
     pref_response = test_client.put(
         "/notifications/preferences/report_export.completed",
@@ -1190,7 +1190,7 @@ def test_process_due_financial_document_dispatches_endpoint(client, monkeypatch)
     test_client, session_local = client
     data = seed_base_data(session_local)
     accountant_headers = login(test_client, "accountant", "accountant123")
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
 
     db = session_local()
     try:
@@ -1430,7 +1430,7 @@ def test_unhandled_exceptions_are_sanitized_and_traced(tmp_path):
 def test_maintenance_snapshot_backup_restore_and_integrity(client, monkeypatch):
     test_client, session_local = client
     data = seed_base_data(session_local)
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "headoffice", "headoffice123")
 
     db = session_local()
     db_path = Path(db.bind.url.database).resolve()

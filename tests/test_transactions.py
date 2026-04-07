@@ -602,7 +602,7 @@ def test_meter_adjustment_starts_new_sales_segment_without_breaking_tank_deducti
     test_client, session_local = client
     data = seed_base_data(session_local)
     operator_headers = login(test_client, "operator", "operator123")
-    admin_headers = login(test_client, "admin", "admin123")
+    admin_headers = login(test_client, "stationadmin", "station123")
     accountant_headers = login(test_client, "accountant", "accountant123")
 
     db = session_local()

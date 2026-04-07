@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, require_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -136,7 +136,7 @@ def list_users(
     current_user: User = Depends(get_current_user)
 ):
     q = db.query(User)
-    if current_user.role.name in {"Admin", "MasterAdmin"} or current_user.is_platform_user:
+    if is_master_admin(current_user):
         if organization_id is not None:
             q = q.filter(User.organization_id == organization_id)
     elif is_head_office_user(current_user):
@@ -152,7 +152,14 @@ def list_users(
             if not station or station.organization_id != user_organization_id:
                 raise HTTPException(status_code=403, detail="Not authorized for this station")
     else:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        require_permission(current_user, "users", "read", detail="You do not have permission to view users")
+        if current_user.station_id is None:
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
+        if station_id is not None and station_id != current_user.station_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
+        if organization_id is not None and organization_id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this organization")
+        q = q.filter(User.station_id == current_user.station_id)
     if station_id:
         q = q.filter(User.station_id == station_id)
     if role_id:
@@ -172,7 +179,7 @@ def get_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if current_user.role.name in {"Admin", "MasterAdmin"} or current_user.is_platform_user:
+    if is_master_admin(current_user):
         pass
     elif is_head_office_user(current_user):
         require_permission(current_user, "users", "read", detail="You do not have permission to view users")
@@ -180,7 +187,9 @@ def get_user(
         if user_organization_id != get_user_organization_id(current_user):
             raise HTTPException(status_code=403, detail="Not authorized for this user")
     else:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        require_permission(current_user, "users", "read", detail="You do not have permission to view users")
+        if current_user.station_id != user.station_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this user")
     return user
 
 

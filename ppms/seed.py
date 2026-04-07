@@ -1,5 +1,5 @@
 """
-Run once to create the initial admin user and required setup.
+Run once to create the initial platform and tenant users and required setup.
 Usage: python seed.py
 """
 from pathlib import Path
@@ -18,6 +18,7 @@ from app.models.role import Role
 from app.models.station import Station
 from app.models.station_module_setting import StationModuleSetting
 from app.models.subscription_plan import SubscriptionPlan
+from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.core.permissions import ROLE_CAPABILITY_SUMMARY
 from app.services.document_template_seed import seed_default_document_templates
@@ -103,7 +104,6 @@ custom_brand = db.query(BrandCatalog).filter(BrandCatalog.code == "CUSTOM").firs
 # Create default roles
 roles_data = [
     {"name": "MasterAdmin", "description": ROLE_CAPABILITY_SUMMARY["MasterAdmin"]["governance"]},
-    {"name": "Admin", "description": ROLE_CAPABILITY_SUMMARY["Admin"]["governance"]},
     {"name": "StationAdmin", "description": ROLE_CAPABILITY_SUMMARY["StationAdmin"]["governance"]},
     {"name": "HeadOffice", "description": ROLE_CAPABILITY_SUMMARY["HeadOffice"]["governance"]},
     {"name": "Manager", "description": ROLE_CAPABILITY_SUMMARY["Manager"]["governance"]},
@@ -117,7 +117,6 @@ for r in roles_data:
 db.commit()
 
 master_admin_role = db.query(Role).filter(Role.name == "MasterAdmin").first()
-admin_role = db.query(Role).filter(Role.name == "Admin").first()
 station_admin_role = db.query(Role).filter(Role.name == "StationAdmin").first()
 head_office_role = db.query(Role).filter(Role.name == "HeadOffice").first()
 manager_role = db.query(Role).filter(Role.name == "Manager").first()
@@ -297,31 +296,19 @@ for module_name, is_enabled in [
 
 seed_default_document_templates(db, station)
 
-# Create admin user
-if not db.query(User).filter(User.username == "admin").first():
-    admin = User(
-        full_name="System Admin",
-        username="admin",
-        email="admin@ppms.com",
-        hashed_password=hash_password("admin123"),
-        is_active=True,
-        role_id=admin_role.id,
-        organization_id=organization.id,
-        station_id=station.id,
-        scope_level="station",
-        is_platform_user=False,
-    )
-    db.add(admin)
+# Remove legacy generic admin login/role from older local databases.
+legacy_admin = db.query(User).filter(User.username == "admin").first()
+if legacy_admin:
+    db.query(AuthSession).filter(AuthSession.user_id == legacy_admin.id).delete(synchronize_session=False)
+    db.delete(legacy_admin)
     db.commit()
-    print("Admin user created: username=admin  password=admin123")
-else:
-    print("Admin user already exists.")
-    admin = db.query(User).filter(User.username == "admin").first()
-    admin.organization_id = organization.id
-    admin.station_id = station.id
-    admin.scope_level = admin.scope_level or "station"
-    admin.is_platform_user = False
+    print("Legacy admin user removed.")
+
+legacy_admin_role = db.query(Role).filter(Role.name == "Admin").first()
+if legacy_admin_role and not db.query(User).filter(User.role_id == legacy_admin_role.id).first():
+    db.delete(legacy_admin_role)
     db.commit()
+    print("Legacy Admin role removed.")
 
 demo_users = [
     {
