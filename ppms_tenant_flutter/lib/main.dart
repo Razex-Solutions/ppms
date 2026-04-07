@@ -528,6 +528,36 @@ class TenantApiClient {
     );
   }
 
+  Future<List<Map<String, dynamic>>> listApiPath({
+    required String baseUrl,
+    required String accessToken,
+    required String path,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: path,
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> getApiPath({
+    required String baseUrl,
+    required String accessToken,
+    required String path,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: path,
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -1487,6 +1517,22 @@ class TenantSessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<Map<String, dynamic>>> loadListPath(String path) {
+    return _apiClient.listApiPath(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      path: path,
+    );
+  }
+
+  Future<Map<String, dynamic>> loadMapPath(String path) {
+    return _apiClient.getApiPath(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      path: path,
+    );
+  }
+
   Future<void> createFuelSale({
     required int nozzleId,
     required int fuelTypeId,
@@ -2109,6 +2155,22 @@ class _WorkspaceDetail extends StatelessWidget {
     }.contains(workspace.id);
     final isOperatorFuelWorkspace = workspace.id == 'fuel_sale';
     final isOperatorShiftWorkspace = workspace.id == 'shift';
+    final isReadOnlyApiWorkspace = {
+      'finance',
+      'finance_overview',
+      'parties',
+      'payments',
+      'payroll',
+      'attendance',
+      'tankers',
+      'pos',
+      'pos_sale',
+      'reports',
+      'documents',
+      'notifications',
+      'cash',
+      'sales_review',
+    }.contains(workspace.id);
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -2187,6 +2249,14 @@ class _WorkspaceDetail extends StatelessWidget {
           const SizedBox(height: 12),
           _OperatorShiftPanel(sessionController: sessionController),
         ],
+        if (isReadOnlyApiWorkspace &&
+            !_usesSpecialActionPanel(sessionController.roleName, workspace.id)) ...[
+          const SizedBox(height: 12),
+          _ApiBackedOverviewPanel(
+            sessionController: sessionController,
+            workspaceId: workspace.id,
+          ),
+        ],
         const SizedBox(height: 12),
         const _SectionCard(
           title: 'Leakage rule',
@@ -2196,6 +2266,241 @@ class _WorkspaceDetail extends StatelessWidget {
       ],
     );
   }
+
+  bool _usesSpecialActionPanel(String roleName, String workspaceId) {
+    if (roleName == 'Manager' &&
+        {
+          'shifts',
+          'fuel_sales',
+          'sales_review',
+          'cash',
+          'purchases',
+          'expenses',
+          'inventory_dips',
+        }.contains(workspaceId)) {
+      return true;
+    }
+    if (roleName == 'Operator' && {'shift', 'fuel_sale'}.contains(workspaceId)) {
+      return true;
+    }
+    return false;
+  }
+}
+
+class _ApiBackedOverviewPanel extends StatefulWidget {
+  const _ApiBackedOverviewPanel({
+    required this.sessionController,
+    required this.workspaceId,
+  });
+
+  final TenantSessionController sessionController;
+  final String workspaceId;
+
+  @override
+  State<_ApiBackedOverviewPanel> createState() => _ApiBackedOverviewPanelState();
+}
+
+class _ApiBackedOverviewPanelState extends State<_ApiBackedOverviewPanel> {
+  bool _isLoading = true;
+  String? _error;
+  final List<_OverviewDataset> _datasets = [];
+
+  int? get _stationId => widget.sessionController.workingStationId;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ApiBackedOverviewPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workspaceId != widget.workspaceId) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _datasets.clear();
+    });
+    try {
+      final datasets = await _loadWorkspaceDatasets();
+      if (!mounted) return;
+      setState(() {
+        _datasets.addAll(datasets);
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<List<_OverviewDataset>> _loadWorkspaceDatasets() async {
+    final stationId = _stationId;
+    final stationQuery = stationId == null ? '' : '?station_id=$stationId';
+    final encodedStationQuery = stationId == null ? '' : '?station_id=$stationId';
+    final today = DateTime.now().toIso8601String().split('T').first;
+    final dailyClosingQuery = stationId == null
+        ? '?report_date=$today'
+        : '?report_date=$today&station_id=$stationId';
+    switch (widget.workspaceId) {
+      case 'finance':
+      case 'finance_overview':
+        return [
+          await _list('Purchases', '/purchases/$stationQuery'),
+          await _list('Expenses', '/expenses/$stationQuery'),
+          await _list('Customer payments', '/customer-payments/$stationQuery'),
+          await _list('Supplier payments', '/supplier-payments/$stationQuery'),
+        ];
+      case 'parties':
+        return [
+          await _list('Customers', '/customers/'),
+          await _list('Suppliers', '/suppliers/'),
+        ];
+      case 'payments':
+        return [
+          await _list('Customer payments', '/customer-payments/$stationQuery'),
+          await _list('Supplier payments', '/supplier-payments/$stationQuery'),
+        ];
+      case 'payroll':
+        return [await _list('Payroll runs', '/payroll/runs$stationQuery')];
+      case 'attendance':
+        return [await _list('Attendance records', '/attendance/$stationQuery')];
+      case 'tankers':
+        return [
+          await _list('Tankers', '/tankers/$stationQuery'),
+          await _list('Tanker trips', '/tankers/trips$stationQuery'),
+        ];
+      case 'pos':
+      case 'pos_sale':
+        return [
+          await _list('POS products', '/pos-products/$stationQuery'),
+          await _list('POS sales', '/pos-sales/$stationQuery'),
+        ];
+      case 'reports':
+        return [
+          await _map('Daily closing', '/reports/daily-closing$dailyClosingQuery'),
+          await _list('Report definitions', '/report-definitions/$stationQuery'),
+          await _list('Report exports', '/report-exports/$stationQuery'),
+        ];
+      case 'documents':
+        return [
+          await _list('Document templates', stationId == null ? '/document-templates/0' : '/document-templates/$stationId'),
+          await _list('Document dispatches', '/financial-documents/dispatches$encodedStationQuery'),
+        ];
+      case 'notifications':
+        return [
+          await _map('Notification summary', '/notifications/summary'),
+          await _list('Notifications', '/notifications/'),
+          await _list('Notification deliveries', '/notifications/deliveries'),
+          await _list('Notification preferences', '/notifications/preferences'),
+        ];
+      case 'cash':
+        return [await _list('Station shifts', '/shifts/$stationQuery')];
+      case 'sales_review':
+        return [await _list('Fuel sales', '/fuel-sales/$stationQuery')];
+      default:
+        return [];
+    }
+  }
+
+  Future<_OverviewDataset> _list(String title, String path) async {
+    try {
+      final rows = await widget.sessionController.loadListPath(path);
+      return _OverviewDataset(title: title, rows: rows);
+    } on Object catch (error) {
+      return _OverviewDataset(
+        title: title,
+        rows: [
+          {'status': 'error', 'message': error.toString()},
+        ],
+      );
+    }
+  }
+
+  Future<_OverviewDataset> _map(String title, String path) async {
+    try {
+      final row = await widget.sessionController.loadMapPath(path);
+      return _OverviewDataset(title: title, rows: [row]);
+    } on Object catch (error) {
+      return _OverviewDataset(
+        title: title,
+        rows: [
+          {'status': 'error', 'message': error.toString()},
+        ],
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading real backend data',
+        body: 'Reading scoped tenant data...',
+      );
+    }
+    if (_error != null) {
+      return _SectionCard(title: 'Backend error', body: _error!);
+    }
+    if (_datasets.isEmpty) {
+      return const _SectionCard(
+        title: 'No API dataset configured yet',
+        body: 'This workspace is visible, but no read packet has been added yet.',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final dataset in _datasets) ...[
+          _SectionCard(
+            title: '${dataset.title}: ${dataset.rows.length}',
+            body: dataset.rows.isEmpty
+                ? 'No records found for this scope.'
+                : dataset.rows.take(5).map(_summarizeRow).join('\n'),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  String _summarizeRow(Map<String, dynamic> row) {
+    final label =
+        row['name'] ??
+        row['title'] ??
+        row['code'] ??
+        row['document_type'] ??
+        row['report_type'] ??
+        row['status'] ??
+        row['id'] ??
+        'record';
+    final parts = <String>[
+      '#${row['id'] ?? '-'}',
+      label.toString(),
+      if (row['status'] != null) 'status=${row['status']}',
+      if (row['amount'] != null) 'amount=${row['amount']}',
+      if (row['total_amount'] != null) 'total=${row['total_amount']}',
+      if (row['net_amount'] != null) 'net=${row['net_amount']}',
+      if (row['station_id'] != null) 'station=${row['station_id']}',
+    ];
+    return parts.join(' | ');
+  }
+}
+
+class _OverviewDataset {
+  const _OverviewDataset({required this.title, required this.rows});
+
+  final String title;
+  final List<Map<String, dynamic>> rows;
 }
 
 class _UserManagementPanel extends StatefulWidget {
