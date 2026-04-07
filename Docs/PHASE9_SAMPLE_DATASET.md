@@ -59,6 +59,9 @@ The Phase 9 sample dataset should create operational data for acceptance testing
 - attendance
 - tankers, compartments, trips, trip expenses, deliveries, and fuel transfers
 - POS products and POS sales
+- correction and reversal flows
+- credit limit override flow
+- meter adjustment and meter segment checks
 - notifications
 - documents
 - report/export records
@@ -88,6 +91,7 @@ Minimum realistic shape for the current one-station `check` tenant:
 - at least 2 fuel purchases from suppliers
 - at least 2 normal station expenses
 - at least 1 internal fuel usage record
+- at least 1 meter adjustment / reset event
 - at least 2 credit customers
 - at least 2 suppliers
 - customer payments and supplier payments
@@ -97,6 +101,8 @@ Minimum realistic shape for the current one-station `check` tenant:
 - tanker compartments for both tankers
 - tanker trips with load, manual sale, expense, and leftover transfer
 - POS/shop sample if module is enabled
+- reversal examples for fuel sale, purchase, customer payment, supplier payment, and POS sale
+- credit limit override request/approval example
 - reports/documents/notifications sample records or verification checks
 
 Expected formulas must be stored alongside the sample data so the runner can fail loudly when anything changes unexpectedly.
@@ -140,6 +146,16 @@ The current automated runner now covers the first running-pump operations batch:
 - creates a completed report export job
 - renders financial documents for fuel sale, customer payment, supplier payment, customer ledger, and supplier ledger
 - verifies notification summary can be read after report export notification creation
+- requests and approves a customer payment reversal
+- requests and approves a fuel sale reversal
+- requests and approves a supplier payment reversal
+- requests and approves a purchase reversal
+- reverses a POS sale and verifies stock is restored
+- requests and approves a customer credit override
+- records a credit sale above the base limit using the approved override
+- records internal fuel usage and verifies it is readable
+- records a HeadOffice meter adjustment for the single-station tenant admin rule
+- verifies meter adjustment history and meter segments are readable
 - records multiple tank dips across all tanks
 - prints expected vs actual totals
 
@@ -151,6 +167,7 @@ Known current backend behavior recorded by the runner:
 - payroll runs currently calculate from payroll-enabled login users, not profile-only staff records
 - tanker workspace summary is cumulative for the station, so scenario checks validate newly created trips directly
 - supplier-to-customer tanker trip completion currently transfers all leftover fuel when a transfer tank is provided and still reports the leftover quantity
+- HeadOffice meter adjustment is allowed for the one-station tenant case because HeadOffice acts as station admin when there is no separate StationAdmin
 
 Command:
 
@@ -160,7 +177,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps
 
 ## Remaining Dataset Blocks
 
-The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, POS/shop, tankers, reports, documents, notifications, and tank dips at a first acceptance level.
+The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, POS/shop, tankers, reports, documents, notifications, corrections/reversals, credit override, internal fuel usage, meter adjustments, and tank dips at a first acceptance level.
 
 It still needs these blocks added.
 
@@ -253,7 +270,7 @@ Current automated coverage:
 Still to add:
 
 - cash customer sale if a named cash customer workflow is kept
-- credit limit override request/approve/reject if this remains in the product flow
+- credit limit override rejection path
 
 Expected formulas:
 
@@ -375,15 +392,56 @@ Current automated coverage:
 - POS product
 - POS sale
 - POS sale item
+- POS sale reversal
 
 Expected formulas:
 
 ```text
 pos_sale_total = sum(quantity * unit_price)
 product_stock_after_sale = stock_before - quantity_sold
+product_stock_after_reversal = stock_after_sale + quantity_sold
 ```
 
-### 10. Notifications, Documents, And Reports
+### 10. Corrections, Reversals, And Overrides
+
+Current automated coverage:
+
+- customer payment reversal request by Accountant
+- customer payment reversal approval by HeadOffice
+- fuel sale reversal request by Operator
+- fuel sale reversal approval by HeadOffice
+- supplier payment reversal request by Accountant
+- supplier payment reversal approval by HeadOffice
+- purchase reversal request by Manager
+- purchase reversal approval by HeadOffice
+- POS sale reversal by Manager
+- credit override request by Manager
+- credit override approval by HeadOffice
+- credit sale above base limit using approved override
+- internal fuel usage by Manager
+- HeadOffice meter adjustment for the single-station tenant admin case
+- meter adjustment history and meter segment readback
+
+Still to add:
+
+- rejection paths for reversal requests
+- rejection path for credit override requests
+- UI workflow for correction notes and approval messages
+
+Expected formulas:
+
+```text
+customer_balance_after_payment_reversal = balance_before_reversal + payment_amount
+customer_balance_after_sale_reversal = balance_before_reversal - sale_total
+supplier_balance_after_payment_reversal = balance_before_reversal + payment_amount
+supplier_balance_after_purchase_reversal = balance_before_reversal - purchase_total
+pos_stock_after_reversal = stock_after_sale + sold_quantity
+nozzle_meter_after_sale_reversal = sale_opening_meter
+nozzle_meter_after_adjustment = requested_new_meter
+tank_volume_after_internal_fuel = tank_volume_before - internal_fuel_quantity
+```
+
+### 11. Notifications, Documents, And Reports
 
 Current automated coverage:
 

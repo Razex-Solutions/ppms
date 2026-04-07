@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import is_master_admin, require_station_access
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -10,6 +10,7 @@ from app.models.fuel_type import FuelType
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle import Nozzle
 from app.models.nozzle_reading import NozzleReading
+from app.models.station import Station
 from app.models.tank import Tank
 from app.schemas.meter_adjustment_event import MeterAdjustmentEventResponse, MeterAdjustmentRequest
 from app.schemas.meter_segment import MeterSegmentResponse
@@ -19,6 +20,20 @@ from app.services.meter_segments import build_nozzle_meter_segments
 from app.services.nozzle_meter import adjust_nozzle_meter
 
 router = APIRouter(prefix="/nozzles", tags=["Nozzles"])
+
+
+def _require_nozzle_station_access(
+    db: Session,
+    current_user,
+    nozzle: Nozzle,
+    detail: str = "Not authorized for this nozzle",
+) -> None:
+    station_id = nozzle.dispenser.station_id
+    if is_head_office_user(current_user):
+        station = db.query(Station).filter(Station.id == station_id).first()
+        if station and station.organization_id == get_user_organization_id(current_user):
+            return
+    require_station_access(current_user, station_id, detail=detail)
 
 
 def _next_nozzle_index(db: Session, dispenser_id: int) -> int:
@@ -203,7 +218,7 @@ def adjust_meter_reading(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
-    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    _require_nozzle_station_access(db, current_user, nozzle, detail="Not authorized for this nozzle")
     return adjust_nozzle_meter(
         db,
         nozzle=nozzle,
@@ -226,7 +241,7 @@ def get_meter_adjustments(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
-    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    _require_nozzle_station_access(db, current_user, nozzle, detail="Not authorized for this nozzle")
     return (
         db.query(MeterAdjustmentEvent)
         .filter(MeterAdjustmentEvent.nozzle_id == nozzle_id)
@@ -248,5 +263,5 @@ def get_meter_segments(
     if not nozzle:
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
-    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    _require_nozzle_station_access(db, current_user, nozzle, detail="Not authorized for this nozzle")
     return build_nozzle_meter_segments(db, nozzle)

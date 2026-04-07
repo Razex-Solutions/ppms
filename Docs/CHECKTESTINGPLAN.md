@@ -117,12 +117,18 @@ What it does:
 - verifies payroll line totals and payroll run net total
 - creates POS/shop products and a POS sale
 - verifies POS stock reduction
+- reverses a POS sale and verifies stock restoration
 - creates tanker records with compartments
 - creates and completes tanker trips with delivery, expense, and leftover transfer
 - verifies scenario tanker loaded, delivered, and transferred quantities
 - verifies scoped reports, report definition, and report export
 - verifies financial documents for sale/payment/ledger contexts
 - verifies notification summary is readable
+- requests and approves reversals for fuel sale, purchase, customer payment, and supplier payment
+- requests and approves a credit limit override
+- records internal fuel usage
+- records a HeadOffice meter adjustment for the one-station tenant admin rule
+- verifies meter adjustment history and meter segments are readable
 - records multiple tank dips across all tanks
 - prints expected vs actual values as JSON
 
@@ -136,6 +142,7 @@ Important business rule captured by the runner:
 - payroll currently runs against payroll-enabled login users, not profile-only staff records
 - tanker workspace summaries are cumulative, so scenario-specific checks validate the new trips directly
 - tanker leftover transfer currently transfers all remaining fuel when a transfer tank is supplied
+- HeadOffice can perform meter adjustments for this one-station tenant because HeadOffice acts as station admin when there is no separate StationAdmin
 
 The runner should end with:
 

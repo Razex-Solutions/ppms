@@ -439,6 +439,19 @@
       }
     ]
   },
+  "corrections_and_reversals": {
+    "expected": [
+      "customer payment reversal request by Accountant and approval by HeadOffice",
+      "fuel sale reversal request by Operator and approval by HeadOffice",
+      "supplier payment reversal request by Accountant and approval by HeadOffice",
+      "purchase reversal request by Manager and approval by HeadOffice",
+      "POS sale reversal restores product stock",
+      "credit override request by Manager and approval by HeadOffice allows a sale above the base credit limit",
+      "internal fuel usage reduces tank stock",
+      "HeadOffice can adjust nozzle meter reading for the one-station tenant admin case",
+      "meter adjustment history and meter segments remain readable after correction"
+    ]
+  },
   "reports_documents_notifications": {
     "expected": [
       "daily closing report totals match shift sales and cash",

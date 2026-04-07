@@ -146,6 +146,7 @@ def ensure_station(db, organization: Organization) -> Station:
         station.has_shops = True
         station.has_pos = True
         station.has_tankers = True
+        station.allow_meter_adjustments = True
         station.is_active = True
         db.commit()
     return station
@@ -304,6 +305,7 @@ def main() -> None:
         set_station_module(db, station.id, "tanker_operations", True)
         set_station_module(db, station.id, "pos", True)
         set_station_module(db, station.id, "mart", True)
+        set_station_module(db, station.id, "meter_adjustments", True)
 
         ensure_user(
             db,

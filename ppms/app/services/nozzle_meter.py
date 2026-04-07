@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import is_master_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.permissions import require_permission
 from app.core.time import utc_now
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
@@ -32,14 +32,18 @@ def adjust_nozzle_meter(
     )
 
     station_id = nozzle.dispenser.station_id
-    if not is_master_admin(current_user) and current_user.station_id != station_id:
-        raise HTTPException(status_code=403, detail="Not authorized for this station")
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not is_master_admin(current_user):
+        if is_head_office_user(current_user):
+            if station is None or station.organization_id != get_user_organization_id(current_user):
+                raise HTTPException(status_code=403, detail="Not authorized for this station")
+        elif current_user.station_id != station_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
     require_station_module_enabled(db, station_id, MODULE_NAME)
 
     old_reading = nozzle.meter_reading or 0.0
     if new_reading == old_reading:
         raise HTTPException(status_code=400, detail="New meter reading must be different from the current reading")
-    station = db.query(Station).filter(Station.id == station_id).first()
     organization_id = station.organization_id if station else None
 
     adjustment = MeterAdjustmentEvent(
