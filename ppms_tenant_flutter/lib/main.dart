@@ -2639,8 +2639,8 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
   Map<String, dynamic>? _stationSetup;
   List<Map<String, dynamic>> _rows = const [];
   List<Map<String, dynamic>> _suppliers = const [];
-  Map<String, dynamic>? _selectedTank;
-  Map<String, dynamic>? _selectedSupplier;
+  int? _selectedTankId;
+  int? _selectedSupplierId;
   bool _isLoading = true;
   bool _isSaving = false;
   String? _message;
@@ -2691,10 +2691,12 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
         _stationSetup = stationSetup;
         _rows = rows;
         _suppliers = suppliers;
-        _selectedTank ??= tanks.isEmpty
+        _selectedTankId ??= tanks.isEmpty
             ? null
-            : Map<String, dynamic>.from(tanks.first as Map);
-        _selectedSupplier ??= suppliers.isEmpty ? null : suppliers.first;
+            : (tanks.first as Map)['id'] as int?;
+        _selectedSupplierId ??= suppliers.isEmpty
+            ? null
+            : suppliers.first['id'] as int?;
       });
     } on TenantApiException catch (error) {
       setState(() => _error = error.message);
@@ -2728,7 +2730,7 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
           );
           _message = 'Created expense.';
         case 'inventory_dips':
-          final tank = _selectedTank;
+          final tank = _selectedTank(_currentTanks());
           if (tank == null) throw TenantApiException('Choose a tank first.');
           await widget.sessionController.createTankDip(
             tankId: tank['id'] as int,
@@ -2740,8 +2742,8 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
           _message = 'Recorded tank dip.';
         case 'purchases':
           await _ensureSupplier();
-          final tank = _selectedTank;
-          final supplier = _selectedSupplier;
+          final tank = _selectedTank(_currentTanks());
+          final supplier = _selectedSupplier();
           if (tank == null) throw TenantApiException('Choose a tank first.');
           if (supplier == null) {
             throw TenantApiException('Choose or create a supplier first.');
@@ -2769,13 +2771,13 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
   }
 
   Future<void> _ensureSupplier() async {
-    if (_selectedSupplier != null) return;
+    if (_selectedSupplierId != null) return;
     final code = 'PHASE9-${DateTime.now().millisecondsSinceEpoch}';
     final supplier = await widget.sessionController.createSupplier(
       name: 'Phase 9 Test Supplier',
       code: code,
     );
-    _selectedSupplier = supplier;
+    _selectedSupplierId = supplier['id'] as int?;
   }
 
   @override
@@ -2898,8 +2900,8 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
   Widget _tankDropdown(List<Map<String, dynamic>> tanks) {
     return SizedBox(
       width: 260,
-      child: DropdownButtonFormField<Map<String, dynamic>>(
-        initialValue: _selectedTank,
+      child: DropdownButtonFormField<int>(
+        initialValue: _selectedTankId,
         decoration: const InputDecoration(
           labelText: 'Tank',
           border: OutlineInputBorder(),
@@ -2907,11 +2909,11 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
         items: [
           for (final tank in tanks)
             DropdownMenuItem(
-              value: tank,
+              value: tank['id'] as int?,
               child: Text('${tank['name']} (${tank['code']})'),
             ),
         ],
-        onChanged: (tank) => setState(() => _selectedTank = tank),
+        onChanged: (tankId) => setState(() => _selectedTankId = tankId),
       ),
     );
   }
@@ -2919,8 +2921,8 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
   Widget _supplierDropdown() {
     return SizedBox(
       width: 260,
-      child: DropdownButtonFormField<Map<String, dynamic>>(
-        initialValue: _selectedSupplier,
+      child: DropdownButtonFormField<int>(
+        initialValue: _selectedSupplierId,
         decoration: const InputDecoration(
           labelText: 'Supplier',
           helperText: 'Auto-creates test supplier if empty',
@@ -2929,13 +2931,37 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
         items: [
           for (final supplier in _suppliers)
             DropdownMenuItem(
-              value: supplier,
+              value: supplier['id'] as int?,
               child: Text('${supplier['name']} (${supplier['code']})'),
             ),
         ],
-        onChanged: (supplier) => setState(() => _selectedSupplier = supplier),
+        onChanged: (supplierId) {
+          setState(() => _selectedSupplierId = supplierId);
+        },
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _currentTanks() {
+    final stationSetup = _stationSetup ?? const <String, dynamic>{};
+    return [
+      for (final tank in _list(stationSetup['tanks']))
+        Map<String, dynamic>.from(tank as Map),
+    ];
+  }
+
+  Map<String, dynamic>? _selectedTank(List<Map<String, dynamic>> tanks) {
+    for (final tank in tanks) {
+      if (tank['id'] == _selectedTankId) return tank;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _selectedSupplier() {
+    for (final supplier in _suppliers) {
+      if (supplier['id'] == _selectedSupplierId) return supplier;
+    }
+    return null;
   }
 
   String _buttonLabel() => switch (widget.workspaceId) {
