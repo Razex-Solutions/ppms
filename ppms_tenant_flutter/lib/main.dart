@@ -149,6 +149,58 @@ class TenantApiClient {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> roles({
+    required String baseUrl,
+    required String accessToken,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/roles/',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> users({
+    required String baseUrl,
+    required String accessToken,
+    int? organizationId,
+    int? stationId,
+  }) async {
+    final query = <String>[
+      if (organizationId != null) 'organization_id=$organizationId',
+      if (stationId != null) 'station_id=$stationId',
+    ].join('&');
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: query.isEmpty ? '/users/' : '/users/?$query',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createUser({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) async {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/users/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -672,6 +724,7 @@ class TenantSessionController extends ChangeNotifier {
   String get username => _currentUser?['username'] as String? ?? '-';
   int? get organizationId => _currentUser?['organization_id'] as int?;
   int? get stationId => _currentUser?['station_id'] as int?;
+  int? get workingStationId => workingStation?['id'] as int?;
   Map<String, dynamic>? get workingStation {
     if (_stations.isEmpty) return null;
     if (stationId != null) {
@@ -696,6 +749,58 @@ class TenantSessionController extends ChangeNotifier {
 
   List<String> get creatableRoles =>
       List<String>.from(_currentUser?['creatable_roles'] as List? ?? const []);
+
+  Future<List<Map<String, dynamic>>> loadRoles() async {
+    return _apiClient.roles(baseUrl: _baseUrl, accessToken: _accessToken());
+  }
+
+  Future<List<Map<String, dynamic>>> loadUsers() async {
+    return _apiClient.users(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      organizationId: organizationId,
+    );
+  }
+
+  Future<void> createWorkerUser({
+    required String fullName,
+    required String username,
+    required String password,
+    required Map<String, dynamic> role,
+    required double monthlySalary,
+    required bool payrollEnabled,
+  }) async {
+    final roleId = role['id'] as int?;
+    if (roleId == null) {
+      throw TenantApiException('Selected role is missing an ID.');
+    }
+    if (organizationId == null) {
+      throw TenantApiException(
+        'No organization is available for this session.',
+      );
+    }
+    if (workingStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    await _apiClient.createUser(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {
+        'full_name': fullName,
+        'username': username,
+        'password': password,
+        'role_id': roleId,
+        'organization_id': organizationId,
+        'station_id': workingStationId,
+        'scope_level': 'station',
+        'is_platform_user': false,
+        'monthly_salary': monthlySalary,
+        'payroll_enabled': payrollEnabled,
+      },
+    );
+  }
 
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
@@ -798,6 +903,14 @@ class TenantSessionController extends ChangeNotifier {
     _isBusy = true;
     _errorMessage = null;
     notifyListeners();
+  }
+
+  String _accessToken() {
+    final accessToken = _tokens?['access_token'] as String?;
+    if (accessToken == null) {
+      throw TenantApiException('No access token is available.');
+    }
+    return accessToken;
   }
 }
 
@@ -1173,6 +1286,8 @@ class _WorkspaceDetail extends StatelessWidget {
                 ? 'No role-creation capabilities returned for this session.'
                 : sessionController.creatableRoles.join(', '),
           ),
+          const SizedBox(height: 12),
+          _UserManagementPanel(sessionController: sessionController),
         ],
         const SizedBox(height: 12),
         const _SectionCard(
@@ -1181,6 +1296,291 @@ class _WorkspaceDetail extends StatelessWidget {
               'This screen must only use the logged-in tenant organization and station. MasterAdmin and other organizations stay out of this app.',
         ),
       ],
+    );
+  }
+}
+
+class _UserManagementPanel extends StatefulWidget {
+  const _UserManagementPanel({required this.sessionController});
+
+  final TenantSessionController sessionController;
+
+  @override
+  State<_UserManagementPanel> createState() => _UserManagementPanelState();
+}
+
+class _UserManagementPanelState extends State<_UserManagementPanel> {
+  final _fullNameController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController(text: 'worker123');
+  final _salaryController = TextEditingController(text: '0');
+
+  List<Map<String, dynamic>> _roles = const [];
+  List<Map<String, dynamic>> _users = const [];
+  Map<String, dynamic>? _selectedRole;
+  bool _payrollEnabled = true;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _salaryController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final roles = await widget.sessionController.loadRoles();
+      final users = await widget.sessionController.loadUsers();
+      final allowedRoleNames = widget.sessionController.creatableRoles.toSet();
+      final workerRoles = roles.where((role) {
+        final roleName = role['name'] as String? ?? '';
+        return allowedRoleNames.contains(roleName) &&
+            roleName != 'StationAdmin';
+      }).toList();
+      setState(() {
+        _roles = workerRoles;
+        _users = users;
+        _selectedRole = _selectedRole == null
+            ? (workerRoles.isEmpty ? null : workerRoles.first)
+            : workerRoles.firstWhere(
+                (role) => role['id'] == _selectedRole?['id'],
+                orElse: () => workerRoles.isEmpty ? {} : workerRoles.first,
+              );
+        if (_selectedRole?.isEmpty ?? false) {
+          _selectedRole = null;
+        }
+      });
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not load users: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _createWorker() async {
+    final selectedRole = _selectedRole;
+    final salary = double.tryParse(_salaryController.text.trim()) ?? 0;
+    if (selectedRole == null) {
+      setState(() => _error = 'Choose a worker role first.');
+      return;
+    }
+    if (_fullNameController.text.trim().isEmpty ||
+        _usernameController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty) {
+      setState(
+        () => _error = 'Full name, username, and password are required.',
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await widget.sessionController.createWorkerUser(
+        fullName: _fullNameController.text.trim(),
+        username: _usernameController.text.trim(),
+        password: _passwordController.text.trim(),
+        role: selectedRole,
+        monthlySalary: salary,
+        payrollEnabled: _payrollEnabled,
+      );
+      _fullNameController.clear();
+      _usernameController.clear();
+      _passwordController.text = 'worker123';
+      _salaryController.text = '0';
+      await _load();
+      setState(() {
+        _message =
+            'Created ${selectedRole['name']} for ${widget.sessionController.workingStationLabel}.';
+      });
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not create worker: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: LinearProgressIndicator(),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Create Worker Login',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Single-station tenant rule: HeadOffice acts as station admin, so StationAdmin is hidden. New workers will be assigned to ${widget.sessionController.workingStationLabel}.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(
+                  width: 260,
+                  child: TextField(
+                    controller: _fullNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Full name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: TextField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Username',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: TextField(
+                    controller: _passwordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
+                    obscureText: true,
+                  ),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<Map<String, dynamic>>(
+                    initialValue: _selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'Role',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final role in _roles)
+                        DropdownMenuItem(
+                          value: role,
+                          child: Text(role['name'] as String? ?? 'Role'),
+                        ),
+                    ],
+                    onChanged: (role) => setState(() => _selectedRole = role),
+                  ),
+                ),
+                SizedBox(
+                  width: 160,
+                  child: TextField(
+                    controller: _salaryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Monthly salary',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                SizedBox(
+                  width: 220,
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Payroll enabled'),
+                    value: _payrollEnabled,
+                    onChanged: (value) {
+                      setState(() => _payrollEnabled = value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _isSaving ? null : _createWorker,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.person_add_alt_outlined),
+              label: Text(_isSaving ? 'Creating...' : 'Create Worker'),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 24),
+            Text(
+              'Tenant Users',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            if (_users.isEmpty)
+              const Text('No users found for this tenant.')
+            else
+              for (final user in _users)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.person_outline),
+                  title: Text(user['full_name'] as String? ?? '-'),
+                  subtitle: Text(
+                    '${user['username']} - role ${user['role_id']} - scope ${user['scope_level']} - station ${user['station_id'] ?? 'org'}',
+                  ),
+                  trailing: (user['is_active'] as bool? ?? false)
+                      ? const Chip(label: Text('Active'))
+                      : const Chip(label: Text('Inactive')),
+                ),
+          ],
+        ),
+      ),
     );
   }
 }
