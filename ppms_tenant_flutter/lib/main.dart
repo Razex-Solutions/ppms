@@ -201,6 +201,34 @@ class TenantApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> updateUser({
+    required String baseUrl,
+    required String accessToken,
+    required int userId,
+    required Map<String, dynamic> body,
+  }) async {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'PUT',
+      path: '/users/$userId',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<void> deleteUser({
+    required String baseUrl,
+    required String accessToken,
+    required int userId,
+  }) async {
+    await _send(
+      baseUrl: baseUrl,
+      method: 'DELETE',
+      path: '/users/$userId',
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -221,6 +249,12 @@ class TenantApiClient {
         headers: headers,
         body: body == null ? null : jsonEncode(body),
       ),
+      'PUT' => await _httpClient.put(
+        uri,
+        headers: headers,
+        body: body == null ? null : jsonEncode(body),
+      ),
+      'DELETE' => await _httpClient.delete(uri, headers: headers),
       _ => throw TenantApiException('Unsupported API method $method'),
     };
 
@@ -722,6 +756,7 @@ class TenantSessionController extends ChangeNotifier {
   String get roleName => _currentUser?['role_name'] as String? ?? 'Unknown';
   String get scopeLevel => _currentUser?['scope_level'] as String? ?? 'unknown';
   String get username => _currentUser?['username'] as String? ?? '-';
+  int? get currentUserId => _currentUser?['id'] as int?;
   int? get organizationId => _currentUser?['organization_id'] as int?;
   int? get stationId => _currentUser?['station_id'] as int?;
   int? get workingStationId => workingStation?['id'] as int?;
@@ -799,6 +834,59 @@ class TenantSessionController extends ChangeNotifier {
         'monthly_salary': monthlySalary,
         'payroll_enabled': payrollEnabled,
       },
+    );
+  }
+
+  Future<void> updateWorkerUser({
+    required int userId,
+    required String fullName,
+    required Map<String, dynamic> role,
+    required double monthlySalary,
+    required bool payrollEnabled,
+    required bool isActive,
+  }) async {
+    final roleId = role['id'] as int?;
+    if (roleId == null) {
+      throw TenantApiException('Selected role is missing an ID.');
+    }
+    if (organizationId == null) {
+      throw TenantApiException(
+        'No organization is available for this session.',
+      );
+    }
+    if (workingStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    await _apiClient.updateUser(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      userId: userId,
+      body: {
+        'full_name': fullName,
+        'role_id': roleId,
+        'organization_id': organizationId,
+        'station_id': workingStationId,
+        'scope_level': 'station',
+        'is_platform_user': false,
+        'monthly_salary': monthlySalary,
+        'payroll_enabled': payrollEnabled,
+        'is_active': isActive,
+      },
+    );
+  }
+
+  Future<void> deleteWorkerUser(int userId) async {
+    if (userId == currentUserId) {
+      throw TenantApiException(
+        'You cannot delete your own active user account.',
+      );
+    }
+    await _apiClient.deleteUser(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      userId: userId,
     );
   }
 
@@ -1319,8 +1407,10 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
   List<Map<String, dynamic>> _users = const [];
   Map<String, dynamic>? _selectedRole;
   bool _payrollEnabled = true;
+  bool _isActive = true;
   bool _isLoading = true;
   bool _isSaving = false;
+  Map<String, dynamic>? _editingUser;
   String? _message;
   String? _error;
 
@@ -1428,6 +1518,148 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
     }
   }
 
+  Future<void> _saveWorker() async {
+    if (_editingUser == null) {
+      await _createWorker();
+      return;
+    }
+    final selectedRole = _selectedRole;
+    final userId = _editingUser?['id'] as int?;
+    final salary = double.tryParse(_salaryController.text.trim()) ?? 0;
+    if (userId == null || selectedRole == null) {
+      setState(() => _error = 'Choose a worker user and role first.');
+      return;
+    }
+    if (_fullNameController.text.trim().isEmpty) {
+      setState(() => _error = 'Full name is required.');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await widget.sessionController.updateWorkerUser(
+        userId: userId,
+        fullName: _fullNameController.text.trim(),
+        role: selectedRole,
+        monthlySalary: salary,
+        payrollEnabled: _payrollEnabled,
+        isActive: _isActive,
+      );
+      _clearForm();
+      await _load();
+      setState(() {
+        _message = 'Updated worker user.';
+      });
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not update worker: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _deleteWorker(Map<String, dynamic> user) async {
+    final userId = user['id'] as int?;
+    if (userId == null) {
+      setState(() => _error = 'Selected user is missing an ID.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete worker?'),
+        content: Text(
+          'Delete ${user['username']}? This should only be used for test users or accounts with no operational history.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await widget.sessionController.deleteWorkerUser(userId);
+      if (_editingUser?['id'] == userId) {
+        _clearForm();
+      }
+      await _load();
+      setState(() => _message = 'Deleted worker user.');
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not delete worker: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  void _editWorker(Map<String, dynamic> user) {
+    final role = _roles.firstWhere(
+      (role) => role['id'] == user['role_id'],
+      orElse: () => _roles.isEmpty ? {} : _roles.first,
+    );
+    if (role.isEmpty) {
+      setState(() => _error = 'This user role is not editable from this flow.');
+      return;
+    }
+    setState(() {
+      _editingUser = user;
+      _selectedRole = role;
+      _fullNameController.text = user['full_name'] as String? ?? '';
+      _usernameController.text = user['username'] as String? ?? '';
+      _passwordController.clear();
+      _salaryController.text = (user['monthly_salary'] ?? 0).toString();
+      _payrollEnabled = user['payroll_enabled'] as bool? ?? true;
+      _isActive = user['is_active'] as bool? ?? true;
+      _error = null;
+      _message = null;
+    });
+  }
+
+  void _clearForm() {
+    setState(() {
+      _editingUser = null;
+      _fullNameController.clear();
+      _usernameController.clear();
+      _passwordController.text = 'worker123';
+      _salaryController.text = '0';
+      _payrollEnabled = true;
+      _isActive = true;
+      _selectedRole = _roles.isEmpty ? null : _roles.first;
+    });
+  }
+
+  String _roleNameFor(Map<String, dynamic> user) {
+    final roleId = user['role_id'];
+    final role = _roles.firstWhere(
+      (role) => role['id'] == roleId,
+      orElse: () => const <String, dynamic>{},
+    );
+    return role['name'] as String? ?? 'Role $roleId';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1446,7 +1678,9 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Create Worker Login',
+              _editingUser == null
+                  ? 'Create Worker Login'
+                  : 'Edit Worker Login',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
@@ -1472,6 +1706,7 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
                   width: 220,
                   child: TextField(
                     controller: _usernameController,
+                    enabled: _editingUser == null,
                     decoration: const InputDecoration(
                       labelText: 'Username',
                       border: OutlineInputBorder(),
@@ -1482,6 +1717,7 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
                   width: 220,
                   child: TextField(
                     controller: _passwordController,
+                    enabled: _editingUser == null,
                     decoration: const InputDecoration(
                       labelText: 'Password',
                       border: OutlineInputBorder(),
@@ -1529,19 +1765,52 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
                     },
                   ),
                 ),
+                SizedBox(
+                  width: 160,
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Active'),
+                    value: _isActive,
+                    onChanged: (value) {
+                      setState(() => _isActive = value);
+                    },
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _isSaving ? null : _createWorker,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person_add_alt_outlined),
-              label: Text(_isSaving ? 'Creating...' : 'Create Worker'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: _isSaving ? null : _saveWorker,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _editingUser == null
+                              ? Icons.person_add_alt_outlined
+                              : Icons.save_outlined,
+                        ),
+                  label: Text(
+                    _isSaving
+                        ? 'Saving...'
+                        : (_editingUser == null
+                              ? 'Create Worker'
+                              : 'Update Worker'),
+                  ),
+                ),
+                if (_editingUser != null)
+                  OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _clearForm,
+                    icon: const Icon(Icons.close_outlined),
+                    label: const Text('Cancel Edit'),
+                  ),
+              ],
             ),
             if (_message != null) ...[
               const SizedBox(height: 12),
@@ -1572,11 +1841,26 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
                   leading: const Icon(Icons.person_outline),
                   title: Text(user['full_name'] as String? ?? '-'),
                   subtitle: Text(
-                    '${user['username']} - role ${user['role_id']} - scope ${user['scope_level']} - station ${user['station_id'] ?? 'org'}',
+                    '${user['username']} - ${_roleNameFor(user)} - scope ${user['scope_level']} - station ${user['station_id'] ?? 'org'}',
                   ),
-                  trailing: (user['is_active'] as bool? ?? false)
-                      ? const Chip(label: Text('Active'))
-                      : const Chip(label: Text('Inactive')),
+                  trailing: Wrap(
+                    spacing: 8,
+                    children: [
+                      (user['is_active'] as bool? ?? false)
+                          ? const Chip(label: Text('Active'))
+                          : const Chip(label: Text('Inactive')),
+                      IconButton(
+                        tooltip: 'Edit worker',
+                        onPressed: _isSaving ? null : () => _editWorker(user),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete worker',
+                        onPressed: _isSaving ? null : () => _deleteWorker(user),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
                 ),
           ],
         ),
