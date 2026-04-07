@@ -129,6 +129,11 @@ What it does:
 - records internal fuel usage
 - records a HeadOffice meter adjustment for the one-station tenant admin rule
 - verifies meter adjustment history and meter segments are readable
+- prepares a multi-station tenant with two StationAdmin users
+- proves StationAdmin is only needed/used in multi-station tenant testing
+- proves StationAdmin cannot read another assigned station or its users
+- prepares a minimal-module tenant
+- proves POS, mart, tanker, hardware, and meter adjustment modules can be disabled
 - records multiple tank dips across all tanks
 - prints expected vs actual values as JSON
 
@@ -143,6 +148,8 @@ Important business rule captured by the runner:
 - tanker workspace summaries are cumulative, so scenario-specific checks validate the new trips directly
 - tanker leftover transfer currently transfers all remaining fuel when a transfer tank is supplied
 - HeadOffice can perform meter adjustments for this one-station tenant because HeadOffice acts as station admin when there is no separate StationAdmin
+- multi-station tenants use separate StationAdmin users per station
+- minimal-module tenants should hide disabled optional workspaces in the Flutter rebuild
 
 The runner should end with:
 

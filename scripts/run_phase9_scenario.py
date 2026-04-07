@@ -99,6 +99,29 @@ def check(name: str, actual: Any, expected: Any, *, approximate: bool = False) -
     }
 
 
+def expect_http_error(
+    name: str,
+    fn,
+    expected_status: int,
+) -> dict[str, Any]:
+    try:
+        fn()
+    except RuntimeError as exc:
+        passed = f"failed with {expected_status}:" in str(exc)
+        return {
+            "name": name,
+            "passed": passed,
+            "expected": expected_status,
+            "actual": str(exc),
+        }
+    return {
+        "name": name,
+        "passed": False,
+        "expected": expected_status,
+        "actual": "request succeeded",
+    }
+
+
 def load_manifest() -> dict[str, Any]:
     return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
@@ -1068,6 +1091,63 @@ def create_corrections_flow(
     }
 
 
+def create_scope_and_module_flow(*, anonymous: ApiClient) -> dict[str, Any]:
+    multi_head_office = anonymous.login("p9_multi", "office123")
+    station_a_admin = anonymous.login("p9_multi_station_a_admin", "station123")
+    station_b_admin = anonymous.login("p9_multi_station_b_admin", "station123")
+    minimal_head_office = anonymous.login("p9_minimal", "office123")
+
+    multi_orgs = multi_head_office.get("/organizations/")
+    multi_org = multi_orgs[0]
+    multi_stations_for_head_office = multi_head_office.get(
+        "/stations/",
+        query={"organization_id": multi_org["id"]},
+    )
+    multi_stations_for_station_a = station_a_admin.get("/stations/")
+    station_a = next(item for item in multi_stations_for_head_office if item["code"] == "PHASE9-MULTI-A")
+    station_b = next(item for item in multi_stations_for_head_office if item["code"] == "PHASE9-MULTI-B")
+    station_a_modules = multi_head_office.get(f"/station-modules/{station_a['id']}")
+    station_b_modules = multi_head_office.get(f"/station-modules/{station_b['id']}")
+
+    minimal_orgs = minimal_head_office.get("/organizations/")
+    minimal_org = minimal_orgs[0]
+    minimal_stations = minimal_head_office.get("/stations/", query={"organization_id": minimal_org["id"]})
+    minimal_station = minimal_stations[0]
+    minimal_modules = minimal_head_office.get(f"/station-modules/{minimal_station['id']}")
+
+    leakage_checks = [
+        expect_http_error(
+            "StationAdmin A cannot read Station B",
+            lambda: station_a_admin.get(f"/stations/{station_b['id']}"),
+            403,
+        ),
+        expect_http_error(
+            "StationAdmin A cannot list users for Station B",
+            lambda: station_a_admin.get("/users/", query={"station_id": station_b["id"]}),
+            403,
+        ),
+        expect_http_error(
+            "StationAdmin B cannot read Station A",
+            lambda: station_b_admin.get(f"/stations/{station_a['id']}"),
+            403,
+        ),
+    ]
+
+    return {
+        "multi_org": multi_org,
+        "multi_stations_for_head_office": multi_stations_for_head_office,
+        "multi_stations_for_station_a": multi_stations_for_station_a,
+        "station_a": station_a,
+        "station_b": station_b,
+        "station_a_modules": station_a_modules,
+        "station_b_modules": station_b_modules,
+        "minimal_org": minimal_org,
+        "minimal_station": minimal_station,
+        "minimal_modules": minimal_modules,
+        "leakage_checks": leakage_checks,
+    }
+
+
 def main() -> int:
     print("Preparing Phase 9 tenant...")
     os.environ["PPMS_RESET_PHASE9_FORECOURT"] = "1"
@@ -1213,6 +1293,7 @@ def main() -> int:
         operator_user=operator_users[0],
         station_id=station_id,
     )
+    scope_and_module_flow = create_scope_and_module_flow(anonymous=anonymous)
     setup_after_sales_and_approved_purchases = manager.get(f"/stations/{station_id}/setup-foundation")
     tanks_after_sales_and_approved_purchases_by_id = {
         int(tank["id"]): float(tank["current_volume"])
@@ -1648,6 +1729,46 @@ def main() -> int:
             ),
         ]
     )
+    station_a_modules = {
+        item["module_name"]: bool(item["is_enabled"])
+        for item in scope_and_module_flow["station_a_modules"]
+    }
+    station_b_modules = {
+        item["module_name"]: bool(item["is_enabled"])
+        for item in scope_and_module_flow["station_b_modules"]
+    }
+    minimal_modules = {
+        item["module_name"]: bool(item["is_enabled"])
+        for item in scope_and_module_flow["minimal_modules"]
+    }
+    checks.extend(
+        [
+            check(
+                "multi-station HeadOffice sees both stations",
+                len(scope_and_module_flow["multi_stations_for_head_office"]),
+                2,
+            ),
+            check(
+                "multi-station StationAdmin A sees only own station",
+                [item["code"] for item in scope_and_module_flow["multi_stations_for_station_a"]],
+                ["PHASE9-MULTI-A"],
+            ),
+            check(
+                "multi-station StationAdmin role appears only in multi-station dataset",
+                scope_and_module_flow["station_a"]["code"],
+                "PHASE9-MULTI-A",
+            ),
+            check("multi station A tanker enabled", station_a_modules.get("tanker_operations"), True),
+            check("multi station B tanker disabled", station_b_modules.get("tanker_operations"), False),
+            check("minimal tenant remains one station", scope_and_module_flow["minimal_org"]["station_target_count"], 1),
+            check("minimal tenant POS disabled", minimal_modules.get("pos"), False),
+            check("minimal tenant mart disabled", minimal_modules.get("mart"), False),
+            check("minimal tenant tanker disabled", minimal_modules.get("tanker_operations"), False),
+            check("minimal tenant hardware disabled", minimal_modules.get("hardware"), False),
+            check("minimal tenant meter adjustments disabled", minimal_modules.get("meter_adjustments"), False),
+        ]
+    )
+    checks.extend(scope_and_module_flow["leakage_checks"])
 
     expected_loss_gains = [
         reading["expected_loss_gain"]
@@ -1756,6 +1877,14 @@ def main() -> int:
                 "credit_override_customer_id": corrections_flow["override_customer"]["id"],
                 "internal_fuel_usage_id": corrections_flow["internal_usage"]["id"],
                 "meter_adjustment_id": corrections_flow["meter_adjustment"]["id"],
+            },
+            "scope_module_dataset": {
+                "multi_org_id": scope_and_module_flow["multi_org"]["id"],
+                "multi_station_ids": [
+                    item["id"] for item in scope_and_module_flow["multi_stations_for_head_office"]
+                ],
+                "minimal_org_id": scope_and_module_flow["minimal_org"]["id"],
+                "minimal_station_id": scope_and_module_flow["minimal_station"]["id"],
             },
         },
         "totals": {

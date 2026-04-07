@@ -108,6 +108,57 @@ def ensure_organization(db, brand: BrandCatalog) -> Organization:
     return organization
 
 
+def ensure_named_organization(
+    db,
+    *,
+    name: str,
+    code: str,
+    description: str,
+    station_target_count: int,
+    brand: BrandCatalog,
+) -> Organization:
+    organization = (
+        db.query(Organization)
+        .filter((Organization.code == code) | (Organization.name == name))
+        .order_by(Organization.id.desc())
+        .first()
+    )
+    if not organization:
+        organization = Organization(
+            name=name,
+            code=code,
+            description=description,
+            legal_name=name,
+            brand_catalog_id=brand.id,
+            brand_name=brand.name,
+            brand_code=brand.code,
+            logo_url=brand.logo_url,
+            onboarding_status="active",
+            billing_status="local",
+            station_target_count=station_target_count,
+            inherit_branding_to_stations=True,
+            is_active=True,
+        )
+        db.add(organization)
+    else:
+        organization.name = name
+        organization.code = code
+        organization.description = description
+        organization.legal_name = organization.legal_name or name
+        organization.brand_catalog_id = brand.id
+        organization.brand_name = brand.name
+        organization.brand_code = brand.code
+        organization.logo_url = organization.logo_url or brand.logo_url
+        organization.onboarding_status = "active"
+        organization.billing_status = organization.billing_status or "local"
+        organization.station_target_count = station_target_count
+        organization.inherit_branding_to_stations = True
+        organization.is_active = True
+    db.commit()
+    db.refresh(organization)
+    return organization
+
+
 def ensure_station(db, organization: Organization) -> Station:
     station = (
         db.query(Station)
@@ -149,6 +200,56 @@ def ensure_station(db, organization: Organization) -> Station:
         station.allow_meter_adjustments = True
         station.is_active = True
         db.commit()
+    return station
+
+
+def ensure_named_station(
+    db,
+    *,
+    organization: Organization,
+    name: str,
+    code: str,
+    is_head_office: bool,
+    has_pos: bool,
+    has_tankers: bool,
+    has_hardware: bool,
+    allow_meter_adjustments: bool,
+) -> Station:
+    station = db.query(Station).filter(Station.code == code).first()
+    if not station:
+        station = Station(
+            name=name,
+            code=code,
+            address=f"{name} Phase 9 local test station",
+            city="Local",
+            organization_id=organization.id,
+            is_head_office=is_head_office,
+            display_name=name,
+            use_organization_branding=True,
+            setup_status="active",
+            has_shops=has_pos,
+            has_pos=has_pos,
+            has_tankers=has_tankers,
+            has_hardware=has_hardware,
+            allow_meter_adjustments=allow_meter_adjustments,
+            is_active=True,
+        )
+        db.add(station)
+    else:
+        station.name = name
+        station.display_name = name
+        station.organization_id = organization.id
+        station.is_head_office = is_head_office
+        station.use_organization_branding = True
+        station.setup_status = "active"
+        station.has_shops = has_pos
+        station.has_pos = has_pos
+        station.has_tankers = has_tankers
+        station.has_hardware = has_hardware
+        station.allow_meter_adjustments = allow_meter_adjustments
+        station.is_active = True
+    db.commit()
+    db.refresh(station)
     return station
 
 
@@ -194,6 +295,23 @@ def ensure_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+def configure_station_modules(
+    db,
+    station: Station,
+    *,
+    pos: bool,
+    mart: bool,
+    tankers: bool,
+    hardware: bool,
+    meter_adjustments: bool,
+) -> None:
+    set_station_module(db, station.id, "pos", pos)
+    set_station_module(db, station.id, "mart", mart)
+    set_station_module(db, station.id, "tanker_operations", tankers)
+    set_station_module(db, station.id, "hardware", hardware)
+    set_station_module(db, station.id, "meter_adjustments", meter_adjustments)
 
 
 def ensure_forecourt(db, station: Station) -> None:
@@ -293,19 +411,156 @@ def ensure_invoice_profile(db, station: Station) -> None:
     db.commit()
 
 
+def ensure_scope_test_tenants(db, brand: BrandCatalog, roles: dict[str, Role]) -> dict[str, object]:
+    multi_org = ensure_named_organization(
+        db,
+        name="phase9_multi",
+        code="PHASE9-MULTI",
+        description="Phase 9 multi-station tenant",
+        station_target_count=2,
+        brand=brand,
+    )
+    multi_station_a = ensure_named_station(
+        db,
+        organization=multi_org,
+        name="phase9_multi_station_a",
+        code="PHASE9-MULTI-A",
+        is_head_office=True,
+        has_pos=True,
+        has_tankers=True,
+        has_hardware=False,
+        allow_meter_adjustments=True,
+    )
+    multi_station_b = ensure_named_station(
+        db,
+        organization=multi_org,
+        name="phase9_multi_station_b",
+        code="PHASE9-MULTI-B",
+        is_head_office=False,
+        has_pos=True,
+        has_tankers=False,
+        has_hardware=False,
+        allow_meter_adjustments=True,
+    )
+    configure_station_modules(
+        db,
+        multi_station_a,
+        pos=True,
+        mart=True,
+        tankers=True,
+        hardware=False,
+        meter_adjustments=True,
+    )
+    configure_station_modules(
+        db,
+        multi_station_b,
+        pos=True,
+        mart=True,
+        tankers=False,
+        hardware=False,
+        meter_adjustments=True,
+    )
+    ensure_user(
+        db,
+        username="p9_multi",
+        password="office123",
+        full_name="Phase 9 Multi HeadOffice",
+        email="p9.multi@example.com",
+        role=roles["HeadOffice"],
+        organization=multi_org,
+        station=None,
+        scope_level="organization",
+    )
+    ensure_user(
+        db,
+        username="p9_multi_station_a_admin",
+        password="station123",
+        full_name="Phase 9 Multi Station A Admin",
+        email="p9.multi.a.admin@example.com",
+        role=roles["StationAdmin"],
+        organization=multi_org,
+        station=multi_station_a,
+        scope_level="station",
+    )
+    ensure_user(
+        db,
+        username="p9_multi_station_b_admin",
+        password="station123",
+        full_name="Phase 9 Multi Station B Admin",
+        email="p9.multi.b.admin@example.com",
+        role=roles["StationAdmin"],
+        organization=multi_org,
+        station=multi_station_b,
+        scope_level="station",
+    )
+
+    minimal_org = ensure_named_organization(
+        db,
+        name="phase9_minimal",
+        code="PHASE9-MINIMAL",
+        description="Phase 9 minimal-module tenant",
+        station_target_count=1,
+        brand=brand,
+    )
+    minimal_station = ensure_named_station(
+        db,
+        organization=minimal_org,
+        name="phase9_minimal_station",
+        code="PHASE9-MINIMAL-A",
+        is_head_office=True,
+        has_pos=False,
+        has_tankers=False,
+        has_hardware=False,
+        allow_meter_adjustments=False,
+    )
+    configure_station_modules(
+        db,
+        minimal_station,
+        pos=False,
+        mart=False,
+        tankers=False,
+        hardware=False,
+        meter_adjustments=False,
+    )
+    ensure_user(
+        db,
+        username="p9_minimal",
+        password="office123",
+        full_name="Phase 9 Minimal HeadOffice",
+        email="p9.minimal@example.com",
+        role=roles["HeadOffice"],
+        organization=minimal_org,
+        station=None,
+        scope_level="organization",
+    )
+    return {
+        "multi_org": multi_org,
+        "multi_station_a": multi_station_a,
+        "multi_station_b": multi_station_b,
+        "minimal_org": minimal_org,
+        "minimal_station": minimal_station,
+    }
+
+
 def main() -> None:
     db = SessionLocal()
     try:
         brand = ensure_brand(db)
-        roles = {name: ensure_role(db, name) for name in ["HeadOffice", "Manager", "Accountant", "Operator"]}
+        roles = {name: ensure_role(db, name) for name in ["HeadOffice", "StationAdmin", "Manager", "Accountant", "Operator"]}
         organization = ensure_organization(db, brand)
         station = ensure_station(db, organization)
         ensure_invoice_profile(db, station)
         ensure_forecourt(db, station)
-        set_station_module(db, station.id, "tanker_operations", True)
-        set_station_module(db, station.id, "pos", True)
-        set_station_module(db, station.id, "mart", True)
-        set_station_module(db, station.id, "meter_adjustments", True)
+        configure_station_modules(
+            db,
+            station,
+            pos=True,
+            mart=True,
+            tankers=True,
+            hardware=False,
+            meter_adjustments=True,
+        )
+        scope_tenants = ensure_scope_test_tenants(db, brand, roles)
 
         ensure_user(
             db,
@@ -372,6 +627,18 @@ def main() -> None:
         print("  check_accountant / accountant123")
         print("  check_operator / operator123")
         print("StationAdmin intentionally not created for this one-station tenant.")
+        print("Additional scope/module test logins:")
+        print("  p9_multi / office123")
+        print("  p9_multi_station_a_admin / station123")
+        print("  p9_multi_station_b_admin / station123")
+        print("  p9_minimal / office123")
+        print(
+            "scope test tenants: "
+            f"multi_org={scope_tenants['multi_org'].id} "
+            f"stations={scope_tenants['multi_station_a'].id},{scope_tenants['multi_station_b'].id} "
+            f"minimal_org={scope_tenants['minimal_org'].id} "
+            f"minimal_station={scope_tenants['minimal_station'].id}"
+        )
     finally:
         db.close()
 

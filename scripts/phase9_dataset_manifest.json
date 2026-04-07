@@ -452,6 +452,48 @@
       "meter adjustment history and meter segments remain readable after correction"
     ]
   },
+  "scope_and_module_tenants": {
+    "multi_station": {
+      "organization_code": "PHASE9-MULTI",
+      "station_codes": [
+        "PHASE9-MULTI-A",
+        "PHASE9-MULTI-B"
+      ],
+      "users": [
+        "p9_multi",
+        "p9_multi_station_a_admin",
+        "p9_multi_station_b_admin"
+      ],
+      "expected": [
+        "HeadOffice can see both stations in its organization",
+        "StationAdmin A can see only station A",
+        "StationAdmin A cannot read station B or station B users",
+        "StationAdmin B cannot read station A",
+        "StationAdmin exists for multi-station tenants only"
+      ]
+    },
+    "minimal_module": {
+      "organization_code": "PHASE9-MINIMAL",
+      "station_codes": [
+        "PHASE9-MINIMAL-A"
+      ],
+      "users": [
+        "p9_minimal"
+      ],
+      "disabled_modules": [
+        "pos",
+        "mart",
+        "tanker_operations",
+        "hardware",
+        "meter_adjustments"
+      ],
+      "expected": [
+        "minimal tenant stays one station",
+        "optional modules are disabled",
+        "tenant UI should hide Tankers, POS, Hardware, and meter adjustment actions when disabled"
+      ]
+    }
+  },
   "reports_documents_notifications": {
     "expected": [
       "daily closing report totals match shift sales and cash",

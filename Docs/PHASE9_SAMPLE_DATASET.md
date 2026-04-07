@@ -103,6 +103,8 @@ Minimum realistic shape for the current one-station `check` tenant:
 - POS/shop sample if module is enabled
 - reversal examples for fuel sale, purchase, customer payment, supplier payment, and POS sale
 - credit limit override request/approval example
+- multi-station tenant for StationAdmin and leakage checks
+- minimal-module tenant for optional module hiding checks
 - reports/documents/notifications sample records or verification checks
 
 Expected formulas must be stored alongside the sample data so the runner can fail loudly when anything changes unexpectedly.
@@ -156,6 +158,12 @@ The current automated runner now covers the first running-pump operations batch:
 - records internal fuel usage and verifies it is readable
 - records a HeadOffice meter adjustment for the single-station tenant admin rule
 - verifies meter adjustment history and meter segments are readable
+- prepares a multi-station tenant with two stations and StationAdmin users
+- verifies multi-station HeadOffice can see both stations
+- verifies StationAdmin can see only their assigned station
+- verifies StationAdmin cannot read another station or its users
+- prepares a minimal-module tenant
+- verifies POS, mart, tanker, hardware, and meter-adjustment modules are disabled for the minimal tenant
 - records multiple tank dips across all tanks
 - prints expected vs actual totals
 
@@ -177,7 +185,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps
 
 ## Remaining Dataset Blocks
 
-The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, POS/shop, tankers, reports, documents, notifications, corrections/reversals, credit override, internal fuel usage, meter adjustments, and tank dips at a first acceptance level.
+The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, POS/shop, tankers, reports, documents, notifications, corrections/reversals, credit override, internal fuel usage, meter adjustments, multi-station scoping, minimal-module toggles, and tank dips at a first acceptance level.
 
 It still needs these blocks added.
 
@@ -463,6 +471,31 @@ Expected checks:
 - local/mock delivery does not require production provider credentials
 - report totals match source transactions
 - documents reference the correct transaction/customer/supplier/payroll context
+
+### 12. Multi-Station And Module Toggles
+
+Current automated coverage:
+
+- prepares `phase9_multi` with two stations
+- prepares `p9_multi` HeadOffice user
+- prepares one `StationAdmin` per multi-station station
+- verifies HeadOffice can see both multi-station stations
+- verifies StationAdmin A sees only station A
+- verifies StationAdmin A cannot read station B
+- verifies StationAdmin A cannot list station B users
+- verifies StationAdmin B cannot read station A
+- verifies one multi-station station can have tankers enabled while another has tankers disabled
+- prepares `phase9_minimal` one-station tenant
+- verifies minimal tenant modules are disabled for POS, mart, tankers, hardware, and meter adjustments
+
+Expected rules:
+
+```text
+one_station_tenant_admin = HeadOffice
+multi_station_tenant_admins = HeadOffice + StationAdmin per station
+station_admin_visible_stations = assigned_station_only
+minimal_module_tenant_hidden_workspaces = disabled_modules
+```
 
 ## Acceptance Rule
 

@@ -504,9 +504,11 @@ The runner uses the live backend API and creates known sample data for:
 - internal fuel usage
 - HeadOffice meter adjustment for the one-station tenant admin rule
 - meter adjustment history and meter segment readback
+- multi-station tenant scoping with per-station StationAdmin users
+- minimal-module tenant toggles for POS, mart, tanker, hardware, and meter adjustments
 - tank dips across all tanks
 
-It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, supplier ledger, attendance, payroll, POS, correction/reversal, tanker, report, document, and notification regressions while rebuilding the Flutter UI.
+It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, supplier ledger, attendance, payroll, POS, correction/reversal, tanker, multi-station scope, module-toggle, report, document, and notification regressions while rebuilding the Flutter UI.
 
 ## Phase 9 Acceptance For Rebuild
 
