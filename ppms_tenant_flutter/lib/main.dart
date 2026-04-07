@@ -4202,6 +4202,7 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
           ? await widget.sessionController.loadSuppliers()
           : const <Map<String, dynamic>>[];
       final tanks = _list(stationSetup['tanks']);
+      if (!mounted) return;
       setState(() {
         _stationSetup = stationSetup;
         _rows = rows;
@@ -4214,8 +4215,10 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
             : suppliers.first['id'] as int?;
       });
     } on TenantApiException catch (error) {
+      if (!mounted) return;
       setState(() => _error = error.message);
     } on Object catch (error) {
+      if (!mounted) return;
       setState(() => _error = 'Could not load manager data: $error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
