@@ -14,11 +14,15 @@ When returning to this project, use these files in this order:
 4. [PHASE_EXECUTION_TEMPLATE.md](PHASE_EXECUTION_TEMPLATE.md)
    - this is the template to execute one phase properly
 
+5. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
+   - this is the Phase 9 manual testing and fix workflow
+
 ## Current Recommended Next Step
 
 Start with:
 
 - `Phase 9 - Local Stabilization and Acceptance`
+- use [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md) as the step-by-step manual acceptance plan
 
 from:
 

@@ -331,7 +331,7 @@ def test_head_office_reports_and_dashboard_are_organization_scoped(client):
         fuel_type = db.query(FuelType).filter(FuelType.id == data["fuel_type_id"]).first()
         foreign_tank = Tank(
             name="Tank C",
-            code="TANK-C",
+            code="TANK-C-REPORT",
             capacity=1000,
             current_volume=200,
             low_stock_threshold=30,

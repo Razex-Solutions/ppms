@@ -851,6 +851,7 @@ Freeze the product locally before cloud deployment.
 
 - backend tests
 - Flutter analyze/test
+- manual acceptance walkthrough from [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
 - local smoke flows
 - fresh setup from empty database
 - single-station scenario

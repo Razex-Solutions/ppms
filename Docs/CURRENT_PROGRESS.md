@@ -931,11 +931,12 @@ Current purpose:
 ## 16. Recommended Next Steps
 
 ### For product work
-1. execute `Phase 9 - Local Stabilization and Acceptance`
+1. execute `Phase 9 - Local Stabilization and Acceptance` using [CHECKTESTINGPLAN.md](/C:/Fuel%20Management%20System/docs/CHECKTESTINGPLAN.md)
 2. validate migrations and fresh database rebuilds
 3. run role-by-role tenant Flutter walkthroughs
 4. run MasterAdmin support console walkthroughs
-5. prepare the local freeze gate before cloud deployment
+5. record issues from each manual step, fix them, and retest before moving forward
+6. prepare the local freeze gate before cloud deployment
 
 ### For deployment later
 1. finalize local product behavior
