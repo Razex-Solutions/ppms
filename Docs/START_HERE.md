@@ -20,13 +20,16 @@ When returning to this project, use these files in this order:
 6. [FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md](FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md)
    - this records the paused Flutter automation work and the new matrix-first rebuild strategy
 
-7. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
+7. [AUTOMATION_AND_MATRIX_BUNDLE.md](AUTOMATION_AND_MATRIX_BUNDLE.md)
+   - this explains the app folders, automation scripts, JSON matrices, Flutter test files, and CI workflow
+
+8. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
    - this is the Phase 9 manual testing and fix workflow
 
-8. [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md)
+9. [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md)
    - this defines the large sample data and expected totals for automated Phase 9 acceptance checks
 
-9. [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md)
+10. [PHASE9_COVERAGE_AUDIT.md](PHASE9_COVERAGE_AUDIT.md)
    - this shows what the Phase 9 runner and clean tenant app cover, and what is still missing
 
 ## Current Recommended Next Step
@@ -35,6 +38,7 @@ Start with:
 
 - `Phase 9 - Local Stabilization and Acceptance`
 - use [FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md](FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md) before doing more Flutter work
+- use [AUTOMATION_AND_MATRIX_BUNDLE.md](AUTOMATION_AND_MATRIX_BUNDLE.md) to understand current scripts, JSON matrices, Flutter automation record, and CI
 - use [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md) only after the next matrix-first UI slice is agreed
 - use [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md) as the step-by-step manual acceptance plan
 - use [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md) when expanding automated scenario data and expected calculations

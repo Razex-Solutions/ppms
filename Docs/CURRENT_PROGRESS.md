@@ -72,6 +72,7 @@ Current Phase 9 tenant rebuild decision:
 - pause broad Flutter building because screen behavior was moving faster than agreed product rules
 - do not delete either Flutter folder automatically
 - use `FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md` before any new Flutter UI work
+- use `AUTOMATION_AND_MATRIX_BUNDLE.md` to understand the current automation scripts, JSON matrices, Flutter test files, and CI workflow
 - build future UI from backend/matrix contracts only, after discussing the real workflow first
 - build every domain/module separately first and integrate only after it is proven
 - optional SaaS modules must be fully hideable so disabled tenants see no sidebar, forms, actions, reports, or API calls for that module
