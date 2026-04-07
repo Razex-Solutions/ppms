@@ -20,6 +20,13 @@ The goal is:
 
 During this testing phase, remove or hide UI that does nothing useful.
 
+Current rebuild decision:
+
+- stop patching the current Flutter tenant UI screen by screen
+- use `TENANT_FLUTTER_REBUILD_PLAN.md` as the source of truth for the clean tenant-app rebuild
+- keep the current Flutter app only as a temporary reference until the replacement path is committed and working
+- preserve backend, DB, permissions, tests, and restart scripts unless a rebuild slice proves a backend change is needed
+
 Examples:
 
 - dashboard cards with fake, empty, or non-actionable numbers
