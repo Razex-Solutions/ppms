@@ -36,6 +36,16 @@
           "visible": true,
           "read_apis": [
             "GET /stations/{station_id}/setup-foundation"
+          ],
+          "update_apis": [
+            "PUT /tanks/{tank_id}",
+            "PUT /dispensers/{dispenser_id}",
+            "PUT /nozzles/{nozzle_id}"
+          ],
+          "delete_apis": [
+            "DELETE /nozzles/{nozzle_id}",
+            "DELETE /dispensers/{dispenser_id}",
+            "DELETE /tanks/{tank_id}"
           ]
         },
         "tankers": {
@@ -45,6 +55,13 @@
           "read_apis": [
             "GET /tankers/?station_id={station_id}",
             "GET /tankers/trips?station_id={station_id}"
+          ],
+          "create_apis": [
+            "POST /tankers/",
+            "POST /tankers/trips",
+            "POST /tankers/trips/{tanker_trip_id}/deliveries",
+            "POST /tankers/trips/{tanker_trip_id}/expenses",
+            "POST /tankers/trips/{tanker_trip_id}/complete"
           ]
         },
         "pos": {
@@ -100,6 +117,28 @@
           "read_apis": [
             "GET /stations/{station_id}/setup-foundation"
           ]
+        },
+        "corrections": {
+          "visible": true,
+          "read_apis": [
+            "GET /fuel-sales/?station_id={station_id}",
+            "GET /purchases/?station_id={station_id}",
+            "GET /customer-payments/?station_id={station_id}",
+            "GET /supplier-payments/?station_id={station_id}",
+            "GET /pos-sales/?station_id={station_id}",
+            "GET /customers/"
+          ],
+          "create_apis": [
+            "POST /fuel-sales/{fuel_sale_id}/reverse",
+            "POST /purchases/{purchase_id}/reverse",
+            "POST /customer-payments/{customer_payment_id}/reverse",
+            "POST /supplier-payments/{supplier_payment_id}/reverse",
+            "POST /pos-sales/{pos_sale_id}/reverse",
+            "POST /customers/{customer_id}/request-credit-override",
+            "POST /customers/{customer_id}/approve-credit-override",
+            "POST /fuel-sales/{fuel_sale_id}/approve-reversal",
+            "POST /fuel-sales/{fuel_sale_id}/reject-reversal"
+          ]
         }
       }
     },
@@ -125,6 +164,16 @@
           "visible": true,
           "read_apis": [
             "GET /stations/{station_id}/setup-foundation"
+          ],
+          "update_apis": [
+            "PUT /tanks/{tank_id}",
+            "PUT /dispensers/{dispenser_id}",
+            "PUT /nozzles/{nozzle_id}"
+          ],
+          "delete_apis": [
+            "DELETE /nozzles/{nozzle_id}",
+            "DELETE /dispensers/{dispenser_id}",
+            "DELETE /tanks/{tank_id}"
           ]
         },
         "shifts": {
@@ -182,6 +231,13 @@
           "read_apis": [
             "GET /tankers/?station_id={station_id}",
             "GET /tankers/trips?station_id={station_id}"
+          ],
+          "create_apis": [
+            "POST /tankers/",
+            "POST /tankers/trips",
+            "POST /tankers/trips/{tanker_trip_id}/deliveries",
+            "POST /tankers/trips/{tanker_trip_id}/expenses",
+            "POST /tankers/trips/{tanker_trip_id}/complete"
           ]
         },
         "pos": {
@@ -208,6 +264,25 @@
           "visible": true,
           "read_apis": [
             "GET /reports/daily-closing?report_date={today}&station_id={station_id}"
+          ]
+        },
+        "corrections": {
+          "visible": true,
+          "read_apis": [
+            "GET /fuel-sales/?station_id={station_id}",
+            "GET /purchases/?station_id={station_id}",
+            "GET /customer-payments/?station_id={station_id}",
+            "GET /supplier-payments/?station_id={station_id}",
+            "GET /pos-sales/?station_id={station_id}",
+            "GET /customers/"
+          ],
+          "create_apis": [
+            "POST /fuel-sales/{fuel_sale_id}/reverse",
+            "POST /purchases/{purchase_id}/reverse",
+            "POST /customer-payments/{customer_payment_id}/reverse",
+            "POST /supplier-payments/{supplier_payment_id}/reverse",
+            "POST /pos-sales/{pos_sale_id}/reverse",
+            "POST /customers/{customer_id}/request-credit-override"
           ]
         }
       }
@@ -273,6 +348,13 @@
           "read_apis": [
             "GET /tankers/?station_id={station_id}",
             "GET /tankers/trips?station_id={station_id}"
+          ],
+          "create_apis": [
+            "POST /tankers/",
+            "POST /tankers/trips",
+            "POST /tankers/trips/{tanker_trip_id}/deliveries",
+            "POST /tankers/trips/{tanker_trip_id}/expenses",
+            "POST /tankers/trips/{tanker_trip_id}/complete"
           ]
         },
         "pos": {
@@ -299,6 +381,25 @@
           "visible": true,
           "read_apis": [
             "GET /reports/daily-closing?report_date={today}&station_id={station_id}"
+          ]
+        },
+        "corrections": {
+          "visible": true,
+          "read_apis": [
+            "GET /fuel-sales/?station_id={station_id}",
+            "GET /purchases/?station_id={station_id}",
+            "GET /customer-payments/?station_id={station_id}",
+            "GET /supplier-payments/?station_id={station_id}",
+            "GET /pos-sales/?station_id={station_id}",
+            "GET /customers/"
+          ],
+          "create_apis": [
+            "POST /fuel-sales/{fuel_sale_id}/reverse",
+            "POST /purchases/{purchase_id}/reverse",
+            "POST /customer-payments/{customer_payment_id}/reverse",
+            "POST /supplier-payments/{supplier_payment_id}/reverse",
+            "POST /pos-sales/{pos_sale_id}/reverse",
+            "POST /customers/{customer_id}/request-credit-override"
           ]
         }
       }
@@ -391,6 +492,28 @@
           ],
           "update_apis": [
             "PUT /notifications/preferences/report_export.completed"
+          ]
+        },
+        "corrections": {
+          "visible": true,
+          "read_apis": [
+            "GET /fuel-sales/?station_id={station_id}",
+            "GET /purchases/?station_id={station_id}",
+            "GET /customer-payments/?station_id={station_id}",
+            "GET /supplier-payments/?station_id={station_id}",
+            "GET /pos-sales/?station_id={station_id}",
+            "GET /customers/"
+          ],
+          "create_apis": [
+            "POST /fuel-sales/{fuel_sale_id}/reverse",
+            "POST /purchases/{purchase_id}/reverse",
+            "POST /customer-payments/{customer_payment_id}/reverse",
+            "POST /supplier-payments/{supplier_payment_id}/reverse",
+            "POST /pos-sales/{pos_sale_id}/reverse",
+            "POST /customers/{customer_id}/request-credit-override",
+            "POST /customers/{customer_id}/approve-credit-override",
+            "POST /fuel-sales/{fuel_sale_id}/approve-reversal",
+            "POST /fuel-sales/{fuel_sale_id}/reject-reversal"
           ]
         }
       }

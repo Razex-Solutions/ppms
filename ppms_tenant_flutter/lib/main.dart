@@ -632,6 +632,19 @@ class TenantApiClient {
     );
   }
 
+  Future<void> deleteApiPath({
+    required String baseUrl,
+    required String accessToken,
+    required String path,
+  }) async {
+    await _send(
+      baseUrl: baseUrl,
+      method: 'DELETE',
+      path: path,
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -876,6 +889,16 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         nextAction:
             'Build after document/report events are stable; real providers come later.',
       ),
+      TenantWorkspace(
+        id: 'corrections',
+        label: 'Corrections',
+        icon: Icons.rule_outlined,
+        category: 'System',
+        purpose:
+            'Request, approve, and reject operational corrections and reversals.',
+        nextAction:
+            'Use this for Phase 9 reversal/override acceptance checks before UI polish.',
+      ),
     ],
     'stationadmin' => const [
       TenantWorkspace(
@@ -981,6 +1004,14 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         purpose: 'Review assigned-station reports only.',
         nextAction: 'No organization-wide report access from StationAdmin.',
       ),
+      TenantWorkspace(
+        id: 'corrections',
+        label: 'Corrections',
+        icon: Icons.rule_outlined,
+        category: 'System',
+        purpose: 'Request station-scoped corrections and reversals.',
+        nextAction: 'Keep correction requests station-scoped.',
+      ),
     ],
     'manager' => const [
       TenantWorkspace(
@@ -1081,6 +1112,14 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         purpose: 'Review station operational reports.',
         nextAction: 'Build after shifts, sales, cash, expenses, and purchases.',
       ),
+      TenantWorkspace(
+        id: 'corrections',
+        label: 'Corrections',
+        icon: Icons.rule_outlined,
+        category: 'System',
+        purpose: 'Request correction/reversal review for station records.',
+        nextAction: 'Use safe request flows; approvals stay with tenant admins.',
+      ),
     ],
     'accountant' => const [
       TenantWorkspace(
@@ -1174,6 +1213,15 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         category: 'Reporting',
         purpose: 'Review document/report notification delivery state.',
         nextAction: 'Build after documents are connected.',
+      ),
+      TenantWorkspace(
+        id: 'corrections',
+        label: 'Corrections',
+        icon: Icons.rule_outlined,
+        category: 'System',
+        purpose: 'Review and process finance correction/reversal requests.',
+        nextAction:
+            'Use this after payment and purchase records are visible in Finance.',
       ),
     ],
     'operator' => const [
@@ -1632,6 +1680,14 @@ class TenantSessionController extends ChangeNotifier {
       accessToken: _accessToken(),
       path: path,
       body: body,
+    );
+  }
+
+  Future<void> deletePath(String path) {
+    return _apiClient.deleteApiPath(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      path: path,
     );
   }
 
@@ -2307,6 +2363,12 @@ class _WorkspaceDetail extends StatelessWidget {
       'inventory',
       'inventory_dips',
     }.contains(workspace.id);
+    final isSetupEditWorkspace = {
+          'station_setup',
+          'inventory',
+          'inventory_dips',
+        }.contains(workspace.id) &&
+        {'HeadOffice', 'StationAdmin'}.contains(sessionController.roleName);
     final isManagerOperationsWorkspace = {
       'shifts',
       'fuel_sales',
@@ -2326,6 +2388,8 @@ class _WorkspaceDetail extends StatelessWidget {
     final isPosActionWorkspace = {'Manager', 'StationAdmin', 'HeadOffice'}
             .contains(sessionController.roleName) &&
         workspace.id == 'pos';
+    final isTankerActionWorkspace = workspace.id == 'tankers';
+    final isCorrectionsWorkspace = workspace.id == 'corrections';
     final isReportingActionWorkspace = {
       'reports',
       'documents',
@@ -2407,6 +2471,10 @@ class _WorkspaceDetail extends StatelessWidget {
             workspaceId: workspace.id,
           ),
         ],
+        if (isSetupEditWorkspace) ...[
+          const SizedBox(height: 12),
+          _SetupEditDeletePanel(sessionController: sessionController),
+        ],
         if (isManagerOperationsWorkspace &&
             {'Manager', 'StationAdmin'}.contains(sessionController.roleName)) ...[
           const SizedBox(height: 12),
@@ -2436,6 +2504,14 @@ class _WorkspaceDetail extends StatelessWidget {
           const SizedBox(height: 12),
           _PosActionPanel(sessionController: sessionController),
         ],
+        if (isTankerActionWorkspace) ...[
+          const SizedBox(height: 12),
+          _TankerActionPanel(sessionController: sessionController),
+        ],
+        if (isCorrectionsWorkspace) ...[
+          const SizedBox(height: 12),
+          _CorrectionsActionPanel(sessionController: sessionController),
+        ],
         if (isAccountantWorkspace) ...[
           const SizedBox(height: 12),
           _AccountantFinancePanel(
@@ -2455,6 +2531,8 @@ class _WorkspaceDetail extends StatelessWidget {
             !isAccountantWorkspace &&
             !isOperatorActionWorkspace &&
             !isPosActionWorkspace &&
+            !isTankerActionWorkspace &&
+            !isCorrectionsWorkspace &&
             !isReportingActionWorkspace) ...[
           const SizedBox(height: 12),
           _ApiBackedOverviewPanel(
@@ -2499,6 +2577,9 @@ class _WorkspaceDetail extends StatelessWidget {
     }
     if ({'Manager', 'StationAdmin', 'HeadOffice'}.contains(roleName) &&
         workspaceId == 'pos') {
+      return true;
+    }
+    if (workspaceId == 'tankers' || workspaceId == 'corrections') {
       return true;
     }
     if ({'reports', 'documents', 'notifications'}.contains(workspaceId)) {
@@ -5818,6 +5899,814 @@ class _ReportingActionPanelState extends State<_ReportingActionPanel> {
   }
 }
 
+class _SetupEditDeletePanel extends StatefulWidget {
+  const _SetupEditDeletePanel({required this.sessionController});
+
+  final TenantSessionController sessionController;
+
+  @override
+  State<_SetupEditDeletePanel> createState() => _SetupEditDeletePanelState();
+}
+
+class _SetupEditDeletePanelState extends State<_SetupEditDeletePanel> {
+  Map<String, dynamic>? _setup;
+  int? _selectedTankId;
+  int? _selectedDispenserId;
+  int? _selectedNozzleId;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final setup = await widget.sessionController.loadStationSetupFoundation();
+      final tanks = _tanks(setup);
+      final dispensers = _dispensers(setup);
+      final nozzles = _nozzles(setup);
+      if (!mounted) return;
+      setState(() {
+        _setup = setup;
+        _selectedTankId ??= tanks.isEmpty ? null : tanks.first['id'] as int?;
+        _selectedDispenserId ??=
+            dispensers.isEmpty ? null : dispensers.first['id'] as int?;
+        _selectedNozzleId ??= nozzles.isEmpty ? null : nozzles.first['id'] as int?;
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _save(Future<void> Function() action, String message) async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await action();
+      await _load();
+      if (!mounted) return;
+      setState(() => _message = message);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _updateTank() async {
+    final tank = _selected(_tanks(_setup), _selectedTankId);
+    if (tank == null) throw TenantApiException('Choose a tank first.');
+    await widget.sessionController.putPath(
+      '/tanks/${tank['id']}',
+      body: {
+        'name': '${tank['name']}',
+        'capacity': tank['capacity'],
+        'current_volume': tank['current_volume'],
+        'low_stock_threshold': tank['low_stock_threshold'],
+        'location': 'Phase 9 checked',
+      },
+    );
+  }
+
+  Future<void> _updateDispenser() async {
+    final dispenser = _selected(_dispensers(_setup), _selectedDispenserId);
+    if (dispenser == null) {
+      throw TenantApiException('Choose a dispenser first.');
+    }
+    await widget.sessionController.putPath(
+      '/dispensers/${dispenser['id']}',
+      body: {'name': '${dispenser['name']}', 'location': 'Phase 9 checked'},
+    );
+  }
+
+  Future<void> _updateNozzle() async {
+    final nozzle = _selected(_nozzles(_setup), _selectedNozzleId);
+    if (nozzle == null) throw TenantApiException('Choose a nozzle first.');
+    await widget.sessionController.putPath(
+      '/nozzles/${nozzle['id']}',
+      body: {
+        'name': '${nozzle['name']}',
+        'tank_id': nozzle['tank_id'],
+        'fuel_type_id': nozzle['fuel_type_id'],
+      },
+    );
+  }
+
+  Future<void> _deleteSelected(String type) async {
+    final id = switch (type) {
+      'tank' => _selectedTankId,
+      'dispenser' => _selectedDispenserId,
+      'nozzle' => _selectedNozzleId,
+      _ => null,
+    };
+    if (id == null) throw TenantApiException('Choose a $type first.');
+    final path = switch (type) {
+      'tank' => '/tanks/$id',
+      'dispenser' => '/dispensers/$id',
+      'nozzle' => '/nozzles/$id',
+      _ => throw TenantApiException('Unknown setup type $type'),
+    };
+    await widget.sessionController.deletePath(path);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading setup edit packet',
+        body: 'Reading station setup for edit/delete actions.',
+      );
+    }
+    final tanks = _tanks(_setup);
+    final dispensers = _dispensers(_setup);
+    final nozzles = _nozzles(_setup);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Setup Edit/Delete Packet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Edit is safe on existing setup. Delete may be blocked by backend dependencies, and that validation is expected.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _idDropdown(
+                  label: 'Tank',
+                  value: _selectedTankId,
+                  rows: tanks,
+                  onChanged: (value) => setState(() => _selectedTankId = value),
+                ),
+                _idDropdown(
+                  label: 'Dispenser',
+                  value: _selectedDispenserId,
+                  rows: dispensers,
+                  onChanged: (value) =>
+                      setState(() => _selectedDispenserId = value),
+                ),
+                _idDropdown(
+                  label: 'Nozzle',
+                  value: _selectedNozzleId,
+                  rows: nozzles,
+                  onChanged: (value) =>
+                      setState(() => _selectedNozzleId = value),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_updateTank, 'Tank updated.'),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Update Tank'),
+                ),
+                FilledButton.icon(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_updateDispenser, 'Dispenser updated.'),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Update Dispenser'),
+                ),
+                FilledButton.icon(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_updateNozzle, 'Nozzle updated.'),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Update Nozzle'),
+                ),
+                OutlinedButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                            () => _deleteSelected('nozzle'),
+                            'Nozzle deleted.',
+                          ),
+                  child: const Text('Delete Nozzle'),
+                ),
+                OutlinedButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                            () => _deleteSelected('dispenser'),
+                            'Dispenser deleted.',
+                          ),
+                  child: const Text('Delete Dispenser'),
+                ),
+                OutlinedButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(() => _deleteSelected('tank'), 'Tank deleted.'),
+                  child: const Text('Delete Tank'),
+                ),
+              ],
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _idDropdown({
+    required String label,
+    required int? value,
+    required List<Map<String, dynamic>> rows,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return SizedBox(
+      width: 300,
+      child: DropdownButtonFormField<int>(
+        initialValue: value,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        items: [
+          for (final row in rows)
+            DropdownMenuItem<int>(
+              value: row['id'] as int?,
+              child: Text(
+                '${row['name']} (${row['code']})',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _TankerActionPanel extends StatefulWidget {
+  const _TankerActionPanel({required this.sessionController});
+
+  final TenantSessionController sessionController;
+
+  @override
+  State<_TankerActionPanel> createState() => _TankerActionPanelState();
+}
+
+class _TankerActionPanelState extends State<_TankerActionPanel> {
+  final _quantityController = TextEditingController(text: '1000');
+  final _rateController = TextEditingController(text: '250');
+  final _expenseController = TextEditingController(text: '100');
+  final _notesController = TextEditingController(text: 'Phase 9 tanker UI packet');
+
+  Map<String, dynamic>? _setup;
+  List<Map<String, dynamic>> _tankers = const [];
+  List<Map<String, dynamic>> _trips = const [];
+  List<Map<String, dynamic>> _suppliers = const [];
+  List<Map<String, dynamic>> _customers = const [];
+  int? _selectedTankerId;
+  int? _selectedTripId;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _rateController.dispose();
+    _expenseController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final stationId = widget.sessionController.workingStationId;
+      final query = stationId == null ? '' : '?station_id=$stationId';
+      final setup = await widget.sessionController.loadStationSetupFoundation();
+      final tankers = await widget.sessionController.loadListPath('/tankers/$query');
+      final trips =
+          await widget.sessionController.loadListPath('/tankers/trips$query');
+      final suppliers = await widget.sessionController.loadSuppliers();
+      final customers = await widget.sessionController.loadCustomers();
+      if (!mounted) return;
+      setState(() {
+        _setup = setup;
+        _tankers = tankers;
+        _trips = trips;
+        _suppliers = suppliers;
+        _customers = customers;
+        _selectedTankerId ??= tankers.isEmpty ? null : tankers.first['id'] as int?;
+        _selectedTripId ??= trips.isEmpty ? null : trips.first['id'] as int?;
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _save(Future<void> Function() action, String message) async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await action();
+      await _load();
+      if (!mounted) return;
+      setState(() => _message = message);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _createTanker() async {
+    final stationId = widget.sessionController.workingStationId;
+    final tank = _firstOrNull(_tanks(_setup));
+    if (stationId == null || tank == null) {
+      throw TenantApiException('Station and tank are required first.');
+    }
+    final suffix = DateTime.now().millisecondsSinceEpoch;
+    final tanker = await widget.sessionController.postPath(
+      '/tankers/',
+      body: {
+        'station_id': stationId,
+        'fuel_type_id': tank['fuel_type_id'],
+        'registration_no': 'P9-TNK-$suffix',
+        'name': 'Phase 9 Tanker',
+        'capacity': 12000,
+        'ownership_type': 'owned',
+        'driver_name': 'Phase 9 Driver',
+        'status': 'active',
+        'compartments': [
+          {
+            'code': 'C1',
+            'name': 'Main Compartment',
+            'capacity': 12000,
+            'position': 1,
+            'is_active': true,
+          }
+        ],
+      },
+    );
+    _selectedTankerId = tanker['id'] as int?;
+  }
+
+  Future<void> _createTrip() async {
+    if (_selectedTankerId == null) {
+      await _createTanker();
+    }
+    final tanker = _selected(_tankers, _selectedTankerId);
+    final tank = _firstOrNull(_tanks(_setup));
+    final supplier = _firstOrNull(_suppliers);
+    if (_selectedTankerId == null || tank == null) {
+      throw TenantApiException('Create a tanker and tank first.');
+    }
+    final trip = await widget.sessionController.postPath(
+      '/tankers/trips',
+      body: {
+        'tanker_id': _selectedTankerId,
+        'supplier_id': supplier?['id'],
+        'fuel_type_id': tanker?['fuel_type_id'] ?? tank['fuel_type_id'],
+        'trip_type': 'supplier_to_customer',
+        'linked_tank_id': tank['id'],
+        'destination_name': 'Phase 9 customer route',
+        'notes': _notesController.text,
+        'loaded_quantity': double.tryParse(_quantityController.text.trim()) ?? 0,
+        'purchase_rate': double.tryParse(_rateController.text.trim()) ?? 0,
+      },
+    );
+    _selectedTripId = trip['id'] as int?;
+  }
+
+  Future<void> _addDelivery() async {
+    if (_selectedTripId == null) await _createTrip();
+    if (_selectedTripId == null) throw TenantApiException('Create a trip first.');
+    await widget.sessionController.postPath(
+      '/tankers/trips/$_selectedTripId/deliveries',
+      body: {
+        'customer_id': _firstOrNull(_customers)?['id'],
+        'destination_name': 'Phase 9 delivery point',
+        'quantity': 100,
+        'fuel_rate': double.tryParse(_rateController.text.trim()) ?? 0,
+        'delivery_charge': 10,
+        'sale_type': 'cash',
+        'paid_amount': 0,
+      },
+    );
+  }
+
+  Future<void> _addExpense() async {
+    if (_selectedTripId == null) throw TenantApiException('Create a trip first.');
+    await widget.sessionController.postPath(
+      '/tankers/trips/$_selectedTripId/expenses',
+      body: {
+        'expense_type': 'fuel',
+        'amount': double.tryParse(_expenseController.text.trim()) ?? 0,
+        'notes': _notesController.text,
+      },
+    );
+  }
+
+  Future<void> _completeTrip() async {
+    if (_selectedTripId == null) throw TenantApiException('Create a trip first.');
+    final tank = _firstOrNull(_tanks(_setup));
+    await widget.sessionController.postPath(
+      '/tankers/trips/$_selectedTripId/complete',
+      body: {
+        'reason': _notesController.text,
+        if (tank != null) 'transfer_to_tank_id': tank['id'],
+        if (tank != null) 'transfer_quantity': 50,
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading tanker packet',
+        body: 'Reading tankers, trips, suppliers, customers, and tanks.',
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Tanker Action Packet', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text('Station: ${widget.sessionController.workingStationLabel}'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _idDropdown('Tanker', _selectedTankerId, _tankers,
+                    (value) => setState(() => _selectedTankerId = value)),
+                _idDropdown('Trip', _selectedTripId, _trips,
+                    (value) => setState(() => _selectedTripId = value)),
+                _field(_quantityController, 'Loaded quantity'),
+                _field(_rateController, 'Rate'),
+                _field(_expenseController, 'Expense'),
+                _field(_notesController, 'Notes'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(onPressed: _isSaving ? null : () => _save(_createTanker, 'Tanker created.'), child: const Text('Create Tanker')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(_createTrip, 'Trip created.'), child: const Text('Create Trip')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(_addDelivery, 'Delivery added.'), child: const Text('Add Delivery')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(_addExpense, 'Expense added.'), child: const Text('Add Expense')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(_completeTrip, 'Trip completed.'), child: const Text('Complete Trip')),
+              ],
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(_message!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
+            const SizedBox(height: 16),
+            _SimpleListCard(
+              title: 'Tankers',
+              emptyText: 'No tankers found.',
+              items: [
+                for (final tanker in _tankers.take(8))
+                  'Tanker ${tanker['id']} - ${tanker['registration_no']} - ${tanker['ownership_type']} - capacity ${tanker['capacity']}',
+              ],
+            ),
+            const SizedBox(height: 12),
+            _SimpleListCard(
+              title: 'Trips',
+              emptyText: 'No trips found.',
+              items: [
+                for (final trip in _trips.take(8))
+                  'Trip ${trip['id']} - ${trip['status']} - loaded ${trip['loaded_quantity']} - delivered ${trip['total_quantity']} - leftover ${trip['leftover_quantity']} - transferred ${trip['transferred_quantity']}',
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 220,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      ),
+    );
+  }
+
+  Widget _idDropdown(
+    String label,
+    int? value,
+    List<Map<String, dynamic>> rows,
+    ValueChanged<int?> onChanged,
+  ) {
+    return SizedBox(
+      width: 280,
+      child: DropdownButtonFormField<int>(
+        initialValue: value,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        items: [
+          for (final row in rows)
+            DropdownMenuItem<int>(
+              value: row['id'] as int?,
+              child: Text('${row['name'] ?? row['registration_no'] ?? row['id']}', overflow: TextOverflow.ellipsis),
+            ),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _CorrectionsActionPanel extends StatefulWidget {
+  const _CorrectionsActionPanel({required this.sessionController});
+
+  final TenantSessionController sessionController;
+
+  @override
+  State<_CorrectionsActionPanel> createState() => _CorrectionsActionPanelState();
+}
+
+class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
+  final _reasonController = TextEditingController(text: 'Phase 9 correction test');
+  List<Map<String, dynamic>> _fuelSales = const [];
+  List<Map<String, dynamic>> _purchases = const [];
+  List<Map<String, dynamic>> _customerPayments = const [];
+  List<Map<String, dynamic>> _supplierPayments = const [];
+  List<Map<String, dynamic>> _posSales = const [];
+  List<Map<String, dynamic>> _customers = const [];
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final stationId = widget.sessionController.workingStationId;
+      final query = stationId == null ? '' : '?station_id=$stationId';
+      final fuelSales = await widget.sessionController.loadListPath('/fuel-sales/$query');
+      final purchases = await widget.sessionController.loadListPath('/purchases/$query');
+      final customerPayments = await widget.sessionController.loadListPath('/customer-payments/$query');
+      final supplierPayments = await widget.sessionController.loadListPath('/supplier-payments/$query');
+      final posSales = await widget.sessionController.loadListPath('/pos-sales/$query');
+      final customers = await widget.sessionController.loadCustomers();
+      if (!mounted) return;
+      setState(() {
+        _fuelSales = fuelSales;
+        _purchases = purchases;
+        _customerPayments = customerPayments;
+        _supplierPayments = supplierPayments;
+        _posSales = posSales;
+        _customers = customers;
+        _isLoading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _save(Future<void> Function() action, String message) async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await action();
+      await _load();
+      if (!mounted) return;
+      setState(() => _message = message);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _postFirst(
+    List<Map<String, dynamic>> rows,
+    String pathSuffix,
+    String entity,
+  ) async {
+    final row = rows.firstWhere(
+      (item) => item['is_reversed'] != true,
+      orElse: () => const {},
+    );
+    if (row['id'] == null) throw TenantApiException('No reversible $entity found.');
+    await widget.sessionController.postPath(
+      '/$pathSuffix/${row['id']}/reverse',
+      body: {'reason': _reasonController.text},
+    );
+  }
+
+  Future<void> _reviewFirst(
+    List<Map<String, dynamic>> rows,
+    String pathSuffix,
+    String decision,
+  ) async {
+    final row = rows.firstWhere(
+      (item) => item['reversal_request_status'] == 'pending',
+      orElse: () => const {},
+    );
+    if (row['id'] == null) throw TenantApiException('No pending reversal found.');
+    await widget.sessionController.postPath(
+      '/$pathSuffix/${row['id']}/$decision-reversal',
+      body: {'reason': _reasonController.text},
+    );
+  }
+
+  Future<void> _reversePos() async {
+    final sale = _posSales.firstWhere(
+      (item) => item['is_reversed'] != true,
+      orElse: () => const {},
+    );
+    if (sale['id'] == null) throw TenantApiException('No reversible POS sale found.');
+    await widget.sessionController.postPath('/pos-sales/${sale['id']}/reverse');
+  }
+
+  Future<void> _requestCreditOverride() async {
+    final customer = _firstOrNull(_customers);
+    if (customer == null || customer['id'] == null) {
+      throw TenantApiException('No customer found.');
+    }
+    await widget.sessionController.postPath(
+      '/customers/${customer['id']}/request-credit-override',
+      body: {'reason': _reasonController.text},
+    );
+  }
+
+  Future<void> _approveCreditOverride() async {
+    final customer = _firstOrNull(_customers);
+    if (customer == null || customer['id'] == null) {
+      throw TenantApiException('No customer found.');
+    }
+    await widget.sessionController.postPath(
+      '/customers/${customer['id']}/approve-credit-override',
+      body: {'reason': _reasonController.text},
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SectionCard(
+        title: 'Loading corrections packet',
+        body: 'Reading reversible station records.',
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Corrections Action Packet', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text('Station: ${widget.sessionController.workingStationLabel}'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Reason',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_fuelSales, 'fuel-sales', 'fuel sale'), 'Fuel sale reversal requested.'), child: const Text('Reverse Fuel Sale')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_purchases, 'purchases', 'purchase'), 'Purchase reversal requested.'), child: const Text('Reverse Purchase')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_customerPayments, 'customer-payments', 'customer payment'), 'Customer payment reversal requested.'), child: const Text('Reverse Customer Payment')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_supplierPayments, 'supplier-payments', 'supplier payment'), 'Supplier payment reversal requested.'), child: const Text('Reverse Supplier Payment')),
+                FilledButton(onPressed: _isSaving ? null : () => _save(_reversePos, 'POS sale reversed.'), child: const Text('Reverse POS Sale')),
+                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(() => _reviewFirst(_fuelSales, 'fuel-sales', 'approve'), 'Fuel reversal approved.'), child: const Text('Approve Fuel Reversal')),
+                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(() => _reviewFirst(_fuelSales, 'fuel-sales', 'reject'), 'Fuel reversal rejected.'), child: const Text('Reject Fuel Reversal')),
+                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(_requestCreditOverride, 'Credit override requested.'), child: const Text('Request Credit Override')),
+                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(_approveCreditOverride, 'Credit override approved.'), child: const Text('Approve Credit Override')),
+              ],
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(_message!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
+            const SizedBox(height: 16),
+            _SimpleListCard(
+              title: 'Correction-ready records',
+              emptyText: 'No records found.',
+              items: [
+                'Fuel sales: ${_fuelSales.length}',
+                'Purchases: ${_purchases.length}',
+                'Customer payments: ${_customerPayments.length}',
+                'Supplier payments: ${_supplierPayments.length}',
+                'POS sales: ${_posSales.length}',
+                'Customers: ${_customers.length}',
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 List<Map<String, dynamic>> _tanks(Map<String, dynamic>? setup) {
   final tanks = setup?['tanks'];
   if (tanks is! List) return const [];
@@ -5825,6 +6714,38 @@ List<Map<String, dynamic>> _tanks(Map<String, dynamic>? setup) {
     for (final tank in tanks)
       if (tank is Map) Map<String, dynamic>.from(tank),
   ];
+}
+
+List<Map<String, dynamic>> _dispensers(Map<String, dynamic>? setup) {
+  final dispensers = setup?['dispensers'];
+  if (dispensers is! List) return const [];
+  return [
+    for (final dispenser in dispensers)
+      if (dispenser is Map) Map<String, dynamic>.from(dispenser),
+  ];
+}
+
+List<Map<String, dynamic>> _nozzles(Map<String, dynamic>? setup) {
+  final rows = <Map<String, dynamic>>[];
+  for (final dispenser in _dispensers(setup)) {
+    final nozzles = dispenser['nozzles'];
+    if (nozzles is! List) continue;
+    for (final nozzle in nozzles) {
+      if (nozzle is Map) rows.add(Map<String, dynamic>.from(nozzle));
+    }
+  }
+  return rows;
+}
+
+Map<String, dynamic>? _selected(List<Map<String, dynamic>> rows, int? id) {
+  for (final row in rows) {
+    if (row['id'] == id) return row;
+  }
+  return null;
+}
+
+Map<String, dynamic>? _firstOrNull(List<Map<String, dynamic>> rows) {
+  return rows.isEmpty ? null : rows.first;
 }
 
 class _ContextChip extends StatelessWidget {
