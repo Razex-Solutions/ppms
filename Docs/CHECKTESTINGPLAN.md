@@ -83,6 +83,8 @@ For each test step:
 
 Use this before and after larger rebuild batches so we are not manually rechecking the same operations math every time.
 
+The full dataset target is defined in [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md), with the machine-readable manifest at [scripts/phase9_dataset_manifest.json](/C:/Fuel%20Management%20System/scripts/phase9_dataset_manifest.json).
+
 Command:
 
 ```powershell

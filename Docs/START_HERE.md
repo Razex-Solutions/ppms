@@ -20,6 +20,9 @@ When returning to this project, use these files in this order:
 6. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
    - this is the Phase 9 manual testing and fix workflow
 
+7. [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md)
+   - this defines the large sample data and expected totals for automated Phase 9 acceptance checks
+
 ## Current Recommended Next Step
 
 Start with:
@@ -27,6 +30,7 @@ Start with:
 - `Phase 9 - Local Stabilization and Acceptance`
 - use [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md) for the clean tenant app path
 - use [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md) as the step-by-step manual acceptance plan
+- use [PHASE9_SAMPLE_DATASET.md](PHASE9_SAMPLE_DATASET.md) when expanding automated scenario data and expected calculations
 
 from:
 

@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "name": "Phase 9 full acceptance dataset",
+  "tenant": {
+    "organization_name": "check",
+    "organization_code": "CHECK-PSO-004",
+    "station_name": "check",
+    "station_code": "CHECK-PSO-004",
+    "station_count": 1,
+    "single_station_rule": "HeadOffice acts as organization admin and station admin; StationAdmin is not created."
+  },
+  "users": {
+    "headoffice": {
+      "username": "check",
+      "password": "office123",
+      "role": "HeadOffice",
+      "scope_level": "organization"
+    },
+    "manager": {
+      "username": "check_manager",
+      "password": "manager123",
+      "role": "Manager",
+      "scope_level": "station"
+    },
+    "accountant": {
+      "username": "check_accountant",
+      "password": "accountant123",
+      "role": "Accountant",
+      "scope_level": "station"
+    },
+    "operator": {
+      "username": "check_operator",
+      "password": "operator123",
+      "role": "Operator",
+      "scope_level": "station"
+    }
+  },
+  "staff_profiles": [
+    {
+      "name": "Phase 9 Pump Attendant",
+      "profile_type": "PumpAttendantProfile",
+      "login_allowed": false,
+      "monthly_salary": 45000
+    },
+    {
+      "name": "Phase 9 Tanker Driver",
+      "profile_type": "TankerDriverProfile",
+      "login_allowed": false,
+      "monthly_salary": 55000
+    },
+    {
+      "name": "Phase 9 Cleaner Helper",
+      "profile_type": "CleanerProfile",
+      "login_allowed": false,
+      "monthly_salary": 30000
+    }
+  ],
+  "forecourt": {
+    "tank_count": 3,
+    "dispenser_count": 3,
+    "nozzle_count": 6,
+    "fuel_types": [
+      "Petrol",
+      "Diesel",
+      "Hi-Octane"
+    ]
+  },
+  "operations": {
+    "shift": {
+      "opening_cash": 500,
+      "meter_sale_liters": 5,
+      "meter_sale_rate": 250,
+      "cash_submission_amounts": [
+        1000,
+        250
+      ],
+      "actual_cash_collected": 1750,
+      "expected": {
+        "sale_quantity_formula": "closing_meter - opening_meter",
+        "sale_total": 1250,
+        "expected_cash": 1750,
+        "cash_submitted": 1250,
+        "cash_in_hand_after_submission": 500,
+        "difference": 0
+      }
+    },
+    "variance_shift": {
+      "opening_cash": 300,
+      "meter_sale_liters": 2,
+      "meter_sale_rate": 250,
+      "actual_cash_collected": 790,
+      "expected": {
+        "sale_total": 500,
+        "expected_cash": 800,
+        "difference": -10
+      }
+    },
+    "expense": {
+      "category": "phase9",
+      "amount": 123
+    },
+    "purchase": {
+      "quantity": 50,
+      "rate_per_liter": 240,
+      "expected_total": 12000,
+      "current_backend_status_for_manager": "pending",
+      "preferred_docs_direction": "normal operational purchase should be direct record unless approval policy is enabled"
+    },
+    "tank_dip": {
+      "dip_reading_mm": 100,
+      "expected_loss_gain_when_matching_system_stock": 0
+    }
+  },
+  "credit_and_ledgers": {
+    "customer": {
+      "name": "Phase 9 Credit Customer",
+      "credit_sale_amount": 2000,
+      "payment_amount": 750,
+      "expected_balance_after_payment": 1250
+    },
+    "supplier": {
+      "name": "Phase 9 Fuel Supplier",
+      "purchase_total": 12000,
+      "payment_amount": 4000,
+      "expected_balance_after_payment": 8000
+    }
+  },
+  "payroll": {
+    "base_salary": 45000,
+    "bonus": 5000,
+    "loan": 2000,
+    "deduction": 1000,
+    "expected_net_salary": 47000
+  },
+  "attendance": {
+    "check_in": "09:00",
+    "check_out": "17:00",
+    "expected_hours": 8
+  },
+  "tankers": {
+    "enabled": true,
+    "vehicle_number": "P9-TANKER-001",
+    "compartments": [
+      5000,
+      5000
+    ],
+    "loaded_quantity": 8000,
+    "manual_sale_quantity": 3000,
+    "transfer_to_station_tank": 4500,
+    "expense_amount": 1000,
+    "expected_leftover_quantity": 500,
+    "expected_tanker_formula": "loaded_quantity - manual_sale_quantity - transfer_to_station_tank"
+  },
+  "pos": {
+    "enabled": true,
+    "product_name": "Phase 9 Engine Oil",
+    "stock_before": 20,
+    "quantity_sold": 2,
+    "unit_price": 1200,
+    "expected_sale_total": 2400,
+    "expected_stock_after_sale": 18
+  },
+  "reports_documents_notifications": {
+    "expected": [
+      "daily closing report totals match shift sales and cash",
+      "stock movement report includes sale, purchase approval state, internal fuel, tanker transfer, and dips",
+      "customer ledger document references the credit customer",
+      "supplier ledger document references the supplier",
+      "payroll document references the payroll run",
+      "notification deliveries stay local/mock in Phase 9"
+    ]
+  }
+}
