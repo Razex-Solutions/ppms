@@ -103,19 +103,25 @@ Expected formulas must be stored alongside the sample data so the runner can fai
 
 ## Current Runner Coverage
 
-The current automated runner covers a first operations loop:
+The current automated runner now covers the first running-pump operations batch:
 
 - prepares `check` tenant
-- creates a unique scenario operator
-- opens an operator shift
-- records a meter-based fuel sale
-- records a cash submission
-- closes the shift with zero difference
-- creates a manager expense
-- creates a supplier
-- creates a manager purchase
-- records a tank dip
+- creates scenario-specific Manager and Operator login users
+- creates profile-only staff records for pump attendants, security, tanker drivers, and cleaners/helpers
+- opens multiple operator shifts
+- records meter-based fuel sales across multiple nozzles
+- records multiple cash submissions
+- closes balanced and variance shifts
+- leaves one current/open shift for cash-in-hand visibility testing
+- creates multiple manager expenses
+- creates suppliers and manager purchases
+- records multiple tank dips across all tanks
 - prints expected vs actual totals
+
+Known current backend behavior recorded by the runner:
+
+- open shift cash expected does not include live sales until shift close
+- closed shift cash expected and variance calculate correctly
 
 Command:
 

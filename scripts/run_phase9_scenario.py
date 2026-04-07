@@ -1,4 +1,4 @@
-"""Run a repeatable Phase 9 operations scenario through the live backend API.
+"""Run repeatable Phase 9 sample data through the live backend API.
 
 Run from the repository root while the backend is running:
     venv\\Scripts\\python.exe scripts\\run_phase9_scenario.py
@@ -23,7 +23,7 @@ from ensure_phase9_tenant import main as ensure_phase9_tenant  # noqa: E402
 
 
 BASE_URL = os.environ.get("PPMS_API_BASE_URL", "http://127.0.0.1:8012").rstrip("/")
-SCENARIO_PASSWORD = "operator123"
+MANIFEST_PATH = ROOT / "scripts" / "phase9_dataset_manifest.json"
 
 
 class ApiClient:
@@ -79,8 +79,7 @@ class ApiClient:
 
     def login(self, username: str, password: str) -> "ApiClient":
         response = self.post("/auth/login", {"username": username, "password": password})
-        token = response["access_token"]
-        return ApiClient(self.base_url, token)
+        return ApiClient(self.base_url, response["access_token"])
 
 
 def approx_equal(left: float | None, right: float | None, tolerance: float = 0.01) -> bool:
@@ -89,12 +88,18 @@ def approx_equal(left: float | None, right: float | None, tolerance: float = 0.0
     return abs(float(left) - float(right)) <= tolerance
 
 
-def first_nozzle(setup: dict[str, Any]) -> dict[str, Any]:
-    for dispenser in setup["dispensers"]:
-        nozzles = dispenser.get("nozzles") or []
-        if nozzles:
-            return nozzles[0]
-    raise RuntimeError("No nozzle exists in the Phase 9 test station")
+def check(name: str, actual: Any, expected: Any, *, approximate: bool = False) -> dict[str, Any]:
+    passed = approx_equal(actual, expected) if approximate else actual == expected
+    return {
+        "name": name,
+        "passed": passed,
+        "expected": expected,
+        "actual": actual,
+    }
+
+
+def load_manifest() -> dict[str, Any]:
+    return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
 
 def role_id(roles: list[dict[str, Any]], name: str) -> int:
@@ -104,19 +109,254 @@ def role_id(roles: list[dict[str, Any]], name: str) -> int:
     raise RuntimeError(f"Role not found: {name}")
 
 
+def flatten_nozzles(setup: dict[str, Any]) -> list[dict[str, Any]]:
+    nozzles: list[dict[str, Any]] = []
+    for dispenser in setup["dispensers"]:
+        nozzles.extend(dispenser.get("nozzles") or [])
+    if not nozzles:
+        raise RuntimeError("No nozzles exist in the Phase 9 test station")
+    return nozzles
+
+
+def create_login_user(
+    *,
+    head_office: ApiClient,
+    role_ids: dict[str, int],
+    scenario_id: str,
+    user_spec: dict[str, Any],
+    organization_id: int,
+    station_id: int,
+) -> dict[str, Any]:
+    username = f"{user_spec['username_prefix']}_{scenario_id.lower().replace('-', '_')}"
+    role_name = user_spec["role"]
+    return head_office.post(
+        "/users/",
+        {
+            "full_name": f"{scenario_id} {role_name} {user_spec['username_prefix']}",
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": user_spec["password"],
+            "role_id": role_ids[role_name],
+            "organization_id": organization_id,
+            "station_id": station_id,
+            "scope_level": "station",
+            "monthly_salary": 0,
+            "payroll_enabled": True,
+        },
+    )
+
+
+def create_employee_profile(
+    *,
+    client: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    profile_spec: dict[str, Any],
+    index: int,
+) -> dict[str, Any]:
+    return client.post(
+        "/employee-profiles/",
+        {
+            "station_id": station_id,
+            "full_name": profile_spec["name"],
+            "staff_type": profile_spec["profile_type"],
+            "employee_code": f"{scenario_id}-EMP-{index:02d}",
+            "phone": f"0300-000-{index:04d}",
+            "national_id": f"{scenario_id}-{index:04d}",
+            "address": "Phase 9 sample staff",
+            "is_active": True,
+            "payroll_enabled": True,
+            "monthly_salary": profile_spec["monthly_salary"],
+            "can_login": profile_spec["login_allowed"],
+            "notes": f"{scenario_id} generated staff profile",
+        },
+    )
+
+
+def run_shift_scenario(
+    *,
+    anonymous: ApiClient,
+    scenario_id: str,
+    scenario_spec: dict[str, Any],
+    operator_user: dict[str, Any],
+    nozzles: list[dict[str, Any]],
+    station_id: int,
+) -> dict[str, Any]:
+    operator = anonymous.login(operator_user["username"], operator_user["password"])
+    shift = operator.post(
+        "/shifts/",
+        {
+            "station_id": station_id,
+            "initial_cash": scenario_spec["opening_cash"],
+            "notes": f"{scenario_id} {scenario_spec['name']} opening cash",
+        },
+    )
+
+    sales: list[dict[str, Any]] = []
+    for sale_spec in scenario_spec["sales"]:
+        nozzle = nozzles[int(sale_spec["nozzle_sequence"]) - 1]
+        current_setup = operator.get(f"/stations/{station_id}/setup-foundation")
+        current_nozzles = flatten_nozzles(current_setup)
+        current_nozzle = next(
+            item for item in current_nozzles if int(item["id"]) == int(nozzle["id"])
+        )
+        sale = operator.post(
+            "/fuel-sales/",
+            {
+                "nozzle_id": current_nozzle["id"],
+                "station_id": station_id,
+                "fuel_type_id": current_nozzle["fuel_type_id"],
+                "closing_meter": float(current_nozzle["meter_reading"]) + float(sale_spec["liters"]),
+                "rate_per_liter": sale_spec["rate"],
+                "sale_type": "cash",
+                "shift_id": shift["id"],
+            },
+        )
+        sales.append(sale)
+
+    cash_submissions: list[dict[str, Any]] = []
+    for amount in scenario_spec.get("cash_submissions", []):
+        cash_submissions.append(
+            operator.post(
+                f"/shifts/{shift['id']}/cash-submissions",
+                {
+                    "amount": amount,
+                    "notes": f"{scenario_id} {scenario_spec['name']} cash submission",
+                },
+            )
+        )
+
+    closed_shift = None
+    if not scenario_spec.get("leave_open", False):
+        closed_shift = operator.post(
+            f"/shifts/{shift['id']}/close",
+            {
+                "actual_cash_collected": scenario_spec["actual_cash_collected"],
+                "notes": f"{scenario_id} {scenario_spec['name']} close",
+            },
+        )
+
+    return {
+        "scenario": scenario_spec["name"],
+        "operator_username": operator_user["username"],
+        "shift": shift,
+        "closed_shift": closed_shift,
+        "sales": sales,
+        "cash_submissions": cash_submissions,
+    }
+
+
+def create_expenses(
+    *,
+    manager: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    expense_specs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        manager.post(
+            "/expenses/",
+            {
+                "station_id": station_id,
+                "title": f"{scenario_id} {item['category']} expense",
+                "category": item["category"],
+                "amount": item["amount"],
+                "notes": "Created by the Phase 9 scenario runner",
+            },
+        )
+        for item in expense_specs
+    ]
+
+
+def create_purchases(
+    *,
+    manager: ApiClient,
+    scenario_id: str,
+    tanks: list[dict[str, Any]],
+    purchase_specs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    purchases: list[dict[str, Any]] = []
+    for index, purchase_spec in enumerate(purchase_specs, start=1):
+        supplier = manager.post(
+            "/suppliers/",
+            {
+                "name": f"{scenario_id} Fuel Supplier {index}",
+                "code": f"{scenario_id}-SUP-{index}",
+                "phone": "000-000",
+                "address": "Phase 9 scenario",
+            },
+        )
+        tank = tanks[(index - 1) % len(tanks)]
+        purchases.append(
+            manager.post(
+                "/purchases/",
+                {
+                    "supplier_id": supplier["id"],
+                    "tank_id": tank["id"],
+                    "fuel_type_id": tank["fuel_type_id"],
+                    "quantity": purchase_spec["quantity"],
+                    "rate_per_liter": purchase_spec["rate_per_liter"],
+                    "reference_no": f"{scenario_id}-PUR-{index}",
+                    "notes": "Created by the Phase 9 scenario runner",
+                },
+            )
+        )
+    return purchases
+
+
+def create_dips(
+    *,
+    manager: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    dip_specs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    dips: list[dict[str, Any]] = []
+    setup = manager.get(f"/stations/{station_id}/setup-foundation")
+    tanks = setup["tanks"]
+    for tank_spec in dip_specs:
+        tank = tanks[int(tank_spec["tank_sequence"]) - 1]
+        for reading in tank_spec["readings"]:
+            current_setup = manager.get(f"/stations/{station_id}/setup-foundation")
+            current_tank = next(
+                item
+                for item in current_setup["tanks"]
+                if int(item["id"]) == int(tank["id"])
+            )
+            calculated_volume = float(current_tank["current_volume"]) + float(reading["calculated_volume_delta"])
+            dips.append(
+                manager.post(
+                    "/tank-dips/",
+                    {
+                        "tank_id": current_tank["id"],
+                        "dip_reading_mm": 100.0,
+                        "calculated_volume": calculated_volume,
+                        "notes": f"{scenario_id} {reading['name']} dip for {current_tank['code']}",
+                    },
+                )
+            )
+    return dips
+
+
 def main() -> int:
     print("Preparing Phase 9 tenant...")
     ensure_phase9_tenant()
+    manifest = load_manifest()
 
     anonymous = ApiClient(BASE_URL)
     anonymous.get("/health")
-    head_office = anonymous.login("check", "office123")
-    manager = anonymous.login("check_manager", "manager123")
+    head_office = anonymous.login(
+        manifest["users"]["headoffice"]["username"],
+        manifest["users"]["headoffice"]["password"],
+    )
+    manager = anonymous.login(
+        manifest["users"]["base_manager"]["username"],
+        manifest["users"]["base_manager"]["password"],
+    )
 
     timestamp = int(time.time())
     scenario_id = f"P9-{timestamp}"
-    scenario_username = f"p9_operator_{timestamp}"
-    print(f"Running scenario {scenario_id}...")
+    print(f"Running dataset scenario {scenario_id}...")
 
     stations = head_office.get("/stations/", query={"organization_id": 4})
     if len(stations) != 1:
@@ -126,201 +366,198 @@ def main() -> int:
     organization_id = int(station["organization_id"])
 
     roles = head_office.get("/roles/")
-    operator_role_id = role_id(roles, "Operator")
-    scenario_user = head_office.post(
-        "/users/",
-        {
-            "full_name": f"{scenario_id} Operator",
-            "username": scenario_username,
-            "email": f"{scenario_username}@example.com",
-            "password": SCENARIO_PASSWORD,
-            "role_id": operator_role_id,
-            "organization_id": organization_id,
-            "station_id": station_id,
-            "scope_level": "station",
-            "monthly_salary": 0,
-            "payroll_enabled": True,
-        },
-    )
-    operator = anonymous.login(scenario_username, SCENARIO_PASSWORD)
+    role_ids = {role["name"]: int(role["id"]) for role in roles}
 
-    setup_before = operator.get(f"/stations/{station_id}/setup-foundation")
-    nozzle = first_nozzle(setup_before)
-    tank_before = next(
-        item for item in setup_before["tanks"] if int(item["id"]) == int(nozzle["tank_id"])
-    )
-
-    opening_cash = 500.0
-    sale_liters = 5.0
-    sale_rate = 250.0
-    sale_total = sale_liters * sale_rate
-    cash_expected = opening_cash + sale_total
-    purchase_quantity = 50.0
-    purchase_rate = 240.0
-    purchase_total = purchase_quantity * purchase_rate
-    expense_amount = 123.0
-
-    shift = operator.post(
-        "/shifts/",
-        {
-            "station_id": station_id,
-            "initial_cash": opening_cash,
-            "notes": f"{scenario_id} operator opening cash",
-        },
-    )
-    sale = operator.post(
-        "/fuel-sales/",
-        {
-            "nozzle_id": nozzle["id"],
-            "station_id": station_id,
-            "fuel_type_id": nozzle["fuel_type_id"],
-            "closing_meter": float(nozzle["meter_reading"]) + sale_liters,
-            "rate_per_liter": sale_rate,
-            "sale_type": "cash",
-            "shift_id": shift["id"],
-        },
-    )
-    cash_submission = operator.post(
-        f"/shifts/{shift['id']}/cash-submissions",
-        {
-            "amount": sale_total,
-            "notes": f"{scenario_id} cash submission",
-        },
-    )
-    closed_shift = operator.post(
-        f"/shifts/{shift['id']}/close",
-        {
-            "actual_cash_collected": cash_expected,
-            "notes": f"{scenario_id} balanced close",
-        },
-    )
-    shift_cash = manager.get(f"/shifts/{shift['id']}/cash")
-
-    expense = manager.post(
-        "/expenses/",
-        {
-            "station_id": station_id,
-            "title": f"{scenario_id} manager test expense",
-            "category": "phase9",
-            "amount": expense_amount,
-            "notes": "Created by the Phase 9 scenario runner",
-        },
-    )
-    supplier = manager.post(
-        "/suppliers/",
-        {
-            "name": f"{scenario_id} Test Supplier",
-            "code": scenario_id,
-            "phone": "000-000",
-            "address": "Phase 9 scenario",
-        },
-    )
-    purchase = manager.post(
-        "/purchases/",
-        {
-            "supplier_id": supplier["id"],
-            "tank_id": tank_before["id"],
-            "fuel_type_id": tank_before["fuel_type_id"],
-            "quantity": purchase_quantity,
-            "rate_per_liter": purchase_rate,
-            "reference_no": scenario_id,
-            "notes": "Created by the Phase 9 scenario runner",
-        },
-    )
-
-    setup_after_purchase = manager.get(f"/stations/{station_id}/setup-foundation")
-    tank_after_purchase = next(
-        item
-        for item in setup_after_purchase["tanks"]
-        if int(item["id"]) == int(tank_before["id"])
-    )
-    dip_volume = float(tank_after_purchase["current_volume"])
-    tank_dip = manager.post(
-        "/tank-dips/",
-        {
-            "tank_id": tank_before["id"],
-            "dip_reading_mm": 100.0,
-            "calculated_volume": dip_volume,
-            "notes": f"{scenario_id} dip matches system stock",
-        },
-    )
-
-    expected_tank_volume = float(tank_before["current_volume"]) - sale_liters
-    if purchase["status"] == "approved":
-        expected_tank_volume += purchase_quantity
-
-    checks = [
-        {
-            "name": "fuel sale quantity is meter-derived",
-            "passed": approx_equal(sale["quantity"], sale_liters),
-            "expected": sale_liters,
-            "actual": sale["quantity"],
-        },
-        {
-            "name": "fuel sale total is quantity times rate",
-            "passed": approx_equal(sale["total_amount"], sale_total),
-            "expected": sale_total,
-            "actual": sale["total_amount"],
-        },
-        {
-            "name": "sale is attached to operator shift",
-            "passed": sale["shift_id"] == shift["id"],
-            "expected": shift["id"],
-            "actual": sale["shift_id"],
-        },
-        {
-            "name": "cash submission records the sale cash",
-            "passed": approx_equal(cash_submission["amount"], sale_total),
-            "expected": sale_total,
-            "actual": cash_submission["amount"],
-        },
-        {
-            "name": "closed shift expected cash includes opening cash and cash sales",
-            "passed": approx_equal(closed_shift["expected_cash"], cash_expected),
-            "expected": cash_expected,
-            "actual": closed_shift["expected_cash"],
-        },
-        {
-            "name": "closed shift balances with zero difference",
-            "passed": approx_equal(closed_shift["difference"], 0.0),
-            "expected": 0.0,
-            "actual": closed_shift["difference"],
-        },
-        {
-            "name": "manager can review shift cash",
-            "passed": approx_equal(shift_cash["cash_submitted"], sale_total),
-            "expected": sale_total,
-            "actual": shift_cash["cash_submitted"],
-        },
-        {
-            "name": "expense records manager amount",
-            "passed": approx_equal(expense["amount"], expense_amount),
-            "expected": expense_amount,
-            "actual": expense["amount"],
-        },
-        {
-            "name": "purchase total is quantity times rate",
-            "passed": approx_equal(purchase["total_amount"], purchase_total),
-            "expected": purchase_total,
-            "actual": purchase["total_amount"],
-        },
-        {
-            "name": "tank stock matches approved/pending purchase behavior",
-            "passed": approx_equal(tank_after_purchase["current_volume"], expected_tank_volume),
-            "expected": expected_tank_volume,
-            "actual": tank_after_purchase["current_volume"],
-        },
-        {
-            "name": "dip matches current system stock",
-            "passed": approx_equal(tank_dip["loss_gain"], 0.0),
-            "expected": 0.0,
-            "actual": tank_dip["loss_gain"],
-        },
+    extra_users = [
+        create_login_user(
+            head_office=head_office,
+            role_ids=role_ids,
+            scenario_id=scenario_id,
+            user_spec=user_spec,
+            organization_id=organization_id,
+            station_id=station_id,
+        )
+        for user_spec in manifest["users"]["extra_login_users"]
     ]
+    operator_users = [
+        {"username": user["username"], "password": "operator123"}
+        for user in extra_users
+        if user["role_id"] == role_ids["Operator"]
+    ]
+    if len(operator_users) < len(manifest["operations"]["shift_scenarios"]):
+        raise RuntimeError("Manifest must define enough fresh Operator users for shift scenarios")
+
+    employee_profiles = [
+        create_employee_profile(
+            client=head_office,
+            scenario_id=scenario_id,
+            station_id=station_id,
+            profile_spec=profile_spec,
+            index=index,
+        )
+        for index, profile_spec in enumerate(manifest["staff_profiles"], start=1)
+    ]
+
+    setup_before = manager.get(f"/stations/{station_id}/setup-foundation")
+    nozzles = flatten_nozzles(setup_before)
+    tanks_before_by_id = {
+        int(tank["id"]): float(tank["current_volume"])
+        for tank in setup_before["tanks"]
+    }
+
+    shift_results = []
+    for index, shift_spec in enumerate(manifest["operations"]["shift_scenarios"]):
+        shift_results.append(
+            run_shift_scenario(
+                anonymous=anonymous,
+                scenario_id=scenario_id,
+                scenario_spec=shift_spec,
+                operator_user=operator_users[index % len(operator_users)],
+                nozzles=nozzles,
+                station_id=station_id,
+            )
+        )
+
+    expenses = create_expenses(
+        manager=manager,
+        scenario_id=scenario_id,
+        station_id=station_id,
+        expense_specs=manifest["operations"]["expenses"],
+    )
+    purchases = create_purchases(
+        manager=manager,
+        scenario_id=scenario_id,
+        tanks=setup_before["tanks"],
+        purchase_specs=manifest["operations"]["purchases"],
+    )
+    setup_after_sales_and_purchases = manager.get(f"/stations/{station_id}/setup-foundation")
+    tanks_after_sales_and_purchases_by_id = {
+        int(tank["id"]): float(tank["current_volume"])
+        for tank in setup_after_sales_and_purchases["tanks"]
+    }
+    dips = create_dips(
+        manager=manager,
+        scenario_id=scenario_id,
+        station_id=station_id,
+        dip_specs=manifest["operations"]["dip_scenarios"],
+    )
+
+    setup_after = manager.get(f"/stations/{station_id}/setup-foundation")
+    tanks_after_by_id = {
+        int(tank["id"]): float(tank["current_volume"])
+        for tank in setup_after["tanks"]
+    }
+
+    checks: list[dict[str, Any]] = [
+        check("one-station tenant stays one station", len(stations), 1),
+        check("staff profile count created", len(employee_profiles), len(manifest["staff_profiles"])),
+        check("extra login users created", len(extra_users), len(manifest["users"]["extra_login_users"])),
+        check("forecourt tank count", setup_before["tank_count"], manifest["forecourt"]["tank_count"]),
+        check("forecourt dispenser count", setup_before["dispenser_count"], manifest["forecourt"]["dispenser_count"]),
+        check("forecourt nozzle count", setup_before["nozzle_count"], manifest["forecourt"]["nozzle_count"]),
+    ]
+
+    for result, expected in zip(shift_results, manifest["operations"]["shift_scenarios"]):
+        actual_sales_total = sum(float(sale["total_amount"]) for sale in result["sales"])
+        actual_submitted = sum(float(item["amount"]) for item in result["cash_submissions"])
+        checks.extend(
+            [
+                check(
+                    f"{expected['name']} sales total",
+                    actual_sales_total,
+                    expected["expected_sales_total"],
+                    approximate=True,
+                ),
+                check(
+                    f"{expected['name']} cash submitted",
+                    actual_submitted,
+                    sum(expected.get("cash_submissions", [])),
+                    approximate=True,
+                ),
+            ]
+        )
+        if result["closed_shift"] is not None:
+            checks.extend(
+                [
+                    check(
+                        f"{expected['name']} expected cash",
+                        result["closed_shift"]["expected_cash"],
+                        expected["expected_cash"],
+                        approximate=True,
+                    ),
+                    check(
+                        f"{expected['name']} difference",
+                        result["closed_shift"]["difference"],
+                        expected["expected_difference"],
+                        approximate=True,
+                    ),
+                ]
+            )
+        else:
+            shift_cash = manager.get(f"/shifts/{result['shift']['id']}/cash")
+            current_cash_in_hand = shift_cash["expected_cash"] - shift_cash["cash_submitted"]
+            checks.append(
+                check(
+                    f"{expected['name']} current backend cash in hand after submission",
+                    current_cash_in_hand,
+                    0.0,
+                    approximate=True,
+                )
+            )
+
+    for purchase, expected in zip(purchases, manifest["operations"]["purchases"]):
+        checks.extend(
+            [
+                check(
+                    f"purchase {purchase['id']} total",
+                    purchase["total_amount"],
+                    expected["expected_total"],
+                    approximate=True,
+                ),
+                check(
+                    f"purchase {purchase['id']} manager status",
+                    purchase["status"],
+                    expected["current_backend_status_for_manager"],
+                ),
+            ]
+        )
+
+    expected_loss_gains = [
+        reading["expected_loss_gain"]
+        for tank_spec in manifest["operations"]["dip_scenarios"]
+        for reading in tank_spec["readings"]
+    ]
+    for dip, expected_loss_gain in zip(dips, expected_loss_gains):
+        checks.append(
+            check(
+                f"dip {dip['id']} loss/gain",
+                dip["loss_gain"],
+                expected_loss_gain,
+                approximate=True,
+            )
+        )
+
+    total_sale_liters_by_tank: dict[int, float] = {}
+    for result in shift_results:
+        for sale in result["sales"]:
+            nozzle = next(item for item in nozzles if int(item["id"]) == int(sale["nozzle_id"]))
+            tank_id = int(nozzle["tank_id"])
+            total_sale_liters_by_tank[tank_id] = total_sale_liters_by_tank.get(tank_id, 0.0) + float(sale["quantity"])
+    for tank_id, tank_before in tanks_before_by_id.items():
+        expected_volume = tank_before - total_sale_liters_by_tank.get(tank_id, 0.0)
+        checks.append(
+            check(
+                f"tank {tank_id} volume after sales and pending purchases",
+                tanks_after_sales_and_purchases_by_id[tank_id],
+                expected_volume,
+                approximate=True,
+            )
+        )
 
     summary = {
         "scenario_id": scenario_id,
         "base_url": BASE_URL,
+        "manifest_version": manifest["version"],
         "tenant": {
             "organization_id": organization_id,
             "station_id": station_id,
@@ -328,36 +565,27 @@ def main() -> int:
             "station_code": station["code"],
         },
         "created": {
-            "operator_user_id": scenario_user["id"],
-            "operator_username": scenario_username,
-            "shift_id": shift["id"],
-            "fuel_sale_id": sale["id"],
-            "cash_submission_id": cash_submission["id"],
-            "expense_id": expense["id"],
-            "supplier_id": supplier["id"],
-            "purchase_id": purchase["id"],
-            "tank_dip_id": tank_dip["id"],
+            "extra_login_usernames": [user["username"] for user in extra_users],
+            "employee_profile_ids": [profile["id"] for profile in employee_profiles],
+            "shift_ids": [item["shift"]["id"] for item in shift_results],
+            "fuel_sale_ids": [sale["id"] for item in shift_results for sale in item["sales"]],
+            "expense_ids": [expense["id"] for expense in expenses],
+            "purchase_ids": [purchase["id"] for purchase in purchases],
+            "tank_dip_ids": [dip["id"] for dip in dips],
         },
-        "expected": {
-            "sale_liters": sale_liters,
-            "sale_total": sale_total,
-            "cash_expected": cash_expected,
-            "purchase_status": purchase["status"],
-            "purchase_total": purchase_total,
-            "tank_volume_after_sale_and_purchase_rule": expected_tank_volume,
+        "totals": {
+            "fuel_sales": sum(float(sale["total_amount"]) for item in shift_results for sale in item["sales"]),
+            "cash_submitted": sum(float(cash["amount"]) for item in shift_results for cash in item["cash_submissions"]),
+            "expenses": sum(float(expense["amount"]) for expense in expenses),
+            "purchase_total": sum(float(purchase["total_amount"]) for purchase in purchases),
         },
-        "actual": {
-            "sale_quantity": sale["quantity"],
-            "sale_total": sale["total_amount"],
-            "closed_shift_expected_cash": closed_shift["expected_cash"],
-            "closed_shift_difference": closed_shift["difference"],
-            "cash_submitted": shift_cash["cash_submitted"],
-            "purchase_status": purchase["status"],
-            "purchase_total": purchase["total_amount"],
-            "tank_volume_before": tank_before["current_volume"],
-            "tank_volume_after": tank_after_purchase["current_volume"],
-            "dip_loss_gain": tank_dip["loss_gain"],
-        },
+        "known_gaps": [
+            {
+                "area": "open shift cash in hand",
+                "current_backend_behavior": "shift_cash.expected_cash stays at opening cash until shift close",
+                "desired_manifest_behavior": "expected cash should include live cash sales on open shifts",
+            }
+        ],
         "checks": checks,
         "passed": all(item["passed"] for item in checks),
     }
