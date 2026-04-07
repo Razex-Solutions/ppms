@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "purpose": "Machine-readable safe Flutter UI action smoke matrix for Phase 9 tenant app.",
+  "rules": {
+    "safe_actions_only": "This matrix opens screens and taps only repeatable, non-destructive actions. Destructive corrections are validated by run_phase9_scenario.py.",
+    "manual_review_scope": "Manual review should focus on layout, wording, and UX after these checks pass."
+  },
+  "accounts": {
+    "check": {
+      "username": "check",
+      "password": "office123",
+      "must_see": ["Tenant Setup", "Users", "Station Setup", "Tankers", "POS / Shop", "Reports", "Documents", "Notifications", "Corrections"],
+      "must_not_see": ["Unsupported Role"],
+      "screens": {
+        "Tenant Setup": {
+          "must_see": ["Organization Setup", "Organization", "Station"]
+        },
+        "Users": {
+          "must_see": ["Create Worker Login", "Users"]
+        },
+        "Station Setup": {
+          "must_see": ["Station Setup", "Setup Edit/Delete Packet", "Update Tank"]
+        },
+        "Tankers": {
+          "must_see": ["Tanker Action Packet", "Create Tanker", "Create Trip", "Complete Trip"]
+        },
+        "POS / Shop": {
+          "must_see": ["POS Action Packet", "Create Product", "Record POS Sale"],
+          "tap_safe": ["Create Product"]
+        },
+        "Reports": {
+          "must_see": ["Reporting Action Packet", "Create Daily Closing Export"],
+          "tap_safe": ["Create Daily Closing Export"]
+        },
+        "Documents": {
+          "must_see": ["Reporting Action Packet", "Load Dispatch Diagnostics"],
+          "tap_safe": ["Load Dispatch Diagnostics"]
+        },
+        "Notifications": {
+          "must_see": ["Reporting Action Packet", "Mark All Read", "Save Report Preference"],
+          "tap_safe": ["Mark All Read", "Save Report Preference"]
+        },
+        "Corrections": {
+          "must_see": ["Corrections Action Packet", "Reverse Fuel Sale", "Approve Fuel Reversal"]
+        }
+      }
+    },
+    "check_manager": {
+      "username": "check_manager",
+      "password": "manager123",
+      "must_see": ["Shifts", "Fuel Sales", "Cash", "Purchases", "Expenses", "Inventory & Dips", "Tankers", "POS / Shop", "Reports", "Corrections"],
+      "must_not_see": ["Users", "Tenant Setup"],
+      "screens": {
+        "Shifts": {
+          "must_see": ["Manager Action Packet", "Open Shift"]
+        },
+        "Cash": {
+          "must_see": ["Manager Action Packet", "Submit Cash"]
+        },
+        "Purchases": {
+          "must_see": ["Manager Action Packet", "Create Purchase"]
+        },
+        "Expenses": {
+          "must_see": ["Manager Action Packet", "Create Expense"]
+        },
+        "Inventory & Dips": {
+          "must_see": ["Manager Action Packet", "Record Dip"]
+        },
+        "Tankers": {
+          "must_see": ["Tanker Action Packet", "Create Tanker"]
+        },
+        "POS / Shop": {
+          "must_see": ["POS Action Packet", "Create Product", "Record POS Sale"],
+          "tap_safe": ["Create Product"]
+        },
+        "Corrections": {
+          "must_see": ["Corrections Action Packet", "Reverse Fuel Sale"]
+        }
+      }
+    },
+    "check_operator": {
+      "username": "check_operator",
+      "password": "operator123",
+      "must_see": ["Shift", "Fuel Sale", "Cash Submission", "Tank Dips", "POS Sale", "Attendance"],
+      "must_not_see": ["Users", "Tenant Setup", "Reports"],
+      "screens": {
+        "Shift": {
+          "must_see": ["Operator Shift", "Open Shift", "Close Shift"]
+        },
+        "Fuel Sale": {
+          "must_see": ["Operator Meter Fuel Sale", "Record Fuel Sale"]
+        },
+        "Cash Submission": {
+          "must_see": ["Operator Action Packet", "Submit Cash"]
+        },
+        "Tank Dips": {
+          "must_see": ["Operator Action Packet", "Record Dip"]
+        },
+        "POS Sale": {
+          "must_see": ["Operator Action Packet", "Record POS Sale"]
+        },
+        "Attendance": {
+          "must_see": ["Operator Action Packet", "Check In", "Check Out Last Check-In"]
+        }
+      }
+    },
+    "check_accountant": {
+      "username": "check_accountant",
+      "password": "accountant123",
+      "must_see": ["Finance", "Parties", "Payments", "Payroll", "Attendance", "Tankers", "Documents", "Reports", "Notifications", "Corrections"],
+      "must_not_see": ["Users", "Tenant Setup", "Fuel Sale"],
+      "screens": {
+        "Finance": {
+          "must_see": ["Accountant Action Packet", "Customers", "Suppliers"]
+        },
+        "Payments": {
+          "must_see": ["Accountant Action Packet", "Record Customer Payment", "Record Supplier Payment"]
+        },
+        "Parties": {
+          "must_see": ["Selected Customer Ledger", "Selected Supplier Ledger"]
+        },
+        "Payroll": {
+          "must_see": ["Payroll Runs", "Finalize First Draft Payroll"]
+        },
+        "Reports": {
+          "must_see": ["Reporting Action Packet", "Create Daily Closing Export"],
+          "tap_safe": ["Create Daily Closing Export"]
+        },
+        "Documents": {
+          "must_see": ["Reporting Action Packet", "Load Dispatch Diagnostics"],
+          "tap_safe": ["Load Dispatch Diagnostics"]
+        },
+        "Notifications": {
+          "must_see": ["Reporting Action Packet", "Mark All Read", "Save Report Preference"],
+          "tap_safe": ["Mark All Read", "Save Report Preference"]
+        },
+        "Corrections": {
+          "must_see": ["Corrections Action Packet", "Reverse Customer Payment", "Reverse Supplier Payment"]
+        }
+      }
+    },
+    "p9_multi_station_a_admin": {
+      "username": "p9_multi_station_a_admin",
+      "password": "station123",
+      "must_see": ["Users", "Station Setup", "Tankers", "Shifts", "Fuel Sales", "Cash", "Purchases", "Expenses", "Reports", "Corrections"],
+      "must_not_see": ["Tenant Setup", "Finance Overview"],
+      "screens": {
+        "Tankers": {
+          "must_see": ["Tanker Action Packet", "Create Tanker", "Create Trip"]
+        },
+        "Station Setup": {
+          "must_see": ["Station Setup", "Setup Edit/Delete Packet", "Update Tank"]
+        },
+        "Shifts": {
+          "must_see": ["Manager Action Packet", "Open Shift"]
+        },
+        "Reports": {
+          "must_see": ["Reporting Action Packet", "Create Daily Closing Export"],
+          "tap_safe": ["Create Daily Closing Export"]
+        }
+      }
+    },
+    "p9_multi_station_b_admin": {
+      "username": "p9_multi_station_b_admin",
+      "password": "station123",
+      "must_see": ["Users", "Station Setup", "Shifts", "Fuel Sales", "Cash", "Purchases", "Expenses", "Reports", "Corrections"],
+      "must_not_see": ["Tankers", "Tenant Setup", "Finance Overview"],
+      "screens": {
+        "Station Setup": {
+          "must_see": ["Station Setup", "Setup Edit/Delete Packet", "Update Tank"]
+        },
+        "Shifts": {
+          "must_see": ["Manager Action Packet", "Open Shift"]
+        },
+        "Reports": {
+          "must_see": ["Reporting Action Packet", "Create Daily Closing Export"],
+          "tap_safe": ["Create Daily Closing Export"]
+        }
+      }
+    },
+    "p9_minimal": {
+      "username": "p9_minimal",
+      "password": "office123",
+      "must_see": ["Tenant Setup", "Users", "Station Setup", "Reports", "Documents", "Notifications", "Corrections"],
+      "must_not_see": ["Tankers", "POS / Shop", "Hardware"],
+      "screens": {
+        "Tenant Setup": {
+          "must_see": ["Organization Setup", "Organization", "Station"]
+        },
+        "Reports": {
+          "must_see": ["Reporting Action Packet", "Create Daily Closing Export"],
+          "tap_safe": ["Create Daily Closing Export"]
+        }
+      }
+    }
+  }
+}

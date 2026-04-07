@@ -126,7 +126,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "read": {"HeadOffice"},
     },
     "station_modules": {
-        "read": {"HeadOffice", "StationAdmin"},
+        "read": {"HeadOffice", "StationAdmin", "Manager", "Operator", "Accountant"},
         "update": {"HeadOffice", "StationAdmin"},
     },
     "invoice_profiles": {

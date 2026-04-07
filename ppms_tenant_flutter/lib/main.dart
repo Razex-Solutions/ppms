@@ -1118,7 +1118,8 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         icon: Icons.rule_outlined,
         category: 'System',
         purpose: 'Request correction/reversal review for station records.',
-        nextAction: 'Use safe request flows; approvals stay with tenant admins.',
+        nextAction:
+            'Use safe request flows; approvals stay with tenant admins.',
       ),
     ],
     'accountant' => const [
@@ -1362,7 +1363,9 @@ class TenantSessionController extends ChangeNotifier {
     final station = workingStation;
     if (station != null) {
       final stationId = station['id'] as int?;
-      final modules = stationId == null ? null : _stationModulesByStationId[stationId];
+      final modules = stationId == null
+          ? null
+          : _stationModulesByStationId[stationId];
       return moduleNames.any((moduleName) => modules?[moduleName] == true);
     }
     return _stationModulesByStationId.values.any(
@@ -2363,7 +2366,8 @@ class _WorkspaceDetail extends StatelessWidget {
       'inventory',
       'inventory_dips',
     }.contains(workspace.id);
-    final isSetupEditWorkspace = {
+    final isSetupEditWorkspace =
+        {
           'station_setup',
           'inventory',
           'inventory_dips',
@@ -2380,13 +2384,23 @@ class _WorkspaceDetail extends StatelessWidget {
     }.contains(workspace.id);
     final isOperatorFuelWorkspace = workspace.id == 'fuel_sale';
     final isOperatorShiftWorkspace = workspace.id == 'shift';
-    final isOperatorActionWorkspace = sessionController.roleName == 'Operator' &&
-        {'cash_submission', 'tank_dips', 'attendance', 'pos_sale'}
-            .contains(workspace.id);
-    final isAccountantWorkspace = sessionController.roleName == 'Accountant' &&
+    final isOperatorActionWorkspace =
+        sessionController.roleName == 'Operator' &&
+        {
+          'cash_submission',
+          'tank_dips',
+          'attendance',
+          'pos_sale',
+        }.contains(workspace.id);
+    final isAccountantWorkspace =
+        sessionController.roleName == 'Accountant' &&
         {'finance', 'parties', 'payments', 'payroll'}.contains(workspace.id);
-    final isPosActionWorkspace = {'Manager', 'StationAdmin', 'HeadOffice'}
-            .contains(sessionController.roleName) &&
+    final isPosActionWorkspace =
+        {
+          'Manager',
+          'StationAdmin',
+          'HeadOffice',
+        }.contains(sessionController.roleName) &&
         workspace.id == 'pos';
     final isTankerActionWorkspace = workspace.id == 'tankers';
     final isCorrectionsWorkspace = workspace.id == 'corrections';
@@ -2476,7 +2490,10 @@ class _WorkspaceDetail extends StatelessWidget {
           _SetupEditDeletePanel(sessionController: sessionController),
         ],
         if (isManagerOperationsWorkspace &&
-            {'Manager', 'StationAdmin'}.contains(sessionController.roleName)) ...[
+            {
+              'Manager',
+              'StationAdmin',
+            }.contains(sessionController.roleName)) ...[
           const SizedBox(height: 12),
           _ManagerOperationsPanel(
             sessionController: sessionController,
@@ -2527,7 +2544,10 @@ class _WorkspaceDetail extends StatelessWidget {
           ),
         ],
         if (isReadOnlyApiWorkspace &&
-            !_usesSpecialActionPanel(sessionController.roleName, workspace.id) &&
+            !_usesSpecialActionPanel(
+              sessionController.roleName,
+              workspace.id,
+            ) &&
             !isAccountantWorkspace &&
             !isOperatorActionWorkspace &&
             !isPosActionWorkspace &&
@@ -2563,12 +2583,17 @@ class _WorkspaceDetail extends StatelessWidget {
         }.contains(workspaceId)) {
       return true;
     }
-    if (roleName == 'Operator' && {'shift', 'fuel_sale'}.contains(workspaceId)) {
+    if (roleName == 'Operator' &&
+        {'shift', 'fuel_sale'}.contains(workspaceId)) {
       return true;
     }
     if (roleName == 'Operator' &&
-        {'cash_submission', 'tank_dips', 'attendance', 'pos_sale'}
-            .contains(workspaceId)) {
+        {
+          'cash_submission',
+          'tank_dips',
+          'attendance',
+          'pos_sale',
+        }.contains(workspaceId)) {
       return true;
     }
     if (roleName == 'Accountant' &&
@@ -2599,7 +2624,8 @@ class _ApiBackedOverviewPanel extends StatefulWidget {
   final String workspaceId;
 
   @override
-  State<_ApiBackedOverviewPanel> createState() => _ApiBackedOverviewPanelState();
+  State<_ApiBackedOverviewPanel> createState() =>
+      _ApiBackedOverviewPanelState();
 }
 
 class _ApiBackedOverviewPanelState extends State<_ApiBackedOverviewPanel> {
@@ -2648,7 +2674,9 @@ class _ApiBackedOverviewPanelState extends State<_ApiBackedOverviewPanel> {
   Future<List<_OverviewDataset>> _loadWorkspaceDatasets() async {
     final stationId = _stationId;
     final stationQuery = stationId == null ? '' : '?station_id=$stationId';
-    final encodedStationQuery = stationId == null ? '' : '?station_id=$stationId';
+    final encodedStationQuery = stationId == null
+        ? ''
+        : '?station_id=$stationId';
     final today = DateTime.now().toIso8601String().split('T').first;
     final dailyClosingQuery = stationId == null
         ? '?report_date=$today'
@@ -2689,14 +2717,28 @@ class _ApiBackedOverviewPanelState extends State<_ApiBackedOverviewPanel> {
         ];
       case 'reports':
         return [
-          await _map('Daily closing', '/reports/daily-closing$dailyClosingQuery'),
-          await _list('Report definitions', '/report-definitions/$stationQuery'),
+          await _map(
+            'Daily closing',
+            '/reports/daily-closing$dailyClosingQuery',
+          ),
+          await _list(
+            'Report definitions',
+            '/report-definitions/$stationQuery',
+          ),
           await _list('Report exports', '/report-exports/$stationQuery'),
         ];
       case 'documents':
         return [
-          await _list('Document templates', stationId == null ? '/document-templates/0' : '/document-templates/$stationId'),
-          await _list('Document dispatches', '/financial-documents/dispatches$encodedStationQuery'),
+          await _list(
+            'Document templates',
+            stationId == null
+                ? '/document-templates/0'
+                : '/document-templates/$stationId',
+          ),
+          await _list(
+            'Document dispatches',
+            '/financial-documents/dispatches$encodedStationQuery',
+          ),
         ];
       case 'notifications':
         return [
@@ -2756,7 +2798,8 @@ class _ApiBackedOverviewPanelState extends State<_ApiBackedOverviewPanel> {
     if (_datasets.isEmpty) {
       return const _SectionCard(
         title: 'No API dataset configured yet',
-        body: 'This workspace is visible, but no read packet has been added yet.',
+        body:
+            'This workspace is visible, but no read packet has been added yet.',
       );
     }
     return Column(
@@ -2815,7 +2858,8 @@ class _AccountantFinancePanel extends StatefulWidget {
   final String workspaceId;
 
   @override
-  State<_AccountantFinancePanel> createState() => _AccountantFinancePanelState();
+  State<_AccountantFinancePanel> createState() =>
+      _AccountantFinancePanelState();
 }
 
 class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
@@ -2874,20 +2918,26 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
           : '?station_id=${widget.sessionController.workingStationId}';
       final customers = await widget.sessionController.loadCustomers();
       final suppliers = await widget.sessionController.loadSuppliers();
-      final customerPayments = await widget.sessionController
-          .loadListPath('/customer-payments/$stationQuery');
-      final supplierPayments = await widget.sessionController
-          .loadListPath('/supplier-payments/$stationQuery');
-      final payrollRuns = await widget.sessionController
-          .loadListPath('/payroll/runs$stationQuery');
-      final selectedCustomerId = _selectedCustomerId ??
+      final customerPayments = await widget.sessionController.loadListPath(
+        '/customer-payments/$stationQuery',
+      );
+      final supplierPayments = await widget.sessionController.loadListPath(
+        '/supplier-payments/$stationQuery',
+      );
+      final payrollRuns = await widget.sessionController.loadListPath(
+        '/payroll/runs$stationQuery',
+      );
+      final selectedCustomerId =
+          _selectedCustomerId ??
           (customers.isEmpty ? null : customers.first['id'] as int?);
-      final selectedSupplierId = _selectedSupplierId ??
+      final selectedSupplierId =
+          _selectedSupplierId ??
           (suppliers.isEmpty ? null : suppliers.first['id'] as int?);
       final customerLedger = selectedCustomerId == null
           ? null
-          : await widget.sessionController
-              .loadMapPath('/ledger/customer/$selectedCustomerId');
+          : await widget.sessionController.loadMapPath(
+              '/ledger/customer/$selectedCustomerId',
+            );
       final supplierLedger = selectedSupplierId == null
           ? null
           : await widget.sessionController.loadMapPath(
@@ -2924,17 +2974,14 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
       });
       return;
     }
-    await _save(
-      () async {
-        await widget.sessionController.createCustomerPayment(
-          customerId: customerId,
-          amount: amount,
-          referenceNo: _referenceController.text.trim(),
-          notes: _notesController.text.trim(),
-        );
-      },
-      'Customer payment recorded.',
-    );
+    await _save(() async {
+      await widget.sessionController.createCustomerPayment(
+        customerId: customerId,
+        amount: amount,
+        referenceNo: _referenceController.text.trim(),
+        notes: _notesController.text.trim(),
+      );
+    }, 'Customer payment recorded.');
   }
 
   Future<void> _createSupplierPayment() async {
@@ -2946,17 +2993,14 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
       });
       return;
     }
-    await _save(
-      () async {
-        await widget.sessionController.createSupplierPayment(
-          supplierId: supplierId,
-          amount: amount,
-          referenceNo: _referenceController.text.trim(),
-          notes: _notesController.text.trim(),
-        );
-      },
-      'Supplier payment recorded.',
-    );
+    await _save(() async {
+      await widget.sessionController.createSupplierPayment(
+        supplierId: supplierId,
+        amount: amount,
+        referenceNo: _referenceController.text.trim(),
+        notes: _notesController.text.trim(),
+      );
+    }, 'Supplier payment recorded.');
   }
 
   Future<void> _finalizeFirstDraftPayroll() async {
@@ -2972,9 +3016,8 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
       return;
     }
     await _save(
-      () async => widget.sessionController.finalizePayrollRun(
-        draftRun!['id'] as int,
-      ),
+      () async =>
+          widget.sessionController.finalizePayrollRun(draftRun!['id'] as int),
       'Draft payroll run finalized.',
     );
   }
@@ -3008,7 +3051,8 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
     if (_isLoading) {
       return const _SectionCard(
         title: 'Loading accountant packet',
-        body: 'Reading parties, payments, ledgers, and payroll from the backend.',
+        body:
+            'Reading parties, payments, ledgers, and payroll from the backend.',
       );
     }
     final customerSummary = _customerLedger?['summary'];
@@ -3032,8 +3076,14 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _SummaryTile(label: 'Customers', value: _customers.length.toString()),
-                _SummaryTile(label: 'Suppliers', value: _suppliers.length.toString()),
+                _SummaryTile(
+                  label: 'Customers',
+                  value: _customers.length.toString(),
+                ),
+                _SummaryTile(
+                  label: 'Suppliers',
+                  value: _suppliers.length.toString(),
+                ),
                 _SummaryTile(
                   label: 'Customer payments',
                   value: _customerPayments.length.toString(),
@@ -3042,7 +3092,10 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
                   label: 'Supplier payments',
                   value: _supplierPayments.length.toString(),
                 ),
-                _SummaryTile(label: 'Payroll runs', value: _payrollRuns.length.toString()),
+                _SummaryTile(
+                  label: 'Payroll runs',
+                  value: _payrollRuns.length.toString(),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -3058,7 +3111,9 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
                 rows: [
                   _DataRowText(
                     'Customer',
-                    customerSummary is Map ? customerSummary['party_name'] : '-',
+                    customerSummary is Map
+                        ? customerSummary['party_name']
+                        : '-',
                   ),
                   _DataRowText(
                     'Balance',
@@ -3086,7 +3141,9 @@ class _AccountantFinancePanelState extends State<_AccountantFinancePanel> {
                 rows: [
                   _DataRowText(
                     'Supplier',
-                    supplierSummary is Map ? supplierSummary['party_name'] : '-',
+                    supplierSummary is Map
+                        ? supplierSummary['party_name']
+                        : '-',
                   ),
                   _DataRowText(
                     'Balance',
@@ -3612,6 +3669,7 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
                   width: 220,
                   child: DropdownButtonFormField<Map<String, dynamic>>(
                     initialValue: _selectedRole,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Role',
                       border: OutlineInputBorder(),
@@ -4937,6 +4995,7 @@ class _OperatorFuelSalePanelState extends State<_OperatorFuelSalePanel> {
                   width: 300,
                   child: DropdownButtonFormField<int>(
                     initialValue: _selectedNozzleId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Nozzle',
                       border: OutlineInputBorder(),
@@ -5080,7 +5139,9 @@ class _OperatorUtilityPanelState extends State<_OperatorUtilityPanel> {
   final _amountController = TextEditingController(text: '100');
   final _dipMmController = TextEditingController(text: '100');
   final _dipVolumeController = TextEditingController(text: '1000');
-  final _notesController = TextEditingController(text: 'Phase 9 operator action');
+  final _notesController = TextEditingController(
+    text: 'Phase 9 operator action',
+  );
 
   Map<String, dynamic>? _setup;
   List<Map<String, dynamic>> _rows = const [];
@@ -5128,11 +5189,11 @@ class _OperatorUtilityPanelState extends State<_OperatorUtilityPanel> {
       final rows = switch (widget.workspaceId) {
         'cash_submission' => await widget.sessionController.loadShifts(),
         'tank_dips' => await widget.sessionController.loadListPath(
-            '/tank-dips/$stationQuery',
-          ),
+          '/tank-dips/$stationQuery',
+        ),
         'pos_sale' => await widget.sessionController.loadListPath(
-            '/pos-sales/$stationQuery',
-          ),
+          '/pos-sales/$stationQuery',
+        ),
         _ => const <Map<String, dynamic>>[],
       };
       final tanks = _tanks(setup);
@@ -5481,12 +5542,16 @@ class _PosActionPanelState extends State<_PosActionPanel> {
       final products = await widget.sessionController.loadListPath(
         '/pos-products/$query',
       );
-      final sales = await widget.sessionController.loadListPath('/pos-sales/$query');
+      final sales = await widget.sessionController.loadListPath(
+        '/pos-sales/$query',
+      );
       if (!mounted) return;
       setState(() {
         _products = products;
         _sales = sales;
-        _selectedProductId ??= products.isEmpty ? null : products.first['id'] as int?;
+        _selectedProductId ??= products.isEmpty
+            ? null
+            : products.first['id'] as int?;
         _isLoading = false;
       });
     } on Object catch (error) {
@@ -5500,7 +5565,9 @@ class _PosActionPanelState extends State<_PosActionPanel> {
 
   Future<void> _createProduct() async {
     final stationId = widget.sessionController.workingStationId;
-    if (stationId == null) throw TenantApiException('No working station found.');
+    if (stationId == null) {
+      throw TenantApiException('No working station found.');
+    }
     await _save(() async {
       final suffix = DateTime.now().millisecondsSinceEpoch;
       final product = await widget.sessionController.postPath(
@@ -5524,7 +5591,9 @@ class _PosActionPanelState extends State<_PosActionPanel> {
 
   Future<void> _createSale() async {
     final stationId = widget.sessionController.workingStationId;
-    if (stationId == null) throw TenantApiException('No working station found.');
+    if (stationId == null) {
+      throw TenantApiException('No working station found.');
+    }
     if (_selectedProductId == null) {
       await _createProduct();
     }
@@ -5582,7 +5651,10 @@ class _PosActionPanelState extends State<_PosActionPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('POS Action Packet', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'POS Action Packet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
             Text('Station: ${widget.sessionController.workingStationLabel}'),
             const SizedBox(height: 16),
@@ -5736,14 +5808,14 @@ class _ReportingActionPanelState extends State<_ReportingActionPanel> {
       final query = stationId == null ? '' : '?station_id=$stationId';
       final rows = switch (widget.workspaceId) {
         'reports' => await widget.sessionController.loadListPath(
-            '/report-exports/$query',
-          ),
+          '/report-exports/$query',
+        ),
         'documents' => await widget.sessionController.loadListPath(
-            '/financial-documents/dispatches$query',
-          ),
+          '/financial-documents/dispatches$query',
+        ),
         'notifications' => await widget.sessionController.loadListPath(
-            '/notifications/',
-          ),
+          '/notifications/',
+        ),
         _ => const <Map<String, dynamic>>[],
       };
       final summary = widget.workspaceId == 'notifications'
@@ -5941,9 +6013,12 @@ class _SetupEditDeletePanelState extends State<_SetupEditDeletePanel> {
       setState(() {
         _setup = setup;
         _selectedTankId ??= tanks.isEmpty ? null : tanks.first['id'] as int?;
-        _selectedDispenserId ??=
-            dispensers.isEmpty ? null : dispensers.first['id'] as int?;
-        _selectedNozzleId ??= nozzles.isEmpty ? null : nozzles.first['id'] as int?;
+        _selectedDispenserId ??= dispensers.isEmpty
+            ? null
+            : dispensers.first['id'] as int?;
+        _selectedNozzleId ??= nozzles.isEmpty
+            ? null
+            : nozzles.first['id'] as int?;
         _isLoading = false;
       });
     } on Object catch (error) {
@@ -6112,24 +6187,27 @@ class _SetupEditDeletePanelState extends State<_SetupEditDeletePanel> {
                   onPressed: _isSaving
                       ? null
                       : () => _save(
-                            () => _deleteSelected('nozzle'),
-                            'Nozzle deleted.',
-                          ),
+                          () => _deleteSelected('nozzle'),
+                          'Nozzle deleted.',
+                        ),
                   child: const Text('Delete Nozzle'),
                 ),
                 OutlinedButton(
                   onPressed: _isSaving
                       ? null
                       : () => _save(
-                            () => _deleteSelected('dispenser'),
-                            'Dispenser deleted.',
-                          ),
+                          () => _deleteSelected('dispenser'),
+                          'Dispenser deleted.',
+                        ),
                   child: const Text('Delete Dispenser'),
                 ),
                 OutlinedButton(
                   onPressed: _isSaving
                       ? null
-                      : () => _save(() => _deleteSelected('tank'), 'Tank deleted.'),
+                      : () => _save(
+                          () => _deleteSelected('tank'),
+                          'Tank deleted.',
+                        ),
                   child: const Text('Delete Tank'),
                 ),
               ],
@@ -6198,7 +6276,9 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
   final _quantityController = TextEditingController(text: '1000');
   final _rateController = TextEditingController(text: '250');
   final _expenseController = TextEditingController(text: '100');
-  final _notesController = TextEditingController(text: 'Phase 9 tanker UI packet');
+  final _notesController = TextEditingController(
+    text: 'Phase 9 tanker UI packet',
+  );
 
   Map<String, dynamic>? _setup;
   List<Map<String, dynamic>> _tankers = const [];
@@ -6236,9 +6316,12 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
       final stationId = widget.sessionController.workingStationId;
       final query = stationId == null ? '' : '?station_id=$stationId';
       final setup = await widget.sessionController.loadStationSetupFoundation();
-      final tankers = await widget.sessionController.loadListPath('/tankers/$query');
-      final trips =
-          await widget.sessionController.loadListPath('/tankers/trips$query');
+      final tankers = await widget.sessionController.loadListPath(
+        '/tankers/$query',
+      );
+      final trips = await widget.sessionController.loadListPath(
+        '/tankers/trips$query',
+      );
       final suppliers = await widget.sessionController.loadSuppliers();
       final customers = await widget.sessionController.loadCustomers();
       if (!mounted) return;
@@ -6248,7 +6331,9 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
         _trips = trips;
         _suppliers = suppliers;
         _customers = customers;
-        _selectedTankerId ??= tankers.isEmpty ? null : tankers.first['id'] as int?;
+        _selectedTankerId ??= tankers.isEmpty
+            ? null
+            : tankers.first['id'] as int?;
         _selectedTripId ??= trips.isEmpty ? null : trips.first['id'] as int?;
         _isLoading = false;
       });
@@ -6305,7 +6390,7 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
             'capacity': 12000,
             'position': 1,
             'is_active': true,
-          }
+          },
         ],
       },
     );
@@ -6332,7 +6417,8 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
         'linked_tank_id': tank['id'],
         'destination_name': 'Phase 9 customer route',
         'notes': _notesController.text,
-        'loaded_quantity': double.tryParse(_quantityController.text.trim()) ?? 0,
+        'loaded_quantity':
+            double.tryParse(_quantityController.text.trim()) ?? 0,
         'purchase_rate': double.tryParse(_rateController.text.trim()) ?? 0,
       },
     );
@@ -6341,7 +6427,9 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
 
   Future<void> _addDelivery() async {
     if (_selectedTripId == null) await _createTrip();
-    if (_selectedTripId == null) throw TenantApiException('Create a trip first.');
+    if (_selectedTripId == null) {
+      throw TenantApiException('Create a trip first.');
+    }
     await widget.sessionController.postPath(
       '/tankers/trips/$_selectedTripId/deliveries',
       body: {
@@ -6357,7 +6445,9 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
   }
 
   Future<void> _addExpense() async {
-    if (_selectedTripId == null) throw TenantApiException('Create a trip first.');
+    if (_selectedTripId == null) {
+      throw TenantApiException('Create a trip first.');
+    }
     await widget.sessionController.postPath(
       '/tankers/trips/$_selectedTripId/expenses',
       body: {
@@ -6369,7 +6459,9 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
   }
 
   Future<void> _completeTrip() async {
-    if (_selectedTripId == null) throw TenantApiException('Create a trip first.');
+    if (_selectedTripId == null) {
+      throw TenantApiException('Create a trip first.');
+    }
     final tank = _firstOrNull(_tanks(_setup));
     await widget.sessionController.postPath(
       '/tankers/trips/$_selectedTripId/complete',
@@ -6395,7 +6487,10 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Tanker Action Packet', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Tanker Action Packet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
             Text('Station: ${widget.sessionController.workingStationLabel}'),
             const SizedBox(height: 16),
@@ -6403,10 +6498,18 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _idDropdown('Tanker', _selectedTankerId, _tankers,
-                    (value) => setState(() => _selectedTankerId = value)),
-                _idDropdown('Trip', _selectedTripId, _trips,
-                    (value) => setState(() => _selectedTripId = value)),
+                _idDropdown(
+                  'Tanker',
+                  _selectedTankerId,
+                  _tankers,
+                  (value) => setState(() => _selectedTankerId = value),
+                ),
+                _idDropdown(
+                  'Trip',
+                  _selectedTripId,
+                  _trips,
+                  (value) => setState(() => _selectedTripId = value),
+                ),
                 _field(_quantityController, 'Loaded quantity'),
                 _field(_rateController, 'Rate'),
                 _field(_expenseController, 'Expense'),
@@ -6418,20 +6521,51 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton(onPressed: _isSaving ? null : () => _save(_createTanker, 'Tanker created.'), child: const Text('Create Tanker')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(_createTrip, 'Trip created.'), child: const Text('Create Trip')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(_addDelivery, 'Delivery added.'), child: const Text('Add Delivery')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(_addExpense, 'Expense added.'), child: const Text('Add Expense')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(_completeTrip, 'Trip completed.'), child: const Text('Complete Trip')),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_createTanker, 'Tanker created.'),
+                  child: const Text('Create Tanker'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_createTrip, 'Trip created.'),
+                  child: const Text('Create Trip'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_addDelivery, 'Delivery added.'),
+                  child: const Text('Add Delivery'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_addExpense, 'Expense added.'),
+                  child: const Text('Add Expense'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_completeTrip, 'Trip completed.'),
+                  child: const Text('Complete Trip'),
+                ),
               ],
             ),
             if (_message != null) ...[
               const SizedBox(height: 12),
-              Text(_message!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
             ],
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
             const SizedBox(height: 16),
             _SimpleListCard(
@@ -6462,7 +6596,10 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
       width: 220,
       child: TextField(
         controller: controller,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
       ),
     );
   }
@@ -6478,12 +6615,18 @@ class _TankerActionPanelState extends State<_TankerActionPanel> {
       child: DropdownButtonFormField<int>(
         initialValue: value,
         isExpanded: true,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
         items: [
           for (final row in rows)
             DropdownMenuItem<int>(
               value: row['id'] as int?,
-              child: Text('${row['name'] ?? row['registration_no'] ?? row['id']}', overflow: TextOverflow.ellipsis),
+              child: Text(
+                '${row['name'] ?? row['registration_no'] ?? row['id']}',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
         onChanged: onChanged,
@@ -6498,11 +6641,14 @@ class _CorrectionsActionPanel extends StatefulWidget {
   final TenantSessionController sessionController;
 
   @override
-  State<_CorrectionsActionPanel> createState() => _CorrectionsActionPanelState();
+  State<_CorrectionsActionPanel> createState() =>
+      _CorrectionsActionPanelState();
 }
 
 class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
-  final _reasonController = TextEditingController(text: 'Phase 9 correction test');
+  final _reasonController = TextEditingController(
+    text: 'Phase 9 correction test',
+  );
   List<Map<String, dynamic>> _fuelSales = const [];
   List<Map<String, dynamic>> _purchases = const [];
   List<Map<String, dynamic>> _customerPayments = const [];
@@ -6534,11 +6680,21 @@ class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
     try {
       final stationId = widget.sessionController.workingStationId;
       final query = stationId == null ? '' : '?station_id=$stationId';
-      final fuelSales = await widget.sessionController.loadListPath('/fuel-sales/$query');
-      final purchases = await widget.sessionController.loadListPath('/purchases/$query');
-      final customerPayments = await widget.sessionController.loadListPath('/customer-payments/$query');
-      final supplierPayments = await widget.sessionController.loadListPath('/supplier-payments/$query');
-      final posSales = await widget.sessionController.loadListPath('/pos-sales/$query');
+      final fuelSales = await widget.sessionController.loadListPath(
+        '/fuel-sales/$query',
+      );
+      final purchases = await widget.sessionController.loadListPath(
+        '/purchases/$query',
+      );
+      final customerPayments = await widget.sessionController.loadListPath(
+        '/customer-payments/$query',
+      );
+      final supplierPayments = await widget.sessionController.loadListPath(
+        '/supplier-payments/$query',
+      );
+      final posSales = await widget.sessionController.loadListPath(
+        '/pos-sales/$query',
+      );
       final customers = await widget.sessionController.loadCustomers();
       if (!mounted) return;
       setState(() {
@@ -6587,7 +6743,9 @@ class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
       (item) => item['is_reversed'] != true,
       orElse: () => const {},
     );
-    if (row['id'] == null) throw TenantApiException('No reversible $entity found.');
+    if (row['id'] == null) {
+      throw TenantApiException('No reversible $entity found.');
+    }
     await widget.sessionController.postPath(
       '/$pathSuffix/${row['id']}/reverse',
       body: {'reason': _reasonController.text},
@@ -6603,7 +6761,9 @@ class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
       (item) => item['reversal_request_status'] == 'pending',
       orElse: () => const {},
     );
-    if (row['id'] == null) throw TenantApiException('No pending reversal found.');
+    if (row['id'] == null) {
+      throw TenantApiException('No pending reversal found.');
+    }
     await widget.sessionController.postPath(
       '/$pathSuffix/${row['id']}/$decision-reversal',
       body: {'reason': _reasonController.text},
@@ -6615,7 +6775,9 @@ class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
       (item) => item['is_reversed'] != true,
       orElse: () => const {},
     );
-    if (sale['id'] == null) throw TenantApiException('No reversible POS sale found.');
+    if (sale['id'] == null) {
+      throw TenantApiException('No reversible POS sale found.');
+    }
     await widget.sessionController.postPath('/pos-sales/${sale['id']}/reverse');
   }
 
@@ -6655,7 +6817,10 @@ class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Corrections Action Packet', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Corrections Action Packet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
             Text('Station: ${widget.sessionController.workingStationLabel}'),
             const SizedBox(height: 12),
@@ -6671,24 +6836,110 @@ class _CorrectionsActionPanelState extends State<_CorrectionsActionPanel> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_fuelSales, 'fuel-sales', 'fuel sale'), 'Fuel sale reversal requested.'), child: const Text('Reverse Fuel Sale')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_purchases, 'purchases', 'purchase'), 'Purchase reversal requested.'), child: const Text('Reverse Purchase')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_customerPayments, 'customer-payments', 'customer payment'), 'Customer payment reversal requested.'), child: const Text('Reverse Customer Payment')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(() => _postFirst(_supplierPayments, 'supplier-payments', 'supplier payment'), 'Supplier payment reversal requested.'), child: const Text('Reverse Supplier Payment')),
-                FilledButton(onPressed: _isSaving ? null : () => _save(_reversePos, 'POS sale reversed.'), child: const Text('Reverse POS Sale')),
-                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(() => _reviewFirst(_fuelSales, 'fuel-sales', 'approve'), 'Fuel reversal approved.'), child: const Text('Approve Fuel Reversal')),
-                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(() => _reviewFirst(_fuelSales, 'fuel-sales', 'reject'), 'Fuel reversal rejected.'), child: const Text('Reject Fuel Reversal')),
-                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(_requestCreditOverride, 'Credit override requested.'), child: const Text('Request Credit Override')),
-                FilledButton.tonal(onPressed: _isSaving ? null : () => _save(_approveCreditOverride, 'Credit override approved.'), child: const Text('Approve Credit Override')),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          () =>
+                              _postFirst(_fuelSales, 'fuel-sales', 'fuel sale'),
+                          'Fuel sale reversal requested.',
+                        ),
+                  child: const Text('Reverse Fuel Sale'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          () => _postFirst(_purchases, 'purchases', 'purchase'),
+                          'Purchase reversal requested.',
+                        ),
+                  child: const Text('Reverse Purchase'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          () => _postFirst(
+                            _customerPayments,
+                            'customer-payments',
+                            'customer payment',
+                          ),
+                          'Customer payment reversal requested.',
+                        ),
+                  child: const Text('Reverse Customer Payment'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          () => _postFirst(
+                            _supplierPayments,
+                            'supplier-payments',
+                            'supplier payment',
+                          ),
+                          'Supplier payment reversal requested.',
+                        ),
+                  child: const Text('Reverse Supplier Payment'),
+                ),
+                FilledButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(_reversePos, 'POS sale reversed.'),
+                  child: const Text('Reverse POS Sale'),
+                ),
+                FilledButton.tonal(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          () =>
+                              _reviewFirst(_fuelSales, 'fuel-sales', 'approve'),
+                          'Fuel reversal approved.',
+                        ),
+                  child: const Text('Approve Fuel Reversal'),
+                ),
+                FilledButton.tonal(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          () =>
+                              _reviewFirst(_fuelSales, 'fuel-sales', 'reject'),
+                          'Fuel reversal rejected.',
+                        ),
+                  child: const Text('Reject Fuel Reversal'),
+                ),
+                FilledButton.tonal(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          _requestCreditOverride,
+                          'Credit override requested.',
+                        ),
+                  child: const Text('Request Credit Override'),
+                ),
+                FilledButton.tonal(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _save(
+                          _approveCreditOverride,
+                          'Credit override approved.',
+                        ),
+                  child: const Text('Approve Credit Override'),
+                ),
               ],
             ),
             if (_message != null) ...[
               const SizedBox(height: 12),
-              Text(_message!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
             ],
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
             const SizedBox(height: 16),
             _SimpleListCard(

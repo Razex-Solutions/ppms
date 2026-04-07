@@ -40,7 +40,20 @@ jobs:
       - name: Start backend
         shell: pwsh
         run: |
-          python run_local_server.py
+          Start-Process -FilePath python -ArgumentList "run_local_server.py" -WorkingDirectory $PWD
+          $deadline = (Get-Date).AddSeconds(45)
+          do {
+            try {
+              $health = Invoke-RestMethod -Uri "http://127.0.0.1:8012/health" -TimeoutSec 2
+              if ($health.status -eq "ok") {
+                Write-Host "Backend is healthy."
+                exit 0
+              }
+            } catch {
+              Start-Sleep -Seconds 2
+            }
+          } while ((Get-Date) -lt $deadline)
+          throw "Backend did not become healthy in time."
 
       - name: Run Phase 9 business scenario
         shell: pwsh
@@ -74,6 +87,12 @@ jobs:
         working-directory: ppms_tenant_flutter
         run: |
           flutter test --no-pub
+
+      - name: Run tenant Flutter UI action smoke
+        shell: pwsh
+        working-directory: ppms_tenant_flutter
+        run: |
+          flutter test --no-pub integration_test
 
       - name: Build tenant Flutter Windows debug app
         shell: pwsh
