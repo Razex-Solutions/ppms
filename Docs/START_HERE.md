@@ -14,7 +14,10 @@ When returning to this project, use these files in this order:
 4. [PHASE_EXECUTION_TEMPLATE.md](PHASE_EXECUTION_TEMPLATE.md)
    - this is the template to execute one phase properly
 
-5. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
+5. [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md)
+   - this is the clean tenant Flutter rebuild source of truth
+
+6. [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md)
    - this is the Phase 9 manual testing and fix workflow
 
 ## Current Recommended Next Step
@@ -22,6 +25,7 @@ When returning to this project, use these files in this order:
 Start with:
 
 - `Phase 9 - Local Stabilization and Acceptance`
+- use [TENANT_FLUTTER_REBUILD_PLAN.md](TENANT_FLUTTER_REBUILD_PLAN.md) for the clean tenant app path
 - use [CHECKTESTINGPLAN.md](CHECKTESTINGPLAN.md) as the step-by-step manual acceptance plan
 
 from:
@@ -45,7 +49,8 @@ from:
 Current direction:
 
 - keep the existing project
-- do not start a new one yet
+- keep the old Flutter app as a reference for now
+- build the clean tenant Flutter app in `ppms_tenant_flutter`
 - refactor and build phase by phase
 - complete locally first
 - deploy later to EC2/Vercel after local stabilization

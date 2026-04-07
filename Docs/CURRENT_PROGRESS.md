@@ -43,7 +43,9 @@ Important note:
 - the newer planning direction is to keep approvals optional and exception-based, not mandatory for normal operational facts
 
 ### Flutter
-The Flutter app is now beyond simple placeholders. It includes real workspaces for:
+The existing Flutter app in `ppms_flutter` is now kept as a reference while the tenant UI is rebuilt cleanly in `ppms_tenant_flutter`.
+
+The old Flutter app is beyond simple placeholders. It includes real workspaces for:
 - login
 - role-aware dashboards
 - onboarding
@@ -63,6 +65,12 @@ The Flutter app is now beyond simple placeholders. It includes real workspaces f
 - attendance
 - notifications
 - settings
+
+Current Phase 9 tenant rebuild decision:
+- keep `ppms_flutter` intact as a reference
+- create `ppms_tenant_flutter` as the clean tenant app rebuild
+- rebuild one vertical slice at a time from `TENANT_FLUTTER_REBUILD_PLAN.md`
+- first slice is login, session context, tenant landing page, role-aware navigation, and HeadOffice worker creation
 
 ### Phase Progress
 
@@ -177,7 +185,9 @@ Root: [C:\Fuel Management System](/C:/Fuel%20Management%20System)
 - [ppms](/C:/Fuel%20Management%20System/ppms)
   - FastAPI backend source
 - [ppms_flutter](/C:/Fuel%20Management%20System/ppms_flutter)
-  - Flutter desktop/mobile client
+  - existing Flutter desktop/mobile client kept as a reference during Phase 9
+- [ppms_tenant_flutter](/C:/Fuel%20Management%20System/ppms_tenant_flutter)
+  - clean tenant Flutter rebuild client
 - [support_console](/C:/Fuel%20Management%20System/support_console)
   - Next.js MasterAdmin/support web console
 - [alembic](/C:/Fuel%20Management%20System/alembic)
