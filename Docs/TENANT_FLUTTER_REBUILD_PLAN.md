@@ -353,6 +353,27 @@ Preferred safe strategy:
 
 Avoid deleting `ppms_flutter` first because it contains working endpoint examples and test wiring.
 
+## Easy Local Test Tenant Setup
+
+Use this helper whenever the local test tenant needs to be prepared again:
+
+```powershell
+cd C:\Fuel Management System
+.\prepare_phase9_tenant.ps1
+```
+
+It prepares the one-station `check` tenant for the clean tenant app:
+
+- organization: `check`
+- station: `check`
+- HeadOffice login: `check / office123`
+- Manager login: `check_manager / manager123`
+- Accountant login: `check_accountant / accountant123`
+- Operator login: `check_operator / operator123`
+- basic tanks, dispensers, and nozzles
+
+It intentionally does not create `StationAdmin` because this is a one-station tenant.
+
 ## Tenant App Screen Order
 
 Rebuild in this order:
