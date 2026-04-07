@@ -94,23 +94,33 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps
 What it does:
 
 - prepares the `check` Phase 9 tenant and worker users
-- creates a unique scenario operator user
-- opens an operator shift with known opening cash
-- records a meter-based fuel sale with known liters and rate
-- records a cash submission
-- closes the shift with expected cash
+- creates scenario-specific Manager and Operator users
+- creates profile-only staff records
+- opens multiple operator shifts with known opening cash
+- records meter-based fuel sales with known liters and rates
+- records cash submissions
+- closes balanced and variance shifts with expected cash
+- leaves one open shift to capture the current cash-in-hand behavior
 - creates a manager expense
-- creates a test supplier
-- creates a manager purchase
-- records a tank dip against current system stock
+- creates suppliers
+- creates Manager purchases and verifies the pending state
+- approves purchases through HeadOffice
+- records supplier payments through Accountant
+- verifies supplier ledger totals and payable balances
+- creates credit customers
+- records credit fuel sales through Operator
+- records customer payments through Accountant
+- verifies customer ledger totals and receivable balances
+- records multiple tank dips across all tanks
 - prints expected vs actual values as JSON
 
 Important business rule captured by the runner:
 
 - Manager-created purchases are currently `pending`
-- pending purchases calculate purchase totals but do not update tank stock until approved
+- pending purchases calculate purchase totals but do not update tank stock or supplier payable balances until approved
 - meter sales immediately reduce tank stock
 - dip loss/gain should be zero when the physical calculated volume equals system stock
+- open shift cash expected currently does not include live sales until close
 
 The runner should end with:
 

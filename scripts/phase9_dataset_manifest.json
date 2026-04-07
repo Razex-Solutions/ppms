@@ -298,12 +298,16 @@
       {
         "name": "Phase 9 Credit Customer A",
         "credit_sale_amount": 2000,
+        "sale_liters": 8,
+        "rate_per_liter": 250,
         "payment_amount": 750,
         "expected_balance_after_payment": 1250
       },
       {
         "name": "Phase 9 Credit Customer B",
         "credit_sale_amount": 3500,
+        "sale_liters": 14,
+        "rate_per_liter": 250,
         "payment_amount": 1000,
         "expected_balance_after_payment": 2500
       }

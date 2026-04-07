@@ -115,6 +115,15 @@ The current automated runner now covers the first running-pump operations batch:
 - leaves one current/open shift for cash-in-hand visibility testing
 - creates multiple manager expenses
 - creates suppliers and manager purchases
+- confirms Manager purchases start as `pending`
+- approves those purchases through HeadOffice
+- verifies approved purchases update supplier payables and tank stock
+- records supplier payments through Accountant
+- verifies supplier ledger charges, payments, and balances
+- creates credit customers
+- records credit fuel sales through an Operator shift
+- records customer payments through Accountant
+- verifies customer ledger charges, payments, and balances
 - records multiple tank dips across all tanks
 - prints expected vs actual totals
 
@@ -122,6 +131,7 @@ Known current backend behavior recorded by the runner:
 
 - open shift cash expected does not include live sales until shift close
 - closed shift cash expected and variance calculate correctly
+- Manager purchases require HeadOffice approval before stock and supplier payable balances update
 
 Command:
 
@@ -129,9 +139,11 @@ Command:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps1
 ```
 
-## Missing Dataset Blocks
+## Remaining Dataset Blocks
 
-The runner still needs these blocks added.
+The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, and tank dips at a first acceptance level.
+
+It still needs these blocks added.
 
 ### 1. Users And Staff
 
@@ -211,14 +223,18 @@ Current backend rule to remember:
 
 ### 4. Customers, Credit, And Receivables
 
-Create:
+Current automated coverage:
 
-- cash customer sale
 - credit customer
 - second credit customer
 - credit fuel sale
 - customer payment
 - customer ledger check
+
+Still to add:
+
+- cash customer sale if a named cash customer workflow is kept
+- credit limit override request/approve/reject if this remains in the product flow
 
 Expected formulas:
 
@@ -230,14 +246,19 @@ receivables = sum(customer_balances)
 
 ### 5. Suppliers, Purchases, Payments, And Payables
 
-Create:
+Current automated coverage:
 
 - supplier
 - second supplier
 - purchase
 - second purchase
+- purchase approval
 - supplier payment
 - supplier ledger check
+
+Still to decide:
+
+- whether normal tenant purchases should remain approval-based or become direct operational records based on tenant/module policy
 
 Expected formulas:
 

@@ -304,6 +304,151 @@ def create_purchases(
     return purchases
 
 
+def approve_purchases_and_pay_suppliers(
+    *,
+    head_office: ApiClient,
+    accountant: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    purchases: list[dict[str, Any]],
+    supplier_specs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    approved_purchases: list[dict[str, Any]] = []
+    supplier_payments: list[dict[str, Any]] = []
+    supplier_ledgers: list[dict[str, Any]] = []
+    suppliers_after_payment: list[dict[str, Any]] = []
+
+    for purchase, supplier_spec in zip(purchases, supplier_specs):
+        approved_purchase = head_office.post(
+            f"/purchases/{purchase['id']}/approve",
+            {"reason": f"{scenario_id} Phase 9 supplier payable check"},
+        )
+        approved_purchases.append(approved_purchase)
+        supplier_payment = accountant.post(
+            "/supplier-payments/",
+            {
+                "supplier_id": approved_purchase["supplier_id"],
+                "station_id": station_id,
+                "amount": supplier_spec["payment_amount"],
+                "payment_method": "cash",
+                "reference_no": f"{scenario_id}-SPAY-{approved_purchase['id']}",
+                "notes": "Created by the Phase 9 scenario runner",
+            },
+        )
+        supplier_payments.append(supplier_payment)
+        supplier_ledgers.append(
+            accountant.get(
+                f"/ledger/supplier/{approved_purchase['supplier_id']}",
+                query={"station_id": station_id},
+            )
+        )
+        suppliers_after_payment.append(accountant.get(f"/suppliers/{approved_purchase['supplier_id']}"))
+
+    return {
+        "approved_purchases": approved_purchases,
+        "supplier_payments": supplier_payments,
+        "supplier_ledgers": supplier_ledgers,
+        "suppliers_after_payment": suppliers_after_payment,
+    }
+
+
+def create_credit_customer_flow(
+    *,
+    anonymous: ApiClient,
+    accountant: ApiClient,
+    scenario_id: str,
+    operator_user: dict[str, Any],
+    station_id: int,
+    customer_specs: list[dict[str, Any]],
+    nozzles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    operator = anonymous.login(operator_user["username"], operator_user["password"])
+    shift = operator.post(
+        "/shifts/",
+        {
+            "station_id": station_id,
+            "initial_cash": 0,
+            "notes": f"{scenario_id} credit customer shift",
+        },
+    )
+
+    customers: list[dict[str, Any]] = []
+    credit_sales: list[dict[str, Any]] = []
+    customer_payments: list[dict[str, Any]] = []
+    customer_ledgers: list[dict[str, Any]] = []
+    customers_after_payment: list[dict[str, Any]] = []
+
+    for index, customer_spec in enumerate(customer_specs, start=1):
+        customer = accountant.post(
+            "/customers/",
+            {
+                "name": f"{scenario_id} {customer_spec['name']}",
+                "code": f"{scenario_id}-CUST-{index}",
+                "customer_type": "business",
+                "phone": "000-000",
+                "address": "Phase 9 scenario credit customer",
+                "credit_limit": customer_spec["credit_sale_amount"] * 2,
+                "station_id": station_id,
+            },
+        )
+        customers.append(customer)
+
+        nozzle = nozzles[(index - 1) % len(nozzles)]
+        current_setup = operator.get(f"/stations/{station_id}/setup-foundation")
+        current_nozzle = next(
+            item
+            for item in flatten_nozzles(current_setup)
+            if int(item["id"]) == int(nozzle["id"])
+        )
+        sale = operator.post(
+            "/fuel-sales/",
+            {
+                "nozzle_id": current_nozzle["id"],
+                "station_id": station_id,
+                "fuel_type_id": current_nozzle["fuel_type_id"],
+                "customer_id": customer["id"],
+                "closing_meter": float(current_nozzle["meter_reading"]) + float(customer_spec["sale_liters"]),
+                "rate_per_liter": customer_spec["rate_per_liter"],
+                "sale_type": "credit",
+                "shift_id": shift["id"],
+            },
+        )
+        credit_sales.append(sale)
+
+        payment = accountant.post(
+            "/customer-payments/",
+            {
+                "customer_id": customer["id"],
+                "station_id": station_id,
+                "amount": customer_spec["payment_amount"],
+                "payment_method": "cash",
+                "reference_no": f"{scenario_id}-CPAY-{index}",
+                "notes": "Created by the Phase 9 scenario runner",
+            },
+        )
+        customer_payments.append(payment)
+        customer_ledgers.append(accountant.get(f"/ledger/customer/{customer['id']}"))
+        customers_after_payment.append(accountant.get(f"/customers/{customer['id']}"))
+
+    closed_shift = operator.post(
+        f"/shifts/{shift['id']}/close",
+        {
+            "actual_cash_collected": 0,
+            "notes": f"{scenario_id} credit customer shift close",
+        },
+    )
+
+    return {
+        "shift": shift,
+        "closed_shift": closed_shift,
+        "customers": customers,
+        "credit_sales": credit_sales,
+        "customer_payments": customer_payments,
+        "customer_ledgers": customer_ledgers,
+        "customers_after_payment": customers_after_payment,
+    }
+
+
 def create_dips(
     *,
     manager: ApiClient,
@@ -353,6 +498,10 @@ def main() -> int:
         manifest["users"]["base_manager"]["username"],
         manifest["users"]["base_manager"]["password"],
     )
+    accountant = anonymous.login(
+        manifest["users"]["accountant"]["username"],
+        manifest["users"]["accountant"]["password"],
+    )
 
     timestamp = int(time.time())
     scenario_id = f"P9-{timestamp}"
@@ -384,8 +533,9 @@ def main() -> int:
         for user in extra_users
         if user["role_id"] == role_ids["Operator"]
     ]
-    if len(operator_users) < len(manifest["operations"]["shift_scenarios"]):
-        raise RuntimeError("Manifest must define enough fresh Operator users for shift scenarios")
+    required_operator_count = len(manifest["operations"]["shift_scenarios"]) + 1
+    if len(operator_users) < required_operator_count:
+        raise RuntimeError("Manifest must define enough fresh Operator users for shift and credit scenarios")
 
     employee_profiles = [
         create_employee_profile(
@@ -430,10 +580,27 @@ def main() -> int:
         tanks=setup_before["tanks"],
         purchase_specs=manifest["operations"]["purchases"],
     )
-    setup_after_sales_and_purchases = manager.get(f"/stations/{station_id}/setup-foundation")
-    tanks_after_sales_and_purchases_by_id = {
+    supplier_finance = approve_purchases_and_pay_suppliers(
+        head_office=head_office,
+        accountant=accountant,
+        scenario_id=scenario_id,
+        station_id=station_id,
+        purchases=purchases,
+        supplier_specs=manifest["credit_and_ledgers"]["suppliers"],
+    )
+    credit_customer_flow = create_credit_customer_flow(
+        anonymous=anonymous,
+        accountant=accountant,
+        scenario_id=scenario_id,
+        operator_user=operator_users[len(manifest["operations"]["shift_scenarios"])],
+        station_id=station_id,
+        customer_specs=manifest["credit_and_ledgers"]["customers"],
+        nozzles=nozzles,
+    )
+    setup_after_sales_and_approved_purchases = manager.get(f"/stations/{station_id}/setup-foundation")
+    tanks_after_sales_and_approved_purchases_by_id = {
         int(tank["id"]): float(tank["current_volume"])
-        for tank in setup_after_sales_and_purchases["tanks"]
+        for tank in setup_after_sales_and_approved_purchases["tanks"]
     }
     dips = create_dips(
         manager=manager,
@@ -522,6 +689,100 @@ def main() -> int:
             ]
         )
 
+    for approved_purchase, expected in zip(
+        supplier_finance["approved_purchases"],
+        manifest["operations"]["purchases"],
+    ):
+        checks.extend(
+            [
+                check(
+                    f"purchase {approved_purchase['id']} approved status",
+                    approved_purchase["status"],
+                    "approved",
+                ),
+                check(
+                    f"purchase {approved_purchase['id']} approved total",
+                    approved_purchase["total_amount"],
+                    expected["expected_total"],
+                    approximate=True,
+                ),
+            ]
+        )
+
+    for flow_index, (customer, ledger, expected) in enumerate(
+        zip(
+            credit_customer_flow["customers_after_payment"],
+            credit_customer_flow["customer_ledgers"],
+            manifest["credit_and_ledgers"]["customers"],
+        ),
+        start=1,
+    ):
+        checks.extend(
+            [
+                check(
+                    f"credit customer {flow_index} outstanding balance",
+                    customer["outstanding_balance"],
+                    expected["expected_balance_after_payment"],
+                    approximate=True,
+                ),
+                check(
+                    f"credit customer {flow_index} ledger charges",
+                    ledger["summary"]["total_charges"],
+                    expected["credit_sale_amount"],
+                    approximate=True,
+                ),
+                check(
+                    f"credit customer {flow_index} ledger payments",
+                    ledger["summary"]["total_payments"],
+                    expected["payment_amount"],
+                    approximate=True,
+                ),
+                check(
+                    f"credit customer {flow_index} ledger balance",
+                    ledger["summary"]["current_balance"],
+                    expected["expected_balance_after_payment"],
+                    approximate=True,
+                ),
+            ]
+        )
+
+    for flow_index, (supplier, ledger, expected) in enumerate(
+        zip(
+            supplier_finance["suppliers_after_payment"],
+            supplier_finance["supplier_ledgers"],
+            manifest["credit_and_ledgers"]["suppliers"],
+        ),
+        start=1,
+    ):
+        checks.extend(
+            [
+                check(
+                    f"supplier {flow_index} payable balance",
+                    supplier["payable_balance"],
+                    expected["expected_balance_after_payment"],
+                    approximate=True,
+                ),
+                check(
+                    f"supplier {flow_index} ledger charges",
+                    ledger["summary"]["total_charges"],
+                    expected["purchase_total"],
+                    approximate=True,
+                ),
+                check(
+                    f"supplier {flow_index} ledger payments",
+                    ledger["summary"]["total_payments"],
+                    expected["payment_amount"],
+                    approximate=True,
+                ),
+                check(
+                    f"supplier {flow_index} ledger balance",
+                    ledger["summary"]["current_balance"],
+                    expected["expected_balance_after_payment"],
+                    approximate=True,
+                ),
+            ]
+        )
+
     expected_loss_gains = [
         reading["expected_loss_gain"]
         for tank_spec in manifest["operations"]["dip_scenarios"]
@@ -543,12 +804,26 @@ def main() -> int:
             nozzle = next(item for item in nozzles if int(item["id"]) == int(sale["nozzle_id"]))
             tank_id = int(nozzle["tank_id"])
             total_sale_liters_by_tank[tank_id] = total_sale_liters_by_tank.get(tank_id, 0.0) + float(sale["quantity"])
+    for sale in credit_customer_flow["credit_sales"]:
+        nozzle = next(item for item in nozzles if int(item["id"]) == int(sale["nozzle_id"]))
+        tank_id = int(nozzle["tank_id"])
+        total_sale_liters_by_tank[tank_id] = total_sale_liters_by_tank.get(tank_id, 0.0) + float(sale["quantity"])
+    total_purchase_liters_by_tank: dict[int, float] = {}
+    for purchase in supplier_finance["approved_purchases"]:
+        tank_id = int(purchase["tank_id"])
+        total_purchase_liters_by_tank[tank_id] = (
+            total_purchase_liters_by_tank.get(tank_id, 0.0) + float(purchase["quantity"])
+        )
     for tank_id, tank_before in tanks_before_by_id.items():
-        expected_volume = tank_before - total_sale_liters_by_tank.get(tank_id, 0.0)
+        expected_volume = (
+            tank_before
+            - total_sale_liters_by_tank.get(tank_id, 0.0)
+            + total_purchase_liters_by_tank.get(tank_id, 0.0)
+        )
         checks.append(
             check(
-                f"tank {tank_id} volume after sales and pending purchases",
-                tanks_after_sales_and_purchases_by_id[tank_id],
+                f"tank {tank_id} volume after sales and approved purchases",
+                tanks_after_sales_and_approved_purchases_by_id[tank_id],
                 expected_volume,
                 approximate=True,
             )
@@ -571,19 +846,32 @@ def main() -> int:
             "fuel_sale_ids": [sale["id"] for item in shift_results for sale in item["sales"]],
             "expense_ids": [expense["id"] for expense in expenses],
             "purchase_ids": [purchase["id"] for purchase in purchases],
+            "approved_purchase_ids": [purchase["id"] for purchase in supplier_finance["approved_purchases"]],
+            "customer_ids": [customer["id"] for customer in credit_customer_flow["customers"]],
+            "credit_fuel_sale_ids": [sale["id"] for sale in credit_customer_flow["credit_sales"]],
+            "customer_payment_ids": [payment["id"] for payment in credit_customer_flow["customer_payments"]],
+            "supplier_payment_ids": [payment["id"] for payment in supplier_finance["supplier_payments"]],
             "tank_dip_ids": [dip["id"] for dip in dips],
         },
         "totals": {
-            "fuel_sales": sum(float(sale["total_amount"]) for item in shift_results for sale in item["sales"]),
+            "cash_fuel_sales": sum(float(sale["total_amount"]) for item in shift_results for sale in item["sales"]),
+            "credit_fuel_sales": sum(float(sale["total_amount"]) for sale in credit_customer_flow["credit_sales"]),
             "cash_submitted": sum(float(cash["amount"]) for item in shift_results for cash in item["cash_submissions"]),
             "expenses": sum(float(expense["amount"]) for expense in expenses),
             "purchase_total": sum(float(purchase["total_amount"]) for purchase in purchases),
+            "customer_payments": sum(float(payment["amount"]) for payment in credit_customer_flow["customer_payments"]),
+            "supplier_payments": sum(float(payment["amount"]) for payment in supplier_finance["supplier_payments"]),
         },
         "known_gaps": [
             {
                 "area": "open shift cash in hand",
                 "current_backend_behavior": "shift_cash.expected_cash stays at opening cash until shift close",
                 "desired_manifest_behavior": "expected cash should include live cash sales on open shifts",
+            },
+            {
+                "area": "purchase approval",
+                "current_backend_behavior": "Manager purchases are pending until HeadOffice approval",
+                "desired_manifest_behavior": "normal purchase direct-vs-approval behavior should become a tenant/module policy",
             }
         ],
         "checks": checks,
