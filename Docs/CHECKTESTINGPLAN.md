@@ -290,7 +290,12 @@ Questions to answer for each field:
 
 Specific checks:
 
+- organization onboarding must expose `Edit` for existing organizations from the recent organization list
+- organization edit mode must update identity, branding, contact, registration, and tax fields without creating duplicate stations or HeadOffice users
 - legal name should allow `same as organization name`, `same as station name`, or `custom`
+- organization legal name should default to `same as organization name` unless the tester explicitly chooses a custom legal name
+- organization code should be auto-generated from organization name, brand context, and a short sequence/id-style suffix; it should not require manual typing during normal creation
+- existing organization code should remain stable while editing an organization unless a later explicit code-change workflow is added
 - invoice legal name should default from organization/station unless explicitly overridden
 - tank location should be kept only if it helps identify physical tanks; otherwise make it optional or hide from the main setup flow
 - dispenser location should be kept only if it helps identify physical dispensers; otherwise make it optional or hide from the main setup flow

@@ -34,9 +34,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
   bool _inheritBranding = true;
   bool _createHeadOfficeAccount = true;
   bool _singleStationUsesOrganizationDetails = true;
+  bool _legalNameMatchesOrganization = true;
   String? _errorMessage;
   String? _feedbackMessage;
   int? _selectedBrandId;
+  int? _editingOrganizationId;
   List<Map<String, dynamic>> _brands = const [];
   int _stationCount = 1;
   List<Map<String, dynamic>> _organizations = const [];
@@ -48,6 +50,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   void initState() {
     super.initState();
     _stationDrafts = [_StationDraft()];
+    _organizationNameController.addListener(_syncGeneratedOrganizationFields);
     _loadWorkspace();
   }
 
@@ -69,6 +72,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
     for (final draft in _stationDrafts) {
       draft.dispose();
     }
+    _organizationNameController.removeListener(
+      _syncGeneratedOrganizationFields,
+    );
     super.dispose();
   }
 
@@ -140,6 +146,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   bool get _isSingleStationFlow => _stationCount == 1;
 
+  bool get _isEditingOrganization => _editingOrganizationId != null;
+
   String _resolvedStationName(_StationDraft draft) {
     if (_isSingleStationFlow && _singleStationUsesOrganizationDetails) {
       return _organizationNameController.text.trim();
@@ -161,12 +169,105 @@ class _OnboardingPageState extends State<OnboardingPage> {
     return _emptyToNull(draft.displayNameController.text);
   }
 
+  void _syncGeneratedOrganizationFields() {
+    if (_legalNameMatchesOrganization &&
+        _legalNameController.text != _organizationNameController.text) {
+      _legalNameController.text = _organizationNameController.text;
+    }
+    if (!_isEditingOrganization) {
+      final generatedCode = _generateOrganizationCode();
+      if (_organizationCodeController.text != generatedCode) {
+        _organizationCodeController.text = generatedCode;
+      }
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  String _generateOrganizationCode() {
+    final organizationPart = _codePart(_organizationNameController.text, 'ORG');
+    final brandPart = _codePart(
+      _selectedBrandData?['code'] as String? ?? _selectedBrandName,
+      'BR',
+    );
+    var sequence = (_organizations.length + 1).clamp(1, 999).toString();
+    sequence = sequence.padLeft(3, '0');
+    var code = '$organizationPart-$brandPart-$sequence';
+    var attempt = _organizations.length + 1;
+    final existingCodes = _organizations
+        .map((organization) => organization['code']?.toString().toUpperCase())
+        .whereType<String>()
+        .toSet();
+    while (existingCodes.contains(code)) {
+      attempt += 1;
+      code =
+          '$organizationPart-$brandPart-${attempt.clamp(1, 999).toString().padLeft(3, '0')}';
+    }
+    return code;
+  }
+
+  String _codePart(String value, String fallback) {
+    final normalized = value.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]+'),
+      '',
+    );
+    if (normalized.isEmpty) {
+      return fallback;
+    }
+    return normalized.length <= 8 ? normalized : normalized.substring(0, 8);
+  }
+
+  Map<String, dynamic> _organizationPayload({
+    required bool includeCode,
+    required bool includeCreateDefaults,
+  }) {
+    final selectedBrand = _selectedBrandData;
+    final legalName = _legalNameMatchesOrganization
+        ? _organizationNameController.text.trim()
+        : _legalNameController.text.trim();
+    final payload = <String, dynamic>{
+      'name': _organizationNameController.text.trim(),
+      if (includeCode) 'code': _organizationCodeController.text.trim(),
+      'description': _emptyToNull(_organizationDescriptionController.text),
+      'legal_name': _emptyToNull(legalName),
+      'brand_catalog_id': _selectedBrandId,
+      'brand_name': _selectedBrandIsCustom
+          ? _organizationNameController.text.trim()
+          : selectedBrand?['name'],
+      'brand_code': _selectedBrandIsCustom
+          ? _organizationCodeController.text.trim().toUpperCase()
+          : selectedBrand?['code'],
+      'logo_url': _selectedBrandIsCustom
+          ? _emptyToNull(_logoUrlController.text)
+          : selectedBrand?['logo_url'] as String?,
+      'contact_email': _emptyToNull(_contactEmailController.text),
+      'contact_phone': _emptyToNull(_contactPhoneController.text),
+      'registration_number': _emptyToNull(_registrationController.text),
+      'tax_registration_number': _emptyToNull(_taxRegistrationController.text),
+      'station_target_count': _stationCount,
+      'inherit_branding_to_stations': _inheritBranding,
+      'is_active': true,
+    };
+    if (includeCreateDefaults) {
+      payload.addAll({
+        'onboarding_status': 'active',
+        'billing_status': 'trial',
+      });
+    }
+    return payload;
+  }
+
   Future<void> _submitOnboarding() async {
     if (_organizationNameController.text.trim().isEmpty ||
         _organizationCodeController.text.trim().isEmpty) {
       setState(() {
         _errorMessage = 'Organization name and code are required.';
       });
+      return;
+    }
+    if (_isEditingOrganization) {
+      await _updateOrganizationDetails();
       return;
     }
     for (final draft in _stationDrafts) {
@@ -189,8 +290,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
 
-    final selectedBrand = _selectedBrandData;
-
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -198,33 +297,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
     });
 
     try {
-      final organization = await widget.sessionController.createOrganization({
-        'name': _organizationNameController.text.trim(),
-        'code': _organizationCodeController.text.trim(),
-        'description': _emptyToNull(_organizationDescriptionController.text),
-        'legal_name': _emptyToNull(_legalNameController.text),
-        'brand_catalog_id': _selectedBrandId,
-        'brand_name': _selectedBrandIsCustom
-            ? _organizationNameController.text.trim()
-            : selectedBrand?['name'],
-        'brand_code': _selectedBrandIsCustom
-            ? _organizationCodeController.text.trim().toUpperCase()
-            : selectedBrand?['code'],
-        'logo_url': _selectedBrandIsCustom
-            ? _emptyToNull(_logoUrlController.text)
-            : selectedBrand?['logo_url'] as String?,
-        'contact_email': _emptyToNull(_contactEmailController.text),
-        'contact_phone': _emptyToNull(_contactPhoneController.text),
-        'registration_number': _emptyToNull(_registrationController.text),
-        'tax_registration_number': _emptyToNull(
-          _taxRegistrationController.text,
-        ),
-        'onboarding_status': 'active',
-        'billing_status': 'trial',
-        'station_target_count': _stationCount,
-        'inherit_branding_to_stations': _inheritBranding,
-        'is_active': true,
-      });
+      final organization = await widget.sessionController.createOrganization(
+        _organizationPayload(includeCode: true, includeCreateDefaults: true),
+      );
 
       final organizationId = organization['id'] as int;
       int? firstStationId;
@@ -299,7 +374,49 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
   }
 
+  Future<void> _updateOrganizationDetails() async {
+    final organizationId = _editingOrganizationId;
+    if (organizationId == null) {
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      final organization = await widget.sessionController.updateOrganization(
+        organizationId: organizationId,
+        payload: _organizationPayload(
+          includeCode: false,
+          includeCreateDefaults: false,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      await _loadWorkspace();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _feedbackMessage =
+            'Organization ${organization['name']} updated. Code ${organization['code']} stayed unchanged.';
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
   void _resetForm() {
+    _editingOrganizationId = null;
     _organizationNameController.clear();
     _organizationCodeController.clear();
     _organizationDescriptionController.clear();
@@ -322,11 +439,57 @@ class _OnboardingPageState extends State<OnboardingPage> {
     _inheritBranding = true;
     _createHeadOfficeAccount = true;
     _singleStationUsesOrganizationDetails = true;
+    _legalNameMatchesOrganization = true;
     _latestSetupFoundation = null;
     _syncStationDraftCount(1);
     for (final draft in _stationDrafts) {
       draft.reset();
     }
+    _syncGeneratedOrganizationFields();
+  }
+
+  void _editOrganization(Map<String, dynamic> organization) {
+    setState(() {
+      _editingOrganizationId = organization['id'] as int?;
+      _organizationNameController.text = organization['name'] as String? ?? '';
+      _organizationCodeController.text = organization['code'] as String? ?? '';
+      _organizationDescriptionController.text =
+          organization['description'] as String? ?? '';
+      final legalName = organization['legal_name'] as String? ?? '';
+      _legalNameMatchesOrganization =
+          legalName.isEmpty || legalName == _organizationNameController.text;
+      _legalNameController.text = _legalNameMatchesOrganization
+          ? _organizationNameController.text
+          : legalName;
+      _logoUrlController.text = organization['logo_url'] as String? ?? '';
+      _contactEmailController.text =
+          organization['contact_email'] as String? ?? '';
+      _contactPhoneController.text =
+          organization['contact_phone'] as String? ?? '';
+      _registrationController.text =
+          organization['registration_number'] as String? ?? '';
+      _taxRegistrationController.text =
+          organization['tax_registration_number'] as String? ?? '';
+      _selectedBrandId =
+          organization['brand_catalog_id'] as int? ??
+          _brands.cast<Map<String, dynamic>?>().firstWhere(
+                (brand) =>
+                    brand?['code']?.toString() ==
+                    organization['brand_code']?.toString(),
+                orElse: () => _brands.isNotEmpty ? _brands.first : null,
+              )?['id']
+              as int?;
+      _inheritBranding =
+          organization['inherit_branding_to_stations'] as bool? ?? true;
+      _stationCount = organization['station_target_count'] as int? ?? 1;
+      _createHeadOfficeAccount = false;
+      _singleStationUsesOrganizationDetails = true;
+      _latestSetupFoundation = null;
+      _errorMessage = null;
+      _feedbackMessage =
+          'Editing ${_organizationNameController.text}. Station and HeadOffice creation are paused in edit mode.';
+    });
+    _syncStationDraftCount(_stationCount);
   }
 
   String? _emptyToNull(String value) {
@@ -424,7 +587,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Organization', style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          _isEditingOrganization ? 'Edit Organization Details' : 'Organization',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _organizationNameController,
@@ -433,7 +599,25 @@ class _OnboardingPageState extends State<OnboardingPage> {
         const SizedBox(height: 12),
         TextFormField(
           controller: _organizationCodeController,
-          decoration: const InputDecoration(labelText: 'Organization Code'),
+          readOnly: true,
+          decoration: InputDecoration(
+            labelText: 'Organization Code',
+            helperText: _isEditingOrganization
+                ? 'Code is kept stable while editing organization details.'
+                : 'Auto-generated from organization name, brand, and the next local sequence.',
+            suffixIcon: _isEditingOrganization
+                ? null
+                : IconButton(
+                    tooltip: 'Regenerate organization code',
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () {
+                      setState(() {
+                        _organizationCodeController.text =
+                            _generateOrganizationCode();
+                      });
+                    },
+                  ),
+          ),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
@@ -452,6 +636,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
           onChanged: (value) {
             setState(() {
               _selectedBrandId = int.tryParse(value ?? '');
+              if (!_isEditingOrganization) {
+                _organizationCodeController.text = _generateOrganizationCode();
+              }
             });
           },
         ),
@@ -467,9 +654,28 @@ class _OnboardingPageState extends State<OnboardingPage> {
           primaryColor: _selectedBrandData?['primary_color'] as String?,
         ),
         const SizedBox(height: 12),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _legalNameMatchesOrganization,
+          title: const Text('Legal name is same as organization name'),
+          onChanged: (value) {
+            setState(() {
+              _legalNameMatchesOrganization = value;
+              if (value) {
+                _legalNameController.text = _organizationNameController.text;
+              }
+            });
+          },
+        ),
         TextFormField(
           controller: _legalNameController,
-          decoration: const InputDecoration(labelText: 'Legal Name'),
+          enabled: !_legalNameMatchesOrganization,
+          decoration: InputDecoration(
+            labelText: 'Legal Name',
+            helperText: _legalNameMatchesOrganization
+                ? 'This will be saved as the organization name.'
+                : null,
+          ),
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -510,24 +716,26 @@ class _OnboardingPageState extends State<OnboardingPage> {
             labelText: 'Tax Registration Number',
           ),
         ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<int>(
-          key: ValueKey<int>(_stationCount),
-          initialValue: _stationCount,
-          decoration: const InputDecoration(labelText: 'Station Count'),
-          items: List.generate(
-            5,
-            (index) => DropdownMenuItem<int>(
-              value: index + 1,
-              child: Text('${index + 1}'),
+        if (!_isEditingOrganization) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            key: ValueKey<int>(_stationCount),
+            initialValue: _stationCount,
+            decoration: const InputDecoration(labelText: 'Station Count'),
+            items: List.generate(
+              5,
+              (index) => DropdownMenuItem<int>(
+                value: index + 1,
+                child: Text('${index + 1}'),
+              ),
             ),
+            onChanged: (value) {
+              if (value != null) {
+                _syncStationDraftCount(value);
+              }
+            },
           ),
-          onChanged: (value) {
-            if (value != null) {
-              _syncStationDraftCount(value);
-            }
-          },
-        ),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _inheritBranding,
@@ -541,7 +749,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             });
           },
         ),
-        if (_isSingleStationFlow)
+        if (!_isEditingOrganization && _isSingleStationFlow)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _singleStationUsesOrganizationDetails,
@@ -555,78 +763,102 @@ class _OnboardingPageState extends State<OnboardingPage> {
               });
             },
           ),
-        const SizedBox(height: 24),
-        Text('Stations', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        for (var index = 0; index < _stationDrafts.length; index++)
-          _StationDraftCard(
-            index: index,
-            draft: _stationDrafts[index],
-            inheritFromOrganization:
-                _isSingleStationFlow &&
-                index == 0 &&
-                _singleStationUsesOrganizationDetails,
-            inheritedStationName: _organizationNameController.text.trim(),
-            inheritedStationCode: _organizationCodeController.text.trim(),
+        if (!_isEditingOrganization) ...[
+          const SizedBox(height: 24),
+          Text('Stations', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          for (var index = 0; index < _stationDrafts.length; index++)
+            _StationDraftCard(
+              index: index,
+              draft: _stationDrafts[index],
+              inheritFromOrganization:
+                  _isSingleStationFlow &&
+                  index == 0 &&
+                  _singleStationUsesOrganizationDetails,
+              inheritedStationName: _organizationNameController.text.trim(),
+              inheritedStationCode: _organizationCodeController.text.trim(),
+            ),
+          const SizedBox(height: 24),
+          _OnboardingReviewCard(
+            organizationName: _organizationNameController.text.trim(),
+            organizationCode: _organizationCodeController.text.trim(),
+            brandName: _selectedBrandIsCustom
+                ? (_organizationNameController.text.trim().isEmpty
+                      ? 'Custom'
+                      : _organizationNameController.text.trim())
+                : _selectedBrandName,
+            stationCount: _stationCount,
+            headOfficeCount: _resolvedHeadOfficeCount,
+            createHeadOfficeAccount: _createHeadOfficeAccount,
+            singleStationInherited:
+                _isSingleStationFlow && _singleStationUsesOrganizationDetails,
+            stations: _stationPreviews,
           ),
-        const SizedBox(height: 24),
-        _OnboardingReviewCard(
-          organizationName: _organizationNameController.text.trim(),
-          organizationCode: _organizationCodeController.text.trim(),
-          brandName: _selectedBrandIsCustom
-              ? (_organizationNameController.text.trim().isEmpty
-                    ? 'Custom'
-                    : _organizationNameController.text.trim())
-              : _selectedBrandName,
-          stationCount: _stationCount,
-          headOfficeCount: _resolvedHeadOfficeCount,
-          createHeadOfficeAccount: _createHeadOfficeAccount,
-          singleStationInherited:
-              _isSingleStationFlow && _singleStationUsesOrganizationDetails,
-          stations: _stationPreviews,
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Initial Head Office Login',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 12),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _createHeadOfficeAccount,
-          title: const Text('Create first HeadOffice user'),
-          onChanged: (value) {
-            setState(() {
-              _createHeadOfficeAccount = value;
-            });
-          },
-        ),
-        if (_createHeadOfficeAccount) ...[
-          TextFormField(
-            controller: _headOfficeNameController,
-            decoration: const InputDecoration(labelText: 'Full Name'),
+          const SizedBox(height: 24),
+          Text(
+            'Initial Head Office Login',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
-          TextFormField(
-            controller: _headOfficeUsernameController,
-            decoration: const InputDecoration(labelText: 'Username'),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _createHeadOfficeAccount,
+            title: const Text('Create first HeadOffice user'),
+            onChanged: (value) {
+              setState(() {
+                _createHeadOfficeAccount = value;
+              });
+            },
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _headOfficeEmailController,
-            decoration: const InputDecoration(labelText: 'Email'),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _headOfficePasswordController,
-            decoration: const InputDecoration(labelText: 'Password'),
-          ),
+          if (_createHeadOfficeAccount) ...[
+            TextFormField(
+              controller: _headOfficeNameController,
+              decoration: const InputDecoration(labelText: 'Full Name'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _headOfficeUsernameController,
+              decoration: const InputDecoration(labelText: 'Username'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _headOfficeEmailController,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _headOfficePasswordController,
+              decoration: const InputDecoration(labelText: 'Password'),
+            ),
+          ],
         ],
         const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: _isSubmitting ? null : _submitOnboarding,
-          icon: const Icon(Icons.apartment_outlined),
-          label: Text(_isSubmitting ? 'Creating...' : 'Create Organization'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.icon(
+              onPressed: _isSubmitting ? null : _submitOnboarding,
+              icon: Icon(
+                _isEditingOrganization
+                    ? Icons.save_outlined
+                    : Icons.apartment_outlined,
+              ),
+              label: Text(
+                _isSubmitting
+                    ? (_isEditingOrganization ? 'Updating...' : 'Creating...')
+                    : (_isEditingOrganization
+                          ? 'Update Organization'
+                          : 'Create Organization'),
+              ),
+            ),
+            if (_isEditingOrganization)
+              OutlinedButton.icon(
+                onPressed: _isSubmitting ? null : _resetForm,
+                icon: const Icon(Icons.close),
+                label: const Text('Cancel Edit'),
+              ),
+          ],
         ),
       ],
     );
@@ -660,6 +892,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       organization['brand_name']?.toString() ?? 'Custom',
                       'Stations target: ${organization['station_target_count'] ?? '-'}',
                     ].join(' • '),
+                  ),
+                  trailing: TextButton.icon(
+                    onPressed: () => _editOrganization(organization),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit'),
                   ),
                 ),
             const Divider(height: 28),

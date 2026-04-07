@@ -484,6 +484,17 @@ class SessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>> updateOrganization({
+    required int organizationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _apiClient.updateOrganization(
+      await _validAccessToken(),
+      organizationId: organizationId,
+      payload: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> fetchOrganizationSetupFoundation({
     required int organizationId,
   }) async {

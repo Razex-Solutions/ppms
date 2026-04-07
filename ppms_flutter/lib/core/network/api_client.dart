@@ -641,6 +641,19 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> updateOrganization(
+    String accessToken, {
+    required int organizationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return _send(
+      'PUT',
+      '/organizations/$organizationId',
+      accessToken: accessToken,
+      body: payload,
+    );
+  }
+
   Future<Map<String, dynamic>> getOrganizationSetupFoundation(
     String accessToken, {
     required int organizationId,
