@@ -4,6 +4,7 @@ param(
     [switch]$SkipBackendLogs,
     [switch]$SkipSupportConsole,
     [switch]$SkipFlutter,
+    [switch]$UseOldFlutter,
     [string]$ApiBaseUrl = "http://127.0.0.1:8012",
     [int]$SupportConsolePort = 3000
 )
@@ -12,7 +13,10 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PythonExe = Join-Path $RepoRoot "venv\Scripts\python.exe"
 $SupportConsoleDir = Join-Path $RepoRoot "support_console"
-$FlutterDir = Join-Path $RepoRoot "ppms_flutter"
+$OldFlutterDir = Join-Path $RepoRoot "ppms_flutter"
+$TenantFlutterDir = Join-Path $RepoRoot "ppms_tenant_flutter"
+$FlutterDir = if ($UseOldFlutter) { $OldFlutterDir } else { $TenantFlutterDir }
+$FlutterWindowTitle = if ($UseOldFlutter) { "PPMS Flutter Reference" } else { "PPMS Tenant Flutter" }
 
 function Stop-PortListener {
     param([int]$Port)
@@ -68,8 +72,10 @@ if (-not $SkipSupportConsole) {
 }
 
 if (-not $SkipFlutter) {
-    Stop-ProcessByCommandLineMatch -Label "Flutter" -Needle $FlutterDir
-    Stop-ProcessByCommandLineMatch -Label "Flutter PPMS Windows app" -Needle "ppms_flutter.exe"
+    Stop-ProcessByCommandLineMatch -Label "old Flutter reference app" -Needle $OldFlutterDir
+    Stop-ProcessByCommandLineMatch -Label "tenant Flutter app" -Needle $TenantFlutterDir
+    Stop-ProcessByCommandLineMatch -Label "old Flutter PPMS Windows app" -Needle "ppms_flutter.exe"
+    Stop-ProcessByCommandLineMatch -Label "tenant Flutter PPMS Windows app" -Needle "ppms_tenant_flutter.exe"
 }
 
 if (-not $SkipBackend) {
@@ -95,8 +101,8 @@ if (-not $SkipSupportConsole) {
 }
 
 if (-not $SkipFlutter) {
-    Write-Host "Starting Flutter Windows app in a new window..."
-    Start-DevWindow -Title "PPMS Flutter" -WorkingDirectory $FlutterDir -Command "flutter run -d windows --dart-define=PPMS_API_BASE_URL=$ApiBaseUrl"
+    Write-Host "Starting Flutter Windows app from $FlutterDir in a new window..."
+    Start-DevWindow -Title $FlutterWindowTitle -WorkingDirectory $FlutterDir -Command "flutter run -d windows --dart-define=PPMS_API_BASE_URL=$ApiBaseUrl"
 }
 
 Write-Host "Restart command finished. Backend health: $ApiBaseUrl/health"
