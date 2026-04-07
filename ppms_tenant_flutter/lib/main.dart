@@ -2939,10 +2939,10 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
           );
           _message = 'Opened shift.';
         case 'cash':
-          final openShift = _openShiftForCurrentManager();
+          final openShift = _firstOpenShift();
           if (openShift == null) {
             throw TenantApiException(
-              'Open a Manager shift before submitting cash.',
+              'No open station shift is visible for cash submission.',
             );
           }
           await widget.sessionController.createCashSubmission(
@@ -3042,6 +3042,14 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
             Text(
               'Station: ${widget.sessionController.workingStationLabel}. These are real API-backed Manager actions.',
             ),
+            if (widget.workspaceId == 'cash') ...[
+              const SizedBox(height: 8),
+              Text(
+                _firstOpenShift() == null
+                    ? 'No open station shift found. Open an operator or manager shift first.'
+                    : 'Cash target shift: ${_firstOpenShift()?['id']} owned by user ${_firstOpenShift()?['user_id']} with expected cash ${_firstOpenShift()?['expected_cash']}.',
+              ),
+            ],
             const SizedBox(height: 16),
             _buildActionForm(tanks),
             const SizedBox(height: 16),
@@ -3132,7 +3140,7 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
 
   Widget _field(TextEditingController controller, String label) {
     return SizedBox(
-      width: 220,
+      width: 260,
       child: TextField(
         controller: controller,
         decoration: InputDecoration(
@@ -3148,6 +3156,7 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
       width: 260,
       child: DropdownButtonFormField<int>(
         initialValue: _selectedTankId,
+        isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Tank',
           border: OutlineInputBorder(),
@@ -3156,7 +3165,10 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
           for (final tank in tanks)
             DropdownMenuItem(
               value: tank['id'] as int?,
-              child: Text('${tank['name']} (${tank['code']})'),
+              child: Text(
+                '${tank['name']} (${tank['code']})',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
         onChanged: (tankId) => setState(() => _selectedTankId = tankId),
@@ -3169,6 +3181,7 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
       width: 260,
       child: DropdownButtonFormField<int>(
         initialValue: _selectedSupplierId,
+        isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Supplier',
           helperText: 'Auto-creates test supplier if empty',
@@ -3178,7 +3191,10 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
           for (final supplier in _suppliers)
             DropdownMenuItem(
               value: supplier['id'] as int?,
-              child: Text('${supplier['name']} (${supplier['code']})'),
+              child: Text(
+                '${supplier['name']} (${supplier['code']})',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
         onChanged: (supplierId) {
@@ -3248,10 +3264,9 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
 
   static List<dynamic> _list(Object? value) => value is List ? value : const [];
 
-  Map<String, dynamic>? _openShiftForCurrentManager() {
+  Map<String, dynamic>? _firstOpenShift() {
     for (final shift in _rows) {
-      if (shift['status'] == 'open' &&
-          shift['user_id'] == widget.sessionController.currentUserId) {
+      if (shift['status'] == 'open') {
         return shift;
       }
     }
