@@ -946,6 +946,35 @@ class _AdminPageState extends State<AdminPage> {
     return null;
   }
 
+  String get _scopeOrganizationLabel {
+    final organization = _selectedOrganization;
+    if (organization != null) {
+      return '${organization['name']} (${organization['code']})';
+    }
+    final organizationId =
+        _selectedOrganizationId ?? widget.sessionController.organizationId;
+    return organizationId == null
+        ? 'No organization selected'
+        : 'Org $organizationId (session scope)';
+  }
+
+  String get _scopeStationLabel {
+    final station = _selectedStation;
+    if (station != null) {
+      return '${station['name']} (${station['code']})';
+    }
+    final stationId = _selectedStationId ?? widget.sessionController.stationId;
+    if (stationId != null) {
+      return 'Station $stationId (session scope)';
+    }
+    if (widget.sessionController.scopeLevel == 'organization') {
+      return _stations.isEmpty
+          ? 'Organization scope - no station loaded'
+          : 'Organization scope';
+    }
+    return 'No station selected';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1059,7 +1088,12 @@ class _AdminPageState extends State<AdminPage> {
                         key: ValueKey<String>(
                           'admin-station-${_selectedStationId ?? 'none'}',
                         ),
-                        initialValue: _selectedStationId,
+                        initialValue:
+                            _stations.any(
+                              (station) => station['id'] == _selectedStationId,
+                            )
+                            ? _selectedStationId
+                            : null,
                         decoration: const InputDecoration(labelText: 'Station'),
                         items: [
                           for (final station in _stations)
@@ -2255,8 +2289,6 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget _buildWorkspaceReview(BuildContext context) {
-    final organization = _selectedOrganization;
-    final station = _selectedStation;
     final subscription = _organizationSubscription;
     final planName = _lookupName(_subscriptionPlans, subscription?['plan_id']);
     final sectionMeta = _sectionMeta(_section);
@@ -2308,16 +2340,12 @@ class _AdminPageState extends State<AdminPage> {
               _buildInfoChip(
                 context,
                 icon: Icons.business_outlined,
-                label: organization == null
-                    ? 'No organization selected'
-                    : '${organization['name']} (${organization['code']})',
+                label: _scopeOrganizationLabel,
               ),
               _buildInfoChip(
                 context,
                 icon: Icons.store_outlined,
-                label: station == null
-                    ? 'No station selected'
-                    : '${station['name']} (${station['code']})',
+                label: _scopeStationLabel,
               ),
               _buildInfoChip(
                 context,
