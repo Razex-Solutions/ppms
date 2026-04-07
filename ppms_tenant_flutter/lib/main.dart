@@ -815,6 +815,25 @@ class _LoginPageState extends State<LoginPage> {
   final _usernameController = TextEditingController(text: 'check');
   final _passwordController = TextEditingController(text: 'office123');
 
+  static const _phase9Logins = [
+    _QuickLogin(label: 'HeadOffice', username: 'check', password: 'office123'),
+    _QuickLogin(
+      label: 'Manager',
+      username: 'check_manager',
+      password: 'manager123',
+    ),
+    _QuickLogin(
+      label: 'Accountant',
+      username: 'check_accountant',
+      password: 'accountant123',
+    ),
+    _QuickLogin(
+      label: 'Operator',
+      username: 'check_operator',
+      password: 'operator123',
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -837,6 +856,12 @@ class _LoginPageState extends State<LoginPage> {
       username: _usernameController.text,
       password: _passwordController.text,
     );
+  }
+
+  Future<void> _quickLogin(_QuickLogin login) async {
+    _usernameController.text = login.username;
+    _passwordController.text = login.password;
+    await _submit();
   }
 
   @override
@@ -863,6 +888,26 @@ class _LoginPageState extends State<LoginPage> {
                       'Use the Phase 9 test tenant first: check / office123.',
                     ),
                     const SizedBox(height: 24),
+                    Text(
+                      'Quick login',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final login in _phase9Logins)
+                          FilledButton.tonalIcon(
+                            onPressed: widget.sessionController.isBusy
+                                ? null
+                                : () => _quickLogin(login),
+                            icon: const Icon(Icons.login_outlined),
+                            label: Text(login.label),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: _baseUrlController,
                       decoration: const InputDecoration(
@@ -920,6 +965,18 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+}
+
+class _QuickLogin {
+  const _QuickLogin({
+    required this.label,
+    required this.username,
+    required this.password,
+  });
+
+  final String label;
+  final String username;
+  final String password;
 }
 
 class TenantHomePage extends StatefulWidget {

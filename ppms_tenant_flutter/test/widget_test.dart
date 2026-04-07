@@ -51,6 +51,11 @@ void main() {
     expect(find.text('Backend URL'), findsOneWidget);
     expect(find.text('Username'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Quick login'), findsOneWidget);
+    expect(find.text('HeadOffice'), findsOneWidget);
+    expect(find.text('Manager'), findsOneWidget);
+    expect(find.text('Accountant'), findsOneWidget);
+    expect(find.text('Operator'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
   });
 }
