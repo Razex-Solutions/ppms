@@ -255,6 +255,166 @@ class TenantApiClient {
     );
   }
 
+  Future<List<Map<String, dynamic>>> shifts({
+    required String baseUrl,
+    required String accessToken,
+    int? stationId,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: stationId == null ? '/shifts/' : '/shifts/?station_id=$stationId',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> openShift({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/shifts/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> expenses({
+    required String baseUrl,
+    required String accessToken,
+    int? stationId,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: stationId == null
+          ? '/expenses/'
+          : '/expenses/?station_id=$stationId',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createExpense({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/expenses/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> tankDips({
+    required String baseUrl,
+    required String accessToken,
+    int? stationId,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: stationId == null
+          ? '/tank-dips/'
+          : '/tank-dips/?station_id=$stationId',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createTankDip({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/tank-dips/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> suppliers({
+    required String baseUrl,
+    required String accessToken,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/suppliers/',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createSupplier({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/suppliers/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> purchases({
+    required String baseUrl,
+    required String accessToken,
+    int? stationId,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: stationId == null
+          ? '/purchases/'
+          : '/purchases/?station_id=$stationId',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createPurchase({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/purchases/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -851,6 +1011,139 @@ class TenantSessionController extends ChangeNotifier {
     );
   }
 
+  Future<List<Map<String, dynamic>>> loadShifts() {
+    return _apiClient.shifts(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      stationId: workingStationId,
+    );
+  }
+
+  Future<void> openShift({required double initialCash, String? notes}) async {
+    final resolvedStationId = workingStationId;
+    if (resolvedStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    await _apiClient.openShift(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {
+        'station_id': resolvedStationId,
+        'initial_cash': initialCash,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadExpenses() {
+    return _apiClient.expenses(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      stationId: workingStationId,
+    );
+  }
+
+  Future<void> createExpense({
+    required String title,
+    required String category,
+    required double amount,
+    String? notes,
+  }) async {
+    final resolvedStationId = workingStationId;
+    if (resolvedStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    await _apiClient.createExpense(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {
+        'title': title,
+        'category': category,
+        'amount': amount,
+        'station_id': resolvedStationId,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadTankDips() {
+    return _apiClient.tankDips(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      stationId: workingStationId,
+    );
+  }
+
+  Future<void> createTankDip({
+    required int tankId,
+    required double dipReadingMm,
+    required double calculatedVolume,
+    String? notes,
+  }) async {
+    await _apiClient.createTankDip(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {
+        'tank_id': tankId,
+        'dip_reading_mm': dipReadingMm,
+        'calculated_volume': calculatedVolume,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadPurchases() {
+    return _apiClient.purchases(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      stationId: workingStationId,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadSuppliers() {
+    return _apiClient.suppliers(baseUrl: _baseUrl, accessToken: _accessToken());
+  }
+
+  Future<Map<String, dynamic>> createSupplier({
+    required String name,
+    required String code,
+  }) {
+    return _apiClient.createSupplier(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {'name': name, 'code': code},
+    );
+  }
+
+  Future<void> createPurchase({
+    required int supplierId,
+    required int tankId,
+    required int fuelTypeId,
+    required double quantity,
+    required double ratePerLiter,
+    String? referenceNo,
+    String? notes,
+  }) async {
+    await _apiClient.createPurchase(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: {
+        'supplier_id': supplierId,
+        'tank_id': tankId,
+        'fuel_type_id': fuelTypeId,
+        'quantity': quantity,
+        'rate_per_liter': ratePerLiter,
+        if (referenceNo != null && referenceNo.trim().isNotEmpty)
+          'reference_no': referenceNo.trim(),
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+  }
+
   Future<void> createWorkerUser({
     required String fullName,
     required String username,
@@ -1388,6 +1681,12 @@ class _WorkspaceDetail extends StatelessWidget {
       'inventory',
       'inventory_dips',
     }.contains(workspace.id);
+    final isManagerOperationsWorkspace = {
+      'shifts',
+      'purchases',
+      'expenses',
+      'inventory_dips',
+    }.contains(workspace.id);
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1440,6 +1739,14 @@ class _WorkspaceDetail extends StatelessWidget {
         if (isSetupWorkspace) ...[
           const SizedBox(height: 12),
           _SetupFoundationPanel(
+            sessionController: sessionController,
+            workspaceId: workspace.id,
+          ),
+        ],
+        if (isManagerOperationsWorkspace &&
+            sessionController.roleName == 'Manager') ...[
+          const SizedBox(height: 12),
+          _ManagerOperationsPanel(
             sessionController: sessionController,
             workspaceId: workspace.id,
           ),
@@ -2301,6 +2608,365 @@ class _StatusCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ManagerOperationsPanel extends StatefulWidget {
+  const _ManagerOperationsPanel({
+    required this.sessionController,
+    required this.workspaceId,
+  });
+
+  final TenantSessionController sessionController;
+  final String workspaceId;
+
+  @override
+  State<_ManagerOperationsPanel> createState() =>
+      _ManagerOperationsPanelState();
+}
+
+class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
+  final _cashController = TextEditingController(text: '0');
+  final _notesController = TextEditingController();
+  final _expenseTitleController = TextEditingController(text: 'Test expense');
+  final _expenseCategoryController = TextEditingController(text: 'general');
+  final _expenseAmountController = TextEditingController(text: '100');
+  final _dipMmController = TextEditingController(text: '100');
+  final _dipVolumeController = TextEditingController(text: '1000');
+  final _purchaseQtyController = TextEditingController(text: '100');
+  final _purchaseRateController = TextEditingController(text: '250');
+  final _purchaseRefController = TextEditingController();
+
+  Map<String, dynamic>? _stationSetup;
+  List<Map<String, dynamic>> _rows = const [];
+  List<Map<String, dynamic>> _suppliers = const [];
+  Map<String, dynamic>? _selectedTank;
+  Map<String, dynamic>? _selectedSupplier;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _cashController.dispose();
+    _notesController.dispose();
+    _expenseTitleController.dispose();
+    _expenseCategoryController.dispose();
+    _expenseAmountController.dispose();
+    _dipMmController.dispose();
+    _dipVolumeController.dispose();
+    _purchaseQtyController.dispose();
+    _purchaseRateController.dispose();
+    _purchaseRefController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final stationSetup = await widget.sessionController
+          .loadStationSetupFoundation();
+      final rows = switch (widget.workspaceId) {
+        'shifts' => await widget.sessionController.loadShifts(),
+        'purchases' => await widget.sessionController.loadPurchases(),
+        'expenses' => await widget.sessionController.loadExpenses(),
+        'inventory_dips' => await widget.sessionController.loadTankDips(),
+        _ => const <Map<String, dynamic>>[],
+      };
+      final suppliers = widget.workspaceId == 'purchases'
+          ? await widget.sessionController.loadSuppliers()
+          : const <Map<String, dynamic>>[];
+      final tanks = _list(stationSetup['tanks']);
+      setState(() {
+        _stationSetup = stationSetup;
+        _rows = rows;
+        _suppliers = suppliers;
+        _selectedTank ??= tanks.isEmpty
+            ? null
+            : Map<String, dynamic>.from(tanks.first as Map);
+        _selectedSupplier ??= suppliers.isEmpty ? null : suppliers.first;
+      });
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not load manager data: $error');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      switch (widget.workspaceId) {
+        case 'shifts':
+          await widget.sessionController.openShift(
+            initialCash: double.tryParse(_cashController.text.trim()) ?? 0,
+            notes: _notesController.text,
+          );
+          _message = 'Opened shift.';
+        case 'expenses':
+          await widget.sessionController.createExpense(
+            title: _expenseTitleController.text.trim(),
+            category: _expenseCategoryController.text.trim(),
+            amount: double.tryParse(_expenseAmountController.text.trim()) ?? 0,
+            notes: _notesController.text,
+          );
+          _message = 'Created expense.';
+        case 'inventory_dips':
+          final tank = _selectedTank;
+          if (tank == null) throw TenantApiException('Choose a tank first.');
+          await widget.sessionController.createTankDip(
+            tankId: tank['id'] as int,
+            dipReadingMm: double.tryParse(_dipMmController.text.trim()) ?? 0,
+            calculatedVolume:
+                double.tryParse(_dipVolumeController.text.trim()) ?? 0,
+            notes: _notesController.text,
+          );
+          _message = 'Recorded tank dip.';
+        case 'purchases':
+          await _ensureSupplier();
+          final tank = _selectedTank;
+          final supplier = _selectedSupplier;
+          if (tank == null) throw TenantApiException('Choose a tank first.');
+          if (supplier == null) {
+            throw TenantApiException('Choose or create a supplier first.');
+          }
+          await widget.sessionController.createPurchase(
+            supplierId: supplier['id'] as int,
+            tankId: tank['id'] as int,
+            fuelTypeId: tank['fuel_type_id'] as int,
+            quantity: double.tryParse(_purchaseQtyController.text.trim()) ?? 0,
+            ratePerLiter:
+                double.tryParse(_purchaseRateController.text.trim()) ?? 0,
+            referenceNo: _purchaseRefController.text,
+            notes: _notesController.text,
+          );
+          _message = 'Created purchase.';
+      }
+      await _load();
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not save manager action: $error');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _ensureSupplier() async {
+    if (_selectedSupplier != null) return;
+    final code = 'PHASE9-${DateTime.now().millisecondsSinceEpoch}';
+    final supplier = await widget.sessionController.createSupplier(
+      name: 'Phase 9 Test Supplier',
+      code: code,
+    );
+    _selectedSupplier = supplier;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: LinearProgressIndicator(),
+        ),
+      );
+    }
+    final stationSetup = _stationSetup ?? const <String, dynamic>{};
+    final tanks = [
+      for (final tank in _list(stationSetup['tanks']))
+        Map<String, dynamic>.from(tank as Map),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Manager Action Packet',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Station: ${widget.sessionController.workingStationLabel}. These are real API-backed Manager actions.',
+            ),
+            const SizedBox(height: 16),
+            _buildActionForm(tanks),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _isSaving ? null : _save,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(_isSaving ? 'Saving...' : _buttonLabel()),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 24),
+            _SimpleListCard(
+              title: _listTitle(),
+              emptyText: 'No records yet.',
+              items: _rows.map(_describeRow).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionForm(List<Map<String, dynamic>> tanks) {
+    final fields = <Widget>[];
+    if (widget.workspaceId == 'shifts') {
+      fields.addAll([
+        _field(_cashController, 'Initial cash'),
+        _field(_notesController, 'Notes'),
+      ]);
+    } else if (widget.workspaceId == 'expenses') {
+      fields.addAll([
+        _field(_expenseTitleController, 'Title'),
+        _field(_expenseCategoryController, 'Category'),
+        _field(_expenseAmountController, 'Amount'),
+        _field(_notesController, 'Notes'),
+      ]);
+    } else if (widget.workspaceId == 'inventory_dips') {
+      fields.addAll([
+        _tankDropdown(tanks),
+        _field(_dipMmController, 'Dip reading mm'),
+        _field(_dipVolumeController, 'Calculated volume'),
+        _field(_notesController, 'Notes'),
+      ]);
+    } else if (widget.workspaceId == 'purchases') {
+      fields.addAll([
+        _supplierDropdown(),
+        _tankDropdown(tanks),
+        _field(_purchaseQtyController, 'Quantity'),
+        _field(_purchaseRateController, 'Rate per liter'),
+        _field(_purchaseRefController, 'Reference'),
+        _field(_notesController, 'Notes'),
+      ]);
+    }
+    return Wrap(spacing: 12, runSpacing: 12, children: fields);
+  }
+
+  Widget _field(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 220,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Widget _tankDropdown(List<Map<String, dynamic>> tanks) {
+    return SizedBox(
+      width: 260,
+      child: DropdownButtonFormField<Map<String, dynamic>>(
+        initialValue: _selectedTank,
+        decoration: const InputDecoration(
+          labelText: 'Tank',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          for (final tank in tanks)
+            DropdownMenuItem(
+              value: tank,
+              child: Text('${tank['name']} (${tank['code']})'),
+            ),
+        ],
+        onChanged: (tank) => setState(() => _selectedTank = tank),
+      ),
+    );
+  }
+
+  Widget _supplierDropdown() {
+    return SizedBox(
+      width: 260,
+      child: DropdownButtonFormField<Map<String, dynamic>>(
+        initialValue: _selectedSupplier,
+        decoration: const InputDecoration(
+          labelText: 'Supplier',
+          helperText: 'Auto-creates test supplier if empty',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          for (final supplier in _suppliers)
+            DropdownMenuItem(
+              value: supplier,
+              child: Text('${supplier['name']} (${supplier['code']})'),
+            ),
+        ],
+        onChanged: (supplier) => setState(() => _selectedSupplier = supplier),
+      ),
+    );
+  }
+
+  String _buttonLabel() => switch (widget.workspaceId) {
+    'shifts' => 'Open Shift',
+    'expenses' => 'Create Expense',
+    'inventory_dips' => 'Record Dip',
+    'purchases' => 'Create Purchase',
+    _ => 'Save',
+  };
+
+  String _listTitle() => switch (widget.workspaceId) {
+    'shifts' => 'Recent Shifts',
+    'expenses' => 'Recent Expenses',
+    'inventory_dips' => 'Recent Tank Dips',
+    'purchases' => 'Recent Purchases',
+    _ => 'Recent Records',
+  };
+
+  String _describeRow(Map<String, dynamic> row) => switch (widget.workspaceId) {
+    'shifts' =>
+      'Shift ${row['id']} - ${row['status']} - opening ${row['initial_cash']} - expected ${row['expected_cash']}',
+    'expenses' =>
+      'Expense ${row['id']} - ${row['title']} - ${row['amount']} - ${row['status']}',
+    'inventory_dips' =>
+      'Dip ${row['id']} - tank ${row['tank_id']} - physical ${row['calculated_volume']} - system ${row['system_volume']} - diff ${row['loss_gain']}',
+    'purchases' =>
+      'Purchase ${row['id']} - tank ${row['tank_id']} - qty ${row['quantity']} - total ${row['total_amount']} - ${row['status']}',
+    _ => row.toString(),
+  };
+
+  static List<dynamic> _list(Object? value) => value is List ? value : const [];
 }
 
 class _ContextChip extends StatelessWidget {
