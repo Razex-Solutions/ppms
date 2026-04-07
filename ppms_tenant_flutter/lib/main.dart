@@ -222,6 +222,194 @@ class TenantApiException implements Exception {
   String toString() => message;
 }
 
+class TenantWorkspace {
+  const TenantWorkspace({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.purpose,
+    required this.nextAction,
+  });
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final String purpose;
+  final String nextAction;
+}
+
+const _contextWorkspace = TenantWorkspace(
+  id: 'context',
+  label: 'Context',
+  icon: Icons.badge_outlined,
+  purpose: 'Confirm the current user, role, organization, and working station.',
+  nextAction: 'Use this first whenever login or station scope looks wrong.',
+);
+
+const _settingsWorkspace = TenantWorkspace(
+  id: 'settings',
+  label: 'Settings',
+  icon: Icons.settings_outlined,
+  purpose: 'Show local app diagnostics and safe tenant settings later.',
+  nextAction: 'Keep this simple until the real tenant flows are stable.',
+);
+
+List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
+  final normalizedRole = roleName.trim().toLowerCase();
+  final roleWorkspaces = switch (normalizedRole) {
+    'headoffice' => const [
+      TenantWorkspace(
+        id: 'tenant_setup',
+        label: 'Tenant Setup',
+        icon: Icons.business_outlined,
+        purpose:
+            'Review organization and station setup for the current tenant only.',
+        nextAction:
+            'Next build: show check organization, check station, tanks, dispensers, and nozzles.',
+      ),
+      TenantWorkspace(
+        id: 'users',
+        label: 'Users',
+        icon: Icons.group_add_outlined,
+        purpose:
+            'Create and manage tenant workers for this organization and station.',
+        nextAction:
+            'Next build: create Manager, Accountant, and Operator. StationAdmin stays hidden for one-station tenants.',
+      ),
+      TenantWorkspace(
+        id: 'station_setup',
+        label: 'Station Setup',
+        icon: Icons.local_gas_station_outlined,
+        purpose:
+            'Maintain station tanks, dispensers, nozzles, and station defaults.',
+        nextAction:
+            'Next build: read-only setup review first, then edit flows one by one.',
+      ),
+      TenantWorkspace(
+        id: 'reports',
+        label: 'Reports',
+        icon: Icons.summarize_outlined,
+        purpose:
+            'Review organization and station reports for this tenant only.',
+        nextAction:
+            'Build after core actions are working so reports only show proven data.',
+      ),
+    ],
+    'manager' => const [
+      TenantWorkspace(
+        id: 'shifts',
+        label: 'Shifts',
+        icon: Icons.schedule_outlined,
+        purpose: 'Open, supervise, and close station shifts.',
+        nextAction:
+            'Next build after users: station shift status and open-shift validation.',
+      ),
+      TenantWorkspace(
+        id: 'sales_review',
+        label: 'Sales Review',
+        icon: Icons.receipt_long_outlined,
+        purpose: 'Review station sales entered by operators.',
+        nextAction: 'Build after operator fuel-sale entry is stable.',
+      ),
+      TenantWorkspace(
+        id: 'cash',
+        label: 'Cash',
+        icon: Icons.payments_outlined,
+        purpose: 'Review shift cash submissions and station cash status.',
+        nextAction: 'Build after shift and sale flows are stable.',
+      ),
+      TenantWorkspace(
+        id: 'expenses',
+        label: 'Expenses',
+        icon: Icons.request_quote_outlined,
+        purpose: 'Record and review station operating expenses.',
+        nextAction: 'Build after the shift flow is accepted.',
+      ),
+      TenantWorkspace(
+        id: 'attendance',
+        label: 'Attendance',
+        icon: Icons.how_to_reg_outlined,
+        purpose: 'Review station staff attendance.',
+        nextAction: 'Build after staff profiles are connected to logins.',
+      ),
+    ],
+    'accountant' => const [
+      TenantWorkspace(
+        id: 'finance',
+        label: 'Finance',
+        icon: Icons.account_balance_wallet_outlined,
+        purpose: 'Manage purchases, payments, expenses, and financial review.',
+        nextAction: 'Build after users and parties are stable.',
+      ),
+      TenantWorkspace(
+        id: 'parties',
+        label: 'Parties',
+        icon: Icons.contacts_outlined,
+        purpose: 'Manage customers, suppliers, and tenant ledger context.',
+        nextAction: 'Build before payment and ledger screens.',
+      ),
+      TenantWorkspace(
+        id: 'payroll',
+        label: 'Payroll',
+        icon: Icons.price_check_outlined,
+        purpose: 'Review payroll for tenant station workers.',
+        nextAction: 'Build after staff profiles are connected.',
+      ),
+      TenantWorkspace(
+        id: 'documents',
+        label: 'Documents',
+        icon: Icons.description_outlined,
+        purpose: 'Generate and inspect tenant financial documents.',
+        nextAction: 'Build after finance transactions are stable.',
+      ),
+      TenantWorkspace(
+        id: 'reports',
+        label: 'Reports',
+        icon: Icons.summarize_outlined,
+        purpose: 'Review accounting and station reports for this tenant only.',
+        nextAction: 'Build after finance flows are accepted.',
+      ),
+    ],
+    'operator' => const [
+      TenantWorkspace(
+        id: 'shift',
+        label: 'Shift',
+        icon: Icons.timer_outlined,
+        purpose: 'See current shift state and assigned station work.',
+        nextAction:
+            'Build operator shift start/status after Manager shift rules.',
+      ),
+      TenantWorkspace(
+        id: 'fuel_sale',
+        label: 'Fuel Sale',
+        icon: Icons.local_gas_station_outlined,
+        purpose: 'Enter meter-based fuel sales for the assigned station only.',
+        nextAction:
+            'Build after station nozzles are confirmed through setup review.',
+      ),
+      TenantWorkspace(
+        id: 'attendance',
+        label: 'Attendance',
+        icon: Icons.how_to_reg_outlined,
+        purpose: 'Record or view operator attendance.',
+        nextAction: 'Build after staff profiles are connected.',
+      ),
+    ],
+    _ => const [
+      TenantWorkspace(
+        id: 'support',
+        label: 'Unsupported Role',
+        icon: Icons.warning_amber_outlined,
+        purpose: 'This role is not part of the clean tenant app flow yet.',
+        nextAction:
+            'Confirm the backend role mapping before adding any screens.',
+      ),
+    ],
+  };
+
+  return [_contextWorkspace, ...roleWorkspaces, _settingsWorkspace];
+}
+
 class TenantSessionController extends ChangeNotifier {
   TenantSessionController(this._apiClient);
 
@@ -499,18 +687,35 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class TenantHomePage extends StatelessWidget {
+class TenantHomePage extends StatefulWidget {
   const TenantHomePage({super.key, required this.sessionController});
 
   final TenantSessionController sessionController;
 
   @override
+  State<TenantHomePage> createState() => _TenantHomePageState();
+}
+
+class _TenantHomePageState extends State<TenantHomePage> {
+  String _selectedWorkspaceId = 'context';
+
+  TenantSessionController get sessionController => widget.sessionController;
+
+  @override
   Widget build(BuildContext context) {
+    final workspaces = workspaceDestinationsForRole(sessionController.roleName);
+    final selectedWorkspace = workspaces.firstWhere(
+      (workspace) => workspace.id == _selectedWorkspaceId,
+      orElse: () => workspaces.first,
+    );
+
     return Scaffold(
       backgroundColor: AppConfig.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppConfig.backgroundColor,
-        title: const Text('PPMS Tenant'),
+        title: Text(
+          'PPMS Tenant - ${sessionController.roleName} - ${sessionController.workingStationLabel}',
+        ),
         actions: [
           IconButton(
             tooltip: 'Sign out',
@@ -521,58 +726,146 @@ class TenantHomePage extends StatelessWidget {
       ),
       body: ColoredBox(
         color: AppConfig.backgroundColor,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
+        child: Row(
           children: [
-            Text(
-              'Tenant Context',
-              style: Theme.of(context).textTheme.headlineMedium,
+            SizedBox(
+              width: 280,
+              child: _WorkspaceSidebar(
+                workspaces: workspaces,
+                selectedWorkspaceId: selectedWorkspace.id,
+                onWorkspaceSelected: (workspaceId) {
+                  setState(() => _selectedWorkspaceId = workspaceId);
+                },
+              ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'This is the first clean rebuild slice. No dashboards yet.',
-            ),
-            const SizedBox(height: 24),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _ContextChip(label: 'User', value: sessionController.username),
-                _ContextChip(label: 'Role', value: sessionController.roleName),
-                _ContextChip(
-                  label: 'Scope',
-                  value: sessionController.scopeLevel,
-                ),
-                _ContextChip(
-                  label: 'Organization',
-                  value: sessionController.organizationId?.toString() ?? '-',
-                ),
-                _ContextChip(
-                  label: 'Station',
-                  value: sessionController.workingStationLabel,
-                ),
-                _ContextChip(
-                  label: 'Station count',
-                  value: sessionController.stations.length.toString(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _SectionCard(
-              title: 'Allowed next roles',
-              body: sessionController.creatableRoles.isEmpty
-                  ? 'No role-creation capabilities returned for this session.'
-                  : sessionController.creatableRoles.join(', '),
-            ),
-            const SizedBox(height: 12),
-            const _SectionCard(
-              title: 'Next slice',
-              body:
-                  'Add simple role-aware navigation, then HeadOffice worker creation for Manager, Accountant, and Operator.',
+            const VerticalDivider(width: 1),
+            Expanded(
+              child: _WorkspaceDetail(
+                sessionController: sessionController,
+                workspace: selectedWorkspace,
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _WorkspaceSidebar extends StatelessWidget {
+  const _WorkspaceSidebar({
+    required this.workspaces,
+    required this.selectedWorkspaceId,
+    required this.onWorkspaceSelected,
+  });
+
+  final List<TenantWorkspace> workspaces;
+  final String selectedWorkspaceId;
+  final ValueChanged<String> onWorkspaceSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+              child: Text(
+                'Workspaces',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            for (final workspace in workspaces)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: ListTile(
+                  selected: workspace.id == selectedWorkspaceId,
+                  selectedTileColor: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  leading: Icon(workspace.icon),
+                  title: Text(workspace.label),
+                  onTap: () => onWorkspaceSelected(workspace.id),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceDetail extends StatelessWidget {
+  const _WorkspaceDetail({
+    required this.sessionController,
+    required this.workspace,
+  });
+
+  final TenantSessionController sessionController;
+  final TenantWorkspace workspace;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUsersWorkspace = workspace.id == 'users';
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text(
+          workspace.label,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 8),
+        const Text('Clean tenant app rebuild. No dashboards, no fake totals.'),
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _ContextChip(label: 'User', value: sessionController.username),
+            _ContextChip(label: 'Role', value: sessionController.roleName),
+            _ContextChip(label: 'Scope', value: sessionController.scopeLevel),
+            _ContextChip(
+              label: 'Organization',
+              value: sessionController.organizationId?.toString() ?? '-',
+            ),
+            _ContextChip(
+              label: 'Station',
+              value: sessionController.workingStationLabel,
+            ),
+            _ContextChip(
+              label: 'Station count',
+              value: sessionController.stations.length.toString(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _SectionCard(title: 'Purpose', body: workspace.purpose),
+        const SizedBox(height: 12),
+        _SectionCard(title: 'Next planned action', body: workspace.nextAction),
+        if (isUsersWorkspace) ...[
+          const SizedBox(height: 12),
+          _SectionCard(
+            title: 'Allowed worker roles',
+            body: sessionController.creatableRoles.isEmpty
+                ? 'No role-creation capabilities returned for this session.'
+                : sessionController.creatableRoles.join(', '),
+          ),
+        ],
+        const SizedBox(height: 12),
+        const _SectionCard(
+          title: 'Leakage rule',
+          body:
+              'This screen must only use the logged-in tenant organization and station. MasterAdmin and other organizations stay out of this app.',
+        ),
+      ],
     );
   }
 }

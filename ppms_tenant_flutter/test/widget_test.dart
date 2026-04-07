@@ -4,6 +4,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ppms_tenant_flutter/main.dart';
 
 void main() {
+  test('workspace destinations are scoped by tenant role', () {
+    final headOfficeIds = workspaceDestinationsForRole(
+      'HeadOffice',
+    ).map((workspace) => workspace.id);
+    final operatorIds = workspaceDestinationsForRole(
+      'Operator',
+    ).map((workspace) => workspace.id);
+    final accountantIds = workspaceDestinationsForRole(
+      'Accountant',
+    ).map((workspace) => workspace.id);
+
+    expect(headOfficeIds, containsAll(['context', 'tenant_setup', 'users']));
+    expect(headOfficeIds, isNot(contains('station_admin')));
+    expect(operatorIds, containsAll(['context', 'shift', 'fuel_sale']));
+    expect(operatorIds, isNot(contains('users')));
+    expect(accountantIds, containsAll(['finance', 'parties', 'payroll']));
+    expect(accountantIds, isNot(contains('fuel_sale')));
+  });
+
   testWidgets('tenant login page renders', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
