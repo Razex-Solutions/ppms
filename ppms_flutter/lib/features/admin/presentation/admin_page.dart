@@ -251,34 +251,56 @@ class _AdminPageState extends State<AdminPage> {
               )).map((item) => Map<String, dynamic>.from(item as Map)),
             )
           : const <Map<String, dynamic>>[];
-      final organizationModules =
-          !_canReadOrganizationModules || organizationId == null
-          ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchOrganizationModules(
-                organizationId: organizationId,
-              )).map((item) => Map<String, dynamic>.from(item as Map)),
-            );
-      final stationModules = !_canReadStationModules || stationId == null
-          ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchStationModules(
-                stationId: stationId,
-              )).map((item) => Map<String, dynamic>.from(item as Map)),
-            );
-      final subscriptionPlans = !_canReadSubscription
-          ? const <Map<String, dynamic>>[]
-          : List<Map<String, dynamic>>.from(
-              (await widget.sessionController.fetchSubscriptionPlans()).map(
-                (item) => Map<String, dynamic>.from(item as Map),
-              ),
-            );
-      final organizationSubscription =
-          !_canReadSubscription || organizationId == null
-          ? null
-          : await widget.sessionController.fetchOrganizationSubscription(
+      List<Map<String, dynamic>> organizationModules = const [];
+      if (_canReadOrganizationModules && organizationId != null) {
+        try {
+          organizationModules = List<Map<String, dynamic>>.from(
+            (await widget.sessionController.fetchOrganizationModules(
               organizationId: organizationId,
-            );
+            )).map((item) => Map<String, dynamic>.from(item as Map)),
+          );
+        } on ApiException {
+          organizationModules = const [];
+        }
+      }
+
+      List<Map<String, dynamic>> stationModules = const [];
+      if (_canReadStationModules &&
+          stationId != null &&
+          widget.sessionController.scopeLevel == 'station') {
+        try {
+          stationModules = List<Map<String, dynamic>>.from(
+            (await widget.sessionController.fetchStationModules(
+              stationId: stationId,
+            )).map((item) => Map<String, dynamic>.from(item as Map)),
+          );
+        } on ApiException {
+          stationModules = const [];
+        }
+      }
+
+      List<Map<String, dynamic>> subscriptionPlans = const [];
+      if (_canManageSubscription) {
+        try {
+          subscriptionPlans = List<Map<String, dynamic>>.from(
+            (await widget.sessionController.fetchSubscriptionPlans()).map(
+              (item) => Map<String, dynamic>.from(item as Map),
+            ),
+          );
+        } on ApiException {
+          subscriptionPlans = const [];
+        }
+      }
+
+      Map<String, dynamic>? organizationSubscription;
+      if (_canReadSubscription && organizationId != null) {
+        try {
+          organizationSubscription = await widget.sessionController
+              .fetchOrganizationSubscription(organizationId: organizationId);
+        } on ApiException {
+          organizationSubscription = null;
+        }
+      }
 
       if (!mounted) return;
 
