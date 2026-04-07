@@ -415,6 +415,42 @@ class TenantApiClient {
     );
   }
 
+  Future<List<Map<String, dynamic>>> fuelSales({
+    required String baseUrl,
+    required String accessToken,
+    int? stationId,
+    int? shiftId,
+  }) async {
+    final query = <String>[
+      if (stationId != null) 'station_id=$stationId',
+      if (shiftId != null) 'shift_id=$shiftId',
+    ].join('&');
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: query.isEmpty ? '/fuel-sales/' : '/fuel-sales/?$query',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createFuelSale({
+    required String baseUrl,
+    required String accessToken,
+    required Map<String, dynamic> body,
+  }) {
+    return _send(
+      baseUrl: baseUrl,
+      method: 'POST',
+      path: '/fuel-sales/',
+      accessToken: accessToken,
+      body: body,
+    );
+  }
+
   Future<Map<String, dynamic>> _send({
     required String baseUrl,
     required String method,
@@ -1019,6 +1055,20 @@ class TenantSessionController extends ChangeNotifier {
     );
   }
 
+  Future<Map<String, dynamic>?> loadOpenShiftForCurrentUser() async {
+    final shifts = await _apiClient.shifts(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      stationId: workingStationId,
+    );
+    for (final shift in shifts) {
+      if (shift['status'] == 'open' && shift['user_id'] == currentUserId) {
+        return shift;
+      }
+    }
+    return null;
+  }
+
   Future<void> openShift({required double initialCash, String? notes}) async {
     final resolvedStationId = workingStationId;
     if (resolvedStationId == null) {
@@ -1141,6 +1191,47 @@ class TenantSessionController extends ChangeNotifier {
           'reference_no': referenceNo.trim(),
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
       },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadFuelSales({int? shiftId}) {
+    return _apiClient.fuelSales(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      stationId: workingStationId,
+      shiftId: shiftId,
+    );
+  }
+
+  Future<void> createFuelSale({
+    required int nozzleId,
+    required int fuelTypeId,
+    required double closingMeter,
+    required double ratePerLiter,
+    int? shiftId,
+    String saleType = 'cash',
+  }) async {
+    final resolvedStationId = workingStationId;
+    if (resolvedStationId == null) {
+      throw TenantApiException(
+        'No working station is available for this user.',
+      );
+    }
+    final body = <String, dynamic>{
+      'nozzle_id': nozzleId,
+      'station_id': resolvedStationId,
+      'fuel_type_id': fuelTypeId,
+      'closing_meter': closingMeter,
+      'rate_per_liter': ratePerLiter,
+      'sale_type': saleType,
+    };
+    if (shiftId != null) {
+      body['shift_id'] = shiftId;
+    }
+    await _apiClient.createFuelSale(
+      baseUrl: _baseUrl,
+      accessToken: _accessToken(),
+      body: body,
     );
   }
 
@@ -1687,6 +1778,7 @@ class _WorkspaceDetail extends StatelessWidget {
       'expenses',
       'inventory_dips',
     }.contains(workspace.id);
+    final isOperatorFuelWorkspace = workspace.id == 'fuel_sale';
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1750,6 +1842,11 @@ class _WorkspaceDetail extends StatelessWidget {
             sessionController: sessionController,
             workspaceId: workspace.id,
           ),
+        ],
+        if (isOperatorFuelWorkspace &&
+            sessionController.roleName == 'Operator') ...[
+          const SizedBox(height: 12),
+          _OperatorFuelSalePanel(sessionController: sessionController),
         ],
         const SizedBox(height: 12),
         const _SectionCard(
@@ -2993,6 +3090,279 @@ class _ManagerOperationsPanelState extends State<_ManagerOperationsPanel> {
   };
 
   static List<dynamic> _list(Object? value) => value is List ? value : const [];
+}
+
+class _OperatorFuelSalePanel extends StatefulWidget {
+  const _OperatorFuelSalePanel({required this.sessionController});
+
+  final TenantSessionController sessionController;
+
+  @override
+  State<_OperatorFuelSalePanel> createState() => _OperatorFuelSalePanelState();
+}
+
+class _OperatorFuelSalePanelState extends State<_OperatorFuelSalePanel> {
+  final _closingMeterController = TextEditingController();
+  final _rateController = TextEditingController(text: '250');
+
+  Map<String, dynamic>? _stationSetup;
+  Map<String, dynamic>? _openShift;
+  List<Map<String, dynamic>> _sales = const [];
+  int? _selectedNozzleId;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _closingMeterController.dispose();
+    _rateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final stationSetup = await widget.sessionController
+          .loadStationSetupFoundation();
+      final openShift = await widget.sessionController
+          .loadOpenShiftForCurrentUser();
+      final sales = await widget.sessionController.loadFuelSales(
+        shiftId: openShift?['id'] as int?,
+      );
+      final nozzles = _nozzlesFrom(stationSetup);
+      setState(() {
+        _stationSetup = stationSetup;
+        _openShift = openShift;
+        _sales = sales;
+        _selectedNozzleId ??= nozzles.isEmpty
+            ? null
+            : nozzles.first['id'] as int?;
+        final selectedNozzle = _selectedNozzle(nozzles);
+        if (selectedNozzle != null && _closingMeterController.text.isEmpty) {
+          final meter =
+              double.tryParse('${selectedNozzle['meter_reading']}') ?? 0;
+          _closingMeterController.text = (meter + 1).toStringAsFixed(2);
+        }
+      });
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not load fuel sale data: $error');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _createSale() async {
+    final nozzles = _nozzlesFrom(_stationSetup ?? const <String, dynamic>{});
+    final nozzle = _selectedNozzle(nozzles);
+    if (nozzle == null) {
+      setState(() => _error = 'Choose a nozzle first.');
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await widget.sessionController.createFuelSale(
+        nozzleId: nozzle['id'] as int,
+        fuelTypeId: nozzle['fuel_type_id'] as int,
+        closingMeter: double.tryParse(_closingMeterController.text.trim()) ?? 0,
+        ratePerLiter: double.tryParse(_rateController.text.trim()) ?? 0,
+        shiftId: _openShift?['id'] as int?,
+      );
+      _closingMeterController.clear();
+      await _load();
+      setState(() => _message = 'Recorded meter-based cash fuel sale.');
+    } on TenantApiException catch (error) {
+      setState(() => _error = error.message);
+    } on Object catch (error) {
+      setState(() => _error = 'Could not record fuel sale: $error');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: LinearProgressIndicator(),
+        ),
+      );
+    }
+    final stationSetup = _stationSetup ?? const <String, dynamic>{};
+    final nozzles = _nozzlesFrom(stationSetup);
+    final selectedNozzle = _selectedNozzle(nozzles);
+    final openingMeter = selectedNozzle == null
+        ? '-'
+        : '${selectedNozzle['meter_reading']}';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Operator Meter Fuel Sale',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _openShift == null
+                  ? 'No open operator shift found. The backend can still record a sale, but the docs prefer opening a shift first.'
+                  : 'Open shift: ${_openShift?['id']} at ${widget.sessionController.workingStationLabel}.',
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(
+                  width: 300,
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _selectedNozzleId,
+                    decoration: const InputDecoration(
+                      labelText: 'Nozzle',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final nozzle in nozzles)
+                        DropdownMenuItem(
+                          value: nozzle['id'] as int?,
+                          child: Text(
+                            '${nozzle['name']} (${nozzle['code']}) - meter ${nozzle['meter_reading']}',
+                          ),
+                        ),
+                    ],
+                    onChanged: (nozzleId) {
+                      setState(() {
+                        _selectedNozzleId = nozzleId;
+                        final nozzle = _selectedNozzle(nozzles);
+                        if (nozzle != null) {
+                          final meter =
+                              double.tryParse('${nozzle['meter_reading']}') ??
+                              0;
+                          _closingMeterController.text = (meter + 1)
+                              .toStringAsFixed(2);
+                        }
+                      });
+                    },
+                  ),
+                ),
+                _readOnlyValue('Opening meter', openingMeter),
+                _field(_closingMeterController, 'Closing meter'),
+                _field(_rateController, 'Rate per liter'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _isSaving ? null : _createSale,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.local_gas_station_outlined),
+              label: Text(_isSaving ? 'Saving...' : 'Record Fuel Sale'),
+            ),
+            if (_message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 24),
+            _SimpleListCard(
+              title: 'Recent Fuel Sales',
+              emptyText: 'No fuel sales yet.',
+              items: [
+                for (final sale in _sales)
+                  'Sale ${sale['id']} - nozzle ${sale['nozzle_id']} - ${sale['quantity']} L - total ${sale['total_amount']} - shift ${sale['shift_id'] ?? '-'}',
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 180,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        keyboardType: TextInputType.number,
+      ),
+    );
+  }
+
+  Widget _readOnlyValue(String label, String value) {
+    return SizedBox(
+      width: 180,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        child: Text(value),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _nozzlesFrom(Map<String, dynamic> stationSetup) {
+    final nozzles = <Map<String, dynamic>>[];
+    final dispensers = stationSetup['dispensers'];
+    if (dispensers is! List) return nozzles;
+    for (final dispenser in dispensers) {
+      if (dispenser is! Map) continue;
+      final dispenserNozzles = dispenser['nozzles'];
+      if (dispenserNozzles is! List) continue;
+      for (final nozzle in dispenserNozzles) {
+        if (nozzle is Map) {
+          nozzles.add(Map<String, dynamic>.from(nozzle));
+        }
+      }
+    }
+    return nozzles;
+  }
+
+  Map<String, dynamic>? _selectedNozzle(List<Map<String, dynamic>> nozzles) {
+    for (final nozzle in nozzles) {
+      if (nozzle['id'] == _selectedNozzleId) return nozzle;
+    }
+    return null;
+  }
 }
 
 class _ContextChip extends StatelessWidget {
