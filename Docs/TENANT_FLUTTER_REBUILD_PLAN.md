@@ -374,6 +374,15 @@ It prepares the one-station `check` tenant for the clean tenant app:
 
 It intentionally does not create `StationAdmin` because this is a one-station tenant.
 
+The normal restart helper also prepares these users by default:
+
+```powershell
+cd C:\Fuel Management System
+.\restart_local_dev.ps1
+```
+
+Use `-SkipTenantPrep` only when you intentionally do not want the helper to touch the local test tenant.
+
 ## Tenant App Screen Order
 
 Rebuild in this order:

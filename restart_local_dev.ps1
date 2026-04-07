@@ -4,6 +4,7 @@ param(
     [switch]$SkipBackendLogs,
     [switch]$SkipSupportConsole,
     [switch]$SkipFlutter,
+    [switch]$SkipTenantPrep,
     [switch]$UseOldFlutter,
     [string]$ApiBaseUrl = "http://127.0.0.1:8012",
     [int]$SupportConsolePort = 3000
@@ -92,6 +93,11 @@ if (-not $SkipBackend) {
     if (-not $SkipBackendLogs) {
         Write-Host "Opening backend log monitor in a new window..."
         Start-DevWindow -Title "PPMS Backend Logs" -WorkingDirectory $RepoRoot -Command ".\watch_backend_logs.ps1 -HealthUrl $ApiBaseUrl/health"
+    }
+
+    if (-not $SkipTenantPrep) {
+        Write-Host "Preparing Phase 9 tenant test users..."
+        & $PythonExe (Join-Path $RepoRoot "scripts\ensure_phase9_tenant.py")
     }
 }
 
