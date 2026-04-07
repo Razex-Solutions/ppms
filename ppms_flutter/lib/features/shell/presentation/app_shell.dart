@@ -223,25 +223,27 @@ class _AppShellState extends State<AppShell> {
                                 ),
                               ),
                               Expanded(
-                                child: NavigationRail(
-                                  selectedIndex: _selectedIndex,
-                                  extended: constraints.maxWidth >= 1480,
-                                  groupAlignment: -1,
-                                  labelType: constraints.maxWidth >= 1480
-                                      ? NavigationRailLabelType.none
-                                      : NavigationRailLabelType.all,
-                                  destinations: [
-                                    for (final destination in destinations)
-                                      NavigationRailDestination(
-                                        icon: Icon(destination.icon),
-                                        label: Text(destination.label),
-                                      ),
-                                  ],
-                                  onDestinationSelected: (index) {
-                                    setState(() {
-                                      _selectedIndex = index;
-                                    });
-                                  },
+                                child: SingleChildScrollView(
+                                  child: NavigationRail(
+                                    selectedIndex: _selectedIndex,
+                                    extended: constraints.maxWidth >= 1480,
+                                    groupAlignment: -1,
+                                    labelType: constraints.maxWidth >= 1480
+                                        ? NavigationRailLabelType.none
+                                        : NavigationRailLabelType.all,
+                                    destinations: [
+                                      for (final destination in destinations)
+                                        NavigationRailDestination(
+                                          icon: Icon(destination.icon),
+                                          label: Text(destination.label),
+                                        ),
+                                    ],
+                                    onDestinationSelected: (index) {
+                                      setState(() {
+                                        _selectedIndex = index;
+                                      });
+                                    },
+                                  ),
                                 ),
                               ),
                             ],
