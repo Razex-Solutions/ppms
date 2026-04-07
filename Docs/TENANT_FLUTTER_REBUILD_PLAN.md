@@ -466,6 +466,29 @@ Examples:
 
 Every backend change must have at least targeted tests before commit.
 
+## Phase 9 Scenario Runner
+
+Use the automated operations scenario as the baseline regression check for the tenant rebuild.
+
+Command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps1
+```
+
+The runner uses the live backend API and creates known sample data for:
+
+- tenant worker login
+- operator shift open and close
+- meter-based fuel sale
+- cash submission
+- manager expense
+- supplier
+- purchase
+- tank dip
+
+It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, and dip regressions while rebuilding the Flutter UI.
+
 ## Phase 9 Acceptance For Rebuild
 
 The rebuild is acceptable when:

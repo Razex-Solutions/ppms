@@ -79,6 +79,43 @@ For each test step:
 6. user repeats the same step
 7. if it passes, mark the step accepted and continue
 
+## Automated Scenario Runner
+
+Use this before and after larger rebuild batches so we are not manually rechecking the same operations math every time.
+
+Command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps1
+```
+
+What it does:
+
+- prepares the `check` Phase 9 tenant and worker users
+- creates a unique scenario operator user
+- opens an operator shift with known opening cash
+- records a meter-based fuel sale with known liters and rate
+- records a cash submission
+- closes the shift with expected cash
+- creates a manager expense
+- creates a test supplier
+- creates a manager purchase
+- records a tank dip against current system stock
+- prints expected vs actual values as JSON
+
+Important business rule captured by the runner:
+
+- Manager-created purchases are currently `pending`
+- pending purchases calculate purchase totals but do not update tank stock until approved
+- meter sales immediately reduce tank stock
+- dip loss/gain should be zero when the physical calculated volume equals system stock
+
+The runner should end with:
+
+```text
+Phase 9 scenario passed.
+```
+
 ## How To Report Issues In Chat
 
 When something fails, send:
