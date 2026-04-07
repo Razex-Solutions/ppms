@@ -1,0 +1,82 @@
+name: Phase 9 Tenant Automation
+
+on:
+  push:
+    branches:
+      - developments
+  pull_request:
+    branches:
+      - developments
+
+jobs:
+  phase9:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Prepare database
+        shell: pwsh
+        run: |
+          alembic upgrade head
+
+      - name: Run backend unit tests
+        shell: pwsh
+        run: |
+          python -m pytest tests
+
+      - name: Start backend
+        shell: pwsh
+        run: |
+          python run_local_server.py
+
+      - name: Run Phase 9 business scenario
+        shell: pwsh
+        run: |
+          .\run_phase9_scenario.ps1
+
+      - name: Run tenant UI API smoke
+        shell: pwsh
+        run: |
+          .\run_phase9_tenant_ui_api_smoke.ps1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install Flutter dependencies
+        shell: pwsh
+        working-directory: ppms_tenant_flutter
+        run: |
+          flutter pub get
+
+      - name: Analyze tenant Flutter
+        shell: pwsh
+        working-directory: ppms_tenant_flutter
+        run: |
+          flutter analyze --no-pub
+
+      - name: Run tenant Flutter navigation tests
+        shell: pwsh
+        working-directory: ppms_tenant_flutter
+        run: |
+          flutter test --no-pub
+
+      - name: Build tenant Flutter Windows debug app
+        shell: pwsh
+        working-directory: ppms_tenant_flutter
+        run: |
+          flutter build windows --debug --no-pub --dart-define=PPMS_API_BASE_URL=http://127.0.0.1:8012
