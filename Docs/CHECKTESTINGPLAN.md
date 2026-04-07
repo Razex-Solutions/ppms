@@ -297,6 +297,9 @@ Specific checks:
 - dispenser number/code should be auto-generated where possible
 - nozzle code should be auto-generated where possible
 - nozzle-to-tank and nozzle-to-fuel mapping must remain clear and required
+- tank, dispenser, and nozzle rows must expose explicit `Edit` and `Delete` actions, not only a vague remove action
+- edit mode should load the existing values into the form, save as an update, and provide a clear cancel option
+- delete mode should ask for confirmation and show the backend validation message if the record has dependent sales, nozzles, purchases, or other history
 
 Acceptance:
 
@@ -305,6 +308,7 @@ Acceptance:
 - legal name inheritance is clear
 - physical location fields are optional or hidden if not useful
 - generated fields do not force manual typing unless there is a custom override
+- existing tanks, dispensers, and nozzles can be edited or intentionally deleted from the setup screen
 
 ## Step 6 - Tenant Admin Setup Review
 

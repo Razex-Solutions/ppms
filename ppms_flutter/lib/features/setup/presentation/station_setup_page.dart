@@ -73,6 +73,9 @@ class _StationSetupPageState extends State<StationSetupPage> {
   int? _selectedNozzleFuelTypeId;
   int? _selectedNozzleTankId;
   int? _selectedNozzleDispenserId;
+  int? _editingTankId;
+  int? _editingDispenserId;
+  int? _editingNozzleId;
 
   List<Map<String, dynamic>> _dedupeById(List<Map<String, dynamic>> items) {
     final seen = <Object?>{};
@@ -445,7 +448,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
     }
   }
 
-  Future<void> _createTank() async {
+  Future<void> _saveTank() async {
     final stationId = _selectedStationId;
     final fuelTypeId = _selectedTankFuelTypeId;
     if (stationId == null || fuelTypeId == null) {
@@ -462,9 +465,9 @@ class _StationSetupPageState extends State<StationSetupPage> {
     });
 
     try {
-      final tank = await widget.sessionController.createTank({
+      final isEditing = _editingTankId != null;
+      final payload = {
         'name': _emptyToNull(_tankNameController.text),
-        'code': _emptyToNull(_tankCodeController.text),
         'capacity': double.parse(_tankCapacityController.text.trim()),
         'current_volume': double.parse(
           _tankCurrentVolumeController.text.trim(),
@@ -473,15 +476,25 @@ class _StationSetupPageState extends State<StationSetupPage> {
           _tankThresholdController.text.trim(),
         ),
         'location': _emptyToNull(_tankLocationController.text),
-        'station_id': stationId,
-        'fuel_type_id': fuelTypeId,
-      });
+      };
+      final tank = isEditing
+          ? await widget.sessionController.updateTank(
+              tankId: _editingTankId!,
+              payload: payload,
+            )
+          : await widget.sessionController.createTank({
+              ...payload,
+              'code': _emptyToNull(_tankCodeController.text),
+              'station_id': stationId,
+              'fuel_type_id': fuelTypeId,
+            });
       if (!mounted) return;
       _resetTankForm();
       await _loadWorkspace();
       if (!mounted) return;
       setState(() {
-        _feedbackMessage = 'Tank ${tank['name']} created.';
+        _feedbackMessage =
+            'Tank ${tank['name']} ${isEditing ? 'updated' : 'created'}.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -493,7 +506,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
     }
   }
 
-  Future<void> _createDispenser() async {
+  Future<void> _saveDispenser() async {
     final stationId = _selectedStationId;
     if (stationId == null) {
       setState(() {
@@ -509,18 +522,28 @@ class _StationSetupPageState extends State<StationSetupPage> {
     });
 
     try {
-      final dispenser = await widget.sessionController.createDispenser({
+      final isEditing = _editingDispenserId != null;
+      final payload = {
         'name': _emptyToNull(_dispenserNameController.text),
-        'code': _emptyToNull(_dispenserCodeController.text),
         'location': _emptyToNull(_dispenserLocationController.text),
-        'station_id': stationId,
-      });
+      };
+      final dispenser = isEditing
+          ? await widget.sessionController.updateDispenser(
+              dispenserId: _editingDispenserId!,
+              payload: payload,
+            )
+          : await widget.sessionController.createDispenser({
+              ...payload,
+              'code': _emptyToNull(_dispenserCodeController.text),
+              'station_id': stationId,
+            });
       if (!mounted) return;
       _resetDispenserForm();
       await _loadWorkspace();
       if (!mounted) return;
       setState(() {
-        _feedbackMessage = 'Dispenser ${dispenser['name']} created.';
+        _feedbackMessage =
+            'Dispenser ${dispenser['name']} ${isEditing ? 'updated' : 'created'}.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -532,7 +555,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
     }
   }
 
-  Future<void> _createNozzle() async {
+  Future<void> _saveNozzle() async {
     final stationId = _selectedStationId;
     final fuelTypeId = _selectedNozzleFuelTypeId;
     final tankId = _selectedNozzleTankId;
@@ -555,21 +578,31 @@ class _StationSetupPageState extends State<StationSetupPage> {
     });
 
     try {
-      final nozzle = await widget.sessionController.createNozzle({
+      final isEditing = _editingNozzleId != null;
+      final payload = {
         'name': _emptyToNull(_nozzleNameController.text),
-        'code': _emptyToNull(_nozzleCodeController.text),
-        'station_id': stationId,
         'fuel_type_id': fuelTypeId,
         'tank_id': tankId,
-        'dispenser_id': dispenserId,
         'meter_reading': double.parse(_nozzleMeterController.text.trim()),
-      });
+      };
+      final nozzle = isEditing
+          ? await widget.sessionController.updateNozzle(
+              nozzleId: _editingNozzleId!,
+              payload: payload,
+            )
+          : await widget.sessionController.createNozzle({
+              ...payload,
+              'code': _emptyToNull(_nozzleCodeController.text),
+              'station_id': stationId,
+              'dispenser_id': dispenserId,
+            });
       if (!mounted) return;
       _resetNozzleForm();
       await _loadWorkspace();
       if (!mounted) return;
       setState(() {
-        _feedbackMessage = 'Nozzle ${nozzle['name']} created.';
+        _feedbackMessage =
+            'Nozzle ${nozzle['name']} ${isEditing ? 'updated' : 'created'}.';
         _isSubmitting = false;
       });
     } on ApiException catch (error) {
@@ -630,12 +663,14 @@ class _StationSetupPageState extends State<StationSetupPage> {
     _tankThresholdController.text = '1000';
     _tankLocationController.clear();
     _selectedTankFuelTypeId = _firstId(_fuelTypes);
+    _editingTankId = null;
   }
 
   void _resetDispenserForm() {
     _dispenserNameController.clear();
     _dispenserCodeController.clear();
     _dispenserLocationController.clear();
+    _editingDispenserId = null;
   }
 
   void _resetNozzleForm() {
@@ -645,6 +680,149 @@ class _StationSetupPageState extends State<StationSetupPage> {
     _selectedNozzleFuelTypeId = _firstId(_fuelTypes);
     _selectedNozzleTankId = _firstId(_tanks);
     _selectedNozzleDispenserId = _firstId(_dispensers);
+    _editingNozzleId = null;
+  }
+
+  Future<bool> _confirmDelete({
+    required String title,
+    required String message,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  void _editTank(Map<String, dynamic> tank) {
+    setState(() {
+      _editingTankId = tank['id'] as int?;
+      _tankNameController.text = tank['name'] as String? ?? '';
+      _tankCodeController.text = tank['code'] as String? ?? '';
+      _tankCapacityController.text = ((tank['capacity'] as num?) ?? 0)
+          .toString();
+      _tankCurrentVolumeController.text =
+          ((tank['current_volume'] as num?) ?? 0).toString();
+      _tankThresholdController.text =
+          ((tank['low_stock_threshold'] as num?) ?? 1000).toString();
+      _tankLocationController.text = tank['location'] as String? ?? '';
+      _selectedTankFuelTypeId = tank['fuel_type_id'] as int?;
+      _feedbackMessage = 'Editing tank ${tank['name'] ?? tank['code']}.';
+    });
+  }
+
+  void _editDispenser(Map<String, dynamic> dispenser) {
+    setState(() {
+      _editingDispenserId = dispenser['id'] as int?;
+      _dispenserNameController.text = dispenser['name'] as String? ?? '';
+      _dispenserCodeController.text = dispenser['code'] as String? ?? '';
+      _dispenserLocationController.text =
+          dispenser['location'] as String? ?? '';
+      _feedbackMessage =
+          'Editing dispenser ${dispenser['name'] ?? dispenser['code']}.';
+    });
+  }
+
+  void _editNozzle(Map<String, dynamic> nozzle) {
+    setState(() {
+      _editingNozzleId = nozzle['id'] as int?;
+      _nozzleNameController.text = nozzle['name'] as String? ?? '';
+      _nozzleCodeController.text = nozzle['code'] as String? ?? '';
+      _nozzleMeterController.text = ((nozzle['meter_reading'] as num?) ?? 0)
+          .toString();
+      _selectedNozzleFuelTypeId = nozzle['fuel_type_id'] as int?;
+      _selectedNozzleTankId = nozzle['tank_id'] as int?;
+      _selectedNozzleDispenserId = nozzle['dispenser_id'] as int?;
+      _feedbackMessage = 'Editing nozzle ${nozzle['name'] ?? nozzle['code']}.';
+    });
+  }
+
+  Future<void> _deleteTank(Map<String, dynamic> tank) async {
+    final tankId = tank['id'] as int?;
+    if (tankId == null) return;
+    final confirmed = await _confirmDelete(
+      title: 'Delete Tank',
+      message:
+          'Delete ${tank['name'] ?? tank['code'] ?? 'this tank'} only if it is not used by nozzles, purchases, or sales.',
+    );
+    if (!confirmed) return;
+    await _runInventoryMutation(
+      () => widget.sessionController.deleteTank(tankId: tankId),
+      successMessage: 'Tank deleted.',
+    );
+  }
+
+  Future<void> _deleteDispenser(Map<String, dynamic> dispenser) async {
+    final dispenserId = dispenser['id'] as int?;
+    if (dispenserId == null) return;
+    final confirmed = await _confirmDelete(
+      title: 'Delete Dispenser',
+      message:
+          'Delete ${dispenser['name'] ?? dispenser['code'] ?? 'this dispenser'} only if it no longer has nozzles attached.',
+    );
+    if (!confirmed) return;
+    await _runInventoryMutation(
+      () => widget.sessionController.deleteDispenser(dispenserId: dispenserId),
+      successMessage: 'Dispenser deleted.',
+    );
+  }
+
+  Future<void> _deleteNozzle(Map<String, dynamic> nozzle) async {
+    final nozzleId = nozzle['id'] as int?;
+    if (nozzleId == null) return;
+    final confirmed = await _confirmDelete(
+      title: 'Delete Nozzle',
+      message:
+          'Delete ${nozzle['name'] ?? nozzle['code'] ?? 'this nozzle'} only if it has no sale history.',
+    );
+    if (!confirmed) return;
+    await _runInventoryMutation(
+      () => widget.sessionController.deleteNozzle(nozzleId: nozzleId),
+      successMessage: 'Nozzle deleted.',
+    );
+  }
+
+  Future<void> _runInventoryMutation(
+    Future<dynamic> Function() action, {
+    required String successMessage,
+  }) async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _feedbackMessage = null;
+    });
+    try {
+      await action();
+      if (!mounted) return;
+      _resetTankForm();
+      _resetDispenserForm();
+      _resetNozzleForm();
+      await _loadWorkspace();
+      if (!mounted) return;
+      setState(() {
+        _feedbackMessage = successMessage;
+        _isSubmitting = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isSubmitting = false;
+      });
+    }
   }
 
   String _lookupName(List<Map<String, dynamic>> items, dynamic id) {
@@ -1224,6 +1402,9 @@ class _StationSetupPageState extends State<StationSetupPage> {
     final canCreateTank = _fuelTypes.isNotEmpty;
     final canCreateDispenser = _tanks.isNotEmpty;
     final canCreateNozzle = _tanks.isNotEmpty && _dispensers.isNotEmpty;
+    final canSaveTank = canCreateTank || _editingTankId != null;
+    final canSaveDispenser = canCreateDispenser || _editingDispenserId != null;
+    final canSaveNozzle = canCreateNozzle || _editingNozzleId != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1368,7 +1549,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
             children: [
               _buildInventoryCard(
                 context: context,
-                title: 'Add Tank',
+                title: _editingTankId == null ? 'Add Tank' : 'Edit Tank',
                 child: Column(
                   children: [
                     TextFormField(
@@ -1382,10 +1563,11 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankCodeController,
+                      enabled: _editingTankId == null,
                       decoration: const InputDecoration(
                         labelText: 'Tank Code',
                         helperText:
-                            'Leave blank to auto-generate the next tank code.',
+                            'Leave blank while creating to auto-generate the next tank code.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1396,16 +1578,18 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       initialValue: _selectedTankFuelTypeId,
                       decoration: const InputDecoration(labelText: 'Fuel Type'),
                       items: fuelTypeItems,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedTankFuelTypeId = value;
-                        });
-                      },
+                      onChanged: _editingTankId != null
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedTankFuelTypeId = value;
+                              });
+                            },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankCapacityController,
-                      enabled: canCreateTank,
+                      enabled: canSaveTank,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1414,7 +1598,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankCurrentVolumeController,
-                      enabled: canCreateTank,
+                      enabled: canSaveTank,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1425,7 +1609,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankThresholdController,
-                      enabled: canCreateTank,
+                      enabled: canSaveTank,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1436,21 +1620,45 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tankLocationController,
-                      enabled: canCreateTank,
+                      enabled: canSaveTank,
                       decoration: const InputDecoration(labelText: 'Location'),
                     ),
-                    if (!canCreateTank) ...[
+                    if (!canSaveTank) ...[
                       const SizedBox(height: 12),
                       const Text(
                         'Add fuel types first so the tank can be assigned correctly.',
                       ),
                     ],
                     const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _isSubmitting || !canCreateTank
-                          ? null
-                          : _createTank,
-                      child: Text(_isSubmitting ? 'Saving...' : 'Create Tank'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: _isSubmitting || !canSaveTank
+                              ? null
+                              : _saveTank,
+                          child: Text(
+                            _isSubmitting
+                                ? 'Saving...'
+                                : _editingTankId == null
+                                ? 'Create Tank'
+                                : 'Update Tank',
+                          ),
+                        ),
+                        if (_editingTankId != null)
+                          TextButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _resetTankForm();
+                                      _feedbackMessage = 'Tank edit cancelled.';
+                                    });
+                                  },
+                            child: const Text('Cancel Edit'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -1458,7 +1666,9 @@ class _StationSetupPageState extends State<StationSetupPage> {
               const SizedBox(height: 16),
               _buildInventoryCard(
                 context: context,
-                title: 'Add Dispenser',
+                title: _editingDispenserId == null
+                    ? 'Add Dispenser'
+                    : 'Edit Dispenser',
                 child: Column(
                   children: [
                     TextFormField(
@@ -1472,32 +1682,56 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _dispenserCodeController,
+                      enabled: _editingDispenserId == null,
                       decoration: const InputDecoration(
                         labelText: 'Dispenser Code',
                         helperText:
-                            'Leave blank to auto-generate the next dispenser code.',
+                            'Leave blank while creating to auto-generate the next dispenser code.',
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _dispenserLocationController,
-                      enabled: canCreateDispenser,
+                      enabled: canSaveDispenser,
                       decoration: const InputDecoration(labelText: 'Location'),
                     ),
-                    if (!canCreateDispenser) ...[
+                    if (!canSaveDispenser) ...[
                       const SizedBox(height: 12),
                       const Text(
                         'Create tanks first so the forecourt builder follows the setup order.',
                       ),
                     ],
                     const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _isSubmitting || !canCreateDispenser
-                          ? null
-                          : _createDispenser,
-                      child: Text(
-                        _isSubmitting ? 'Saving...' : 'Create Dispenser',
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: _isSubmitting || !canSaveDispenser
+                              ? null
+                              : _saveDispenser,
+                          child: Text(
+                            _isSubmitting
+                                ? 'Saving...'
+                                : _editingDispenserId == null
+                                ? 'Create Dispenser'
+                                : 'Update Dispenser',
+                          ),
+                        ),
+                        if (_editingDispenserId != null)
+                          TextButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _resetDispenserForm();
+                                      _feedbackMessage =
+                                          'Dispenser edit cancelled.';
+                                    });
+                                  },
+                            child: const Text('Cancel Edit'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -1505,7 +1739,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
               const SizedBox(height: 16),
               _buildInventoryCard(
                 context: context,
-                title: 'Add Nozzle',
+                title: _editingNozzleId == null ? 'Add Nozzle' : 'Edit Nozzle',
                 child: Column(
                   children: [
                     TextFormField(
@@ -1519,10 +1753,11 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _nozzleCodeController,
+                      enabled: _editingNozzleId == null,
                       decoration: const InputDecoration(
                         labelText: 'Nozzle Code',
                         helperText:
-                            'Leave blank to auto-generate the next nozzle code.',
+                            'Leave blank while creating to auto-generate the next nozzle code.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1533,7 +1768,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       initialValue: _selectedNozzleFuelTypeId,
                       decoration: const InputDecoration(labelText: 'Fuel Type'),
                       items: fuelTypeItems,
-                      onChanged: !canCreateNozzle
+                      onChanged: !canSaveNozzle
                           ? null
                           : (value) {
                               setState(() {
@@ -1549,7 +1784,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       initialValue: _selectedNozzleTankId,
                       decoration: const InputDecoration(labelText: 'Tank'),
                       items: tankItems,
-                      onChanged: !canCreateNozzle
+                      onChanged: !canSaveNozzle
                           ? null
                           : (value) {
                               setState(() {
@@ -1576,7 +1811,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                       initialValue: _selectedNozzleDispenserId,
                       decoration: const InputDecoration(labelText: 'Dispenser'),
                       items: dispenserItems,
-                      onChanged: !canCreateNozzle
+                      onChanged: _editingNozzleId != null || !canSaveNozzle
                           ? null
                           : (value) {
                               setState(() {
@@ -1587,7 +1822,7 @@ class _StationSetupPageState extends State<StationSetupPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _nozzleMeterController,
-                      enabled: canCreateNozzle,
+                      enabled: canSaveNozzle,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1597,20 +1832,43 @@ class _StationSetupPageState extends State<StationSetupPage> {
                             'Later meter adjustments still go through the Hardware workspace.',
                       ),
                     ),
-                    if (!canCreateNozzle) ...[
+                    if (!canSaveNozzle) ...[
                       const SizedBox(height: 12),
                       const Text(
                         'Create at least one tank and one dispenser before mapping nozzles.',
                       ),
                     ],
                     const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _isSubmitting || !canCreateNozzle
-                          ? null
-                          : _createNozzle,
-                      child: Text(
-                        _isSubmitting ? 'Saving...' : 'Create Nozzle',
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: _isSubmitting || !canSaveNozzle
+                              ? null
+                              : _saveNozzle,
+                          child: Text(
+                            _isSubmitting
+                                ? 'Saving...'
+                                : _editingNozzleId == null
+                                ? 'Create Nozzle'
+                                : 'Update Nozzle',
+                          ),
+                        ),
+                        if (_editingNozzleId != null)
+                          TextButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _resetNozzleForm();
+                                      _feedbackMessage =
+                                          'Nozzle edit cancelled.';
+                                    });
+                                  },
+                            child: const Text('Cancel Edit'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -1645,8 +1903,62 @@ class _StationSetupPageState extends State<StationSetupPage> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(tank['name'] as String? ?? 'Tank'),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            TextButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _editTank(tank),
+                              child: const Text('Edit'),
+                            ),
+                            TextButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _deleteTank(tank),
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
                         subtitle: Text(
                           '${tank['code'] ?? '-'} • ${_lookupName(_fuelTypes, tank['fuel_type_id'])}',
+                        ),
+                      ),
+                  const Divider(height: 24),
+                  Text(
+                    'Dispensers',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_dispensers.isEmpty)
+                    const Text('No dispensers configured yet.')
+                  else
+                    for (final dispenser in _dispensers)
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          dispenser['name'] as String? ?? 'Dispenser',
+                        ),
+                        subtitle: Text(
+                          '${dispenser['code'] ?? '-'} • ${dispenser['location'] ?? 'No location'}',
+                        ),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            TextButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _editDispenser(dispenser),
+                              child: const Text('Edit'),
+                            ),
+                            TextButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _deleteDispenser(dispenser),
+                              child: const Text('Delete'),
+                            ),
+                          ],
                         ),
                       ),
                   const Divider(height: 24),
@@ -1663,6 +1975,23 @@ class _StationSetupPageState extends State<StationSetupPage> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(nozzle['name'] as String? ?? 'Nozzle'),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            TextButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _editNozzle(nozzle),
+                              child: const Text('Edit'),
+                            ),
+                            TextButton(
+                              onPressed: _isSubmitting
+                                  ? null
+                                  : () => _deleteNozzle(nozzle),
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
                         subtitle: Text(
                           '${_lookupName(_dispensers, nozzle['dispenser_id'])} -> ${_lookupName(_tanks, nozzle['tank_id'])} • ${_lookupName(_fuelTypes, nozzle['fuel_type_id'])}',
                         ),
