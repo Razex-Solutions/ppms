@@ -149,6 +149,23 @@ class TenantApiClient {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> stationModules({
+    required String baseUrl,
+    required String accessToken,
+    required int stationId,
+  }) async {
+    final payload = await _sendList(
+      baseUrl: baseUrl,
+      method: 'GET',
+      path: '/station-modules/$stationId',
+      accessToken: accessToken,
+    );
+    return payload
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> organizationSetupFoundation({
     required String baseUrl,
     required String accessToken,
@@ -598,6 +615,7 @@ class TenantWorkspace {
     required this.category,
     required this.purpose,
     required this.nextAction,
+    this.requiredModules = const [],
   });
 
   final String id;
@@ -606,6 +624,7 @@ class TenantWorkspace {
   final String category;
   final String purpose;
   final String nextAction;
+  final List<String> requiredModules;
 }
 
 const _contextWorkspace = TenantWorkspace(
@@ -699,6 +718,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
             'Review tanker ownership, tanker masters, trips, deliveries, expenses, and leftovers.',
         nextAction:
             'Keep module-gated; build after core station sale and purchase flows are stable.',
+        requiredModules: ['tanker_operations'],
       ),
       TenantWorkspace(
         id: 'pos',
@@ -709,6 +729,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
             'Review shop/POS product and sale flows when the module is enabled.',
         nextAction:
             'Keep module-gated; build after fuel operations are accepted.',
+        requiredModules: ['pos', 'mart'],
       ),
       TenantWorkspace(
         id: 'hardware',
@@ -719,6 +740,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
             'Review hardware devices, vendor context, and meter-related integrations.',
         nextAction:
             'Keep optional; manual meter flows must work without hardware first.',
+        requiredModules: ['hardware'],
       ),
       TenantWorkspace(
         id: 'reports',
@@ -749,6 +771,111 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
             'Review notification preferences, inbox, delivery logs, and local mock dispatch.',
         nextAction:
             'Build after document/report events are stable; real providers come later.',
+      ),
+    ],
+    'stationadmin' => const [
+      TenantWorkspace(
+        id: 'users',
+        label: 'Users',
+        icon: Icons.group_add_outlined,
+        category: 'Admin',
+        purpose:
+            'Create and manage worker users for this assigned station only.',
+        nextAction:
+            'StationAdmin exists only for multi-station tenants and cannot see other stations.',
+      ),
+      TenantWorkspace(
+        id: 'station_setup',
+        label: 'Station Setup',
+        icon: Icons.local_gas_station_outlined,
+        category: 'Setup',
+        purpose:
+            'Maintain assigned-station setup, fuel types, tanks, dispensers, and nozzles.',
+        nextAction:
+            'Keep station-scoped; no cross-station setup access is allowed.',
+      ),
+      TenantWorkspace(
+        id: 'inventory_dips',
+        label: 'Inventory & Dips',
+        icon: Icons.inventory_2_outlined,
+        category: 'Operations',
+        purpose: 'Review station stock and record tank dip checks.',
+        nextAction:
+            'Use the same stock/dip flow as Manager, scoped to the assigned station.',
+      ),
+      TenantWorkspace(
+        id: 'shifts',
+        label: 'Shifts',
+        icon: Icons.schedule_outlined,
+        category: 'Operations',
+        purpose: 'Open, supervise, and close assigned-station shifts.',
+        nextAction: 'Use station-scoped shift operations only.',
+      ),
+      TenantWorkspace(
+        id: 'fuel_sales',
+        label: 'Fuel Sales',
+        icon: Icons.local_gas_station_outlined,
+        category: 'Operations',
+        purpose: 'Review and manage assigned-station meter sales.',
+        nextAction: 'Keep cross-station sales hidden.',
+      ),
+      TenantWorkspace(
+        id: 'cash',
+        label: 'Cash',
+        icon: Icons.payments_outlined,
+        category: 'Operations',
+        purpose: 'Review shift cash submissions for the assigned station.',
+        nextAction: 'Keep cash visibility station-scoped.',
+      ),
+      TenantWorkspace(
+        id: 'purchases',
+        label: 'Purchases',
+        icon: Icons.shopping_cart_checkout_outlined,
+        category: 'Operations',
+        purpose: 'Record and review assigned-station fuel purchases.',
+        nextAction: 'Use approval rules from the backend scenario runner.',
+      ),
+      TenantWorkspace(
+        id: 'expenses',
+        label: 'Expenses',
+        icon: Icons.request_quote_outlined,
+        category: 'Operations',
+        purpose: 'Record and review assigned-station expenses.',
+        nextAction: 'Keep expense visibility station-scoped.',
+      ),
+      TenantWorkspace(
+        id: 'tankers',
+        label: 'Tankers',
+        icon: Icons.local_shipping_outlined,
+        category: 'Optional Modules',
+        purpose: 'Manage tanker flows only when enabled for this station.',
+        nextAction: 'Hide when tanker module is disabled.',
+        requiredModules: ['tanker_operations'],
+      ),
+      TenantWorkspace(
+        id: 'pos',
+        label: 'POS / Shop',
+        icon: Icons.point_of_sale_outlined,
+        category: 'Optional Modules',
+        purpose: 'Manage POS/shop flows only when enabled for this station.',
+        nextAction: 'Hide when POS/mart module is disabled.',
+        requiredModules: ['pos', 'mart'],
+      ),
+      TenantWorkspace(
+        id: 'attendance',
+        label: 'Attendance',
+        icon: Icons.how_to_reg_outlined,
+        category: 'People',
+        purpose: 'Review assigned-station staff attendance.',
+        nextAction: 'Keep staff scope tied to the assigned station.',
+      ),
+      TenantWorkspace(
+        id: 'reports',
+        label: 'Reports',
+        icon: Icons.summarize_outlined,
+        category: 'Reporting',
+        purpose: 'Review assigned-station reports only.',
+        nextAction: 'No organization-wide report access from StationAdmin.',
       ),
     ],
     'manager' => const [
@@ -822,6 +949,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
             'Manage tanker trips, manual tanker sales, expenses, and leftover transfers.',
         nextAction:
             'Build only for tanker-enabled tenants after core fuel operations.',
+        requiredModules: ['tanker_operations'],
       ),
       TenantWorkspace(
         id: 'pos',
@@ -831,6 +959,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         purpose:
             'Manage POS/shop sales when that module is enabled for the station.',
         nextAction: 'Build only after core fuel sale flow is accepted.',
+        requiredModules: ['pos', 'mart'],
       ),
       TenantWorkspace(
         id: 'attendance',
@@ -916,6 +1045,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         purpose:
             'Review tanker financial impact, expenses, and purchase value.',
         nextAction: 'Build after tanker operations are accepted for Manager.',
+        requiredModules: ['tanker_operations'],
       ),
       TenantWorkspace(
         id: 'documents',
@@ -987,6 +1117,7 @@ List<TenantWorkspace> workspaceDestinationsForRole(String roleName) {
         purpose: 'Enter shop/POS sales when the module is enabled.',
         nextAction:
             'Keep hidden when POS module is disabled; build after fuel sale flow.',
+        requiredModules: ['pos', 'mart'],
       ),
       TenantWorkspace(
         id: 'attendance',
@@ -1024,6 +1155,7 @@ class TenantSessionController extends ChangeNotifier {
   Map<String, dynamic>? _tokens;
   Map<String, dynamic>? _currentUser;
   List<Map<String, dynamic>> _stations = const [];
+  Map<int, Map<String, bool>> _stationModulesByStationId = const {};
   bool _isRestoring = true;
   bool _isBusy = false;
   String? _errorMessage;
@@ -1035,6 +1167,8 @@ class TenantSessionController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   Map<String, dynamic>? get currentUser => _currentUser;
   List<Map<String, dynamic>> get stations => _stations;
+  Map<int, Map<String, bool>> get stationModulesByStationId =>
+      _stationModulesByStationId;
   String get roleName => _currentUser?['role_name'] as String? ?? 'Unknown';
   String get scopeLevel => _currentUser?['scope_level'] as String? ?? 'unknown';
   String get username => _currentUser?['username'] as String? ?? '-';
@@ -1052,6 +1186,9 @@ class TenantSessionController extends ChangeNotifier {
     return _stations.length == 1 ? _stations.first : null;
   }
 
+  bool get isSingleStationTenant => _stations.length == 1;
+  bool get isMultiStationTenant => _stations.length > 1;
+
   String get workingStationLabel {
     final station = workingStation;
     if (station == null) {
@@ -1066,6 +1203,45 @@ class TenantSessionController extends ChangeNotifier {
 
   List<String> get creatableRoles =>
       List<String>.from(_currentUser?['creatable_roles'] as List? ?? const []);
+
+  bool isModuleEnabledForNavigation(List<String> moduleNames) {
+    if (moduleNames.isEmpty) return true;
+    if (_stationModulesByStationId.isEmpty) return false;
+    final station = workingStation;
+    if (station != null) {
+      final stationId = station['id'] as int?;
+      final modules = stationId == null ? null : _stationModulesByStationId[stationId];
+      return moduleNames.any((moduleName) => modules?[moduleName] == true);
+    }
+    return _stationModulesByStationId.values.any(
+      (modules) => moduleNames.any((moduleName) => modules[moduleName] == true),
+    );
+  }
+
+  String get enabledOptionalModuleLabel {
+    final moduleLabels = <String>[];
+    for (final entry in {
+      'pos': 'POS',
+      'mart': 'Mart',
+      'tanker_operations': 'Tankers',
+      'hardware': 'Hardware',
+      'meter_adjustments': 'Meter adjustments',
+    }.entries) {
+      if (isModuleEnabledForNavigation([entry.key])) {
+        moduleLabels.add(entry.value);
+      }
+    }
+    return moduleLabels.isEmpty ? 'None' : moduleLabels.join(', ');
+  }
+
+  List<TenantWorkspace> workspacesForCurrentSession() {
+    return workspaceDestinationsForRole(roleName)
+        .where(
+          (workspace) =>
+              isModuleEnabledForNavigation(workspace.requiredModules),
+        )
+        .toList(growable: false);
+  }
 
   Future<List<Map<String, dynamic>>> loadRoles() async {
     return _apiClient.roles(baseUrl: _baseUrl, accessToken: _accessToken());
@@ -1503,6 +1679,7 @@ class TenantSessionController extends ChangeNotifier {
     _tokens = null;
     _currentUser = null;
     _stations = const [];
+    _stationModulesByStationId = const {};
     _errorMessage = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
@@ -1523,6 +1700,27 @@ class TenantSessionController extends ChangeNotifier {
       accessToken: accessToken,
       organizationId: organizationId,
     );
+    final modulesByStation = <int, Map<String, bool>>{};
+    for (final station in _stations) {
+      final stationId = station['id'] as int?;
+      if (stationId == null) continue;
+      try {
+        final settings = await _apiClient.stationModules(
+          baseUrl: _baseUrl,
+          accessToken: accessToken,
+          stationId: stationId,
+        );
+        modulesByStation[stationId] = {
+          for (final setting in settings)
+            if (setting['module_name'] != null)
+              setting['module_name'].toString():
+                  setting['is_enabled'] as bool? ?? false,
+        };
+      } on TenantApiException {
+        modulesByStation[stationId] = const {};
+      }
+    }
+    _stationModulesByStationId = modulesByStation;
   }
 
   Future<void> _persist() async {
@@ -1579,6 +1777,26 @@ class _LoginPageState extends State<LoginPage> {
       username: 'check_operator',
       password: 'operator123',
     ),
+    _QuickLogin(
+      label: 'Multi HeadOffice',
+      username: 'p9_multi',
+      password: 'office123',
+    ),
+    _QuickLogin(
+      label: 'StationAdmin A',
+      username: 'p9_multi_station_a_admin',
+      password: 'station123',
+    ),
+    _QuickLogin(
+      label: 'StationAdmin B',
+      username: 'p9_multi_station_b_admin',
+      password: 'station123',
+    ),
+    _QuickLogin(
+      label: 'Minimal HeadOffice',
+      username: 'p9_minimal',
+      password: 'office123',
+    ),
   ];
 
   @override
@@ -1632,7 +1850,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Use the Phase 9 test tenant first: check / office123.',
+                      'Use check first, then p9_multi and p9_minimal for scope/module checks.',
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -1742,7 +1960,7 @@ class _TenantHomePageState extends State<TenantHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final workspaces = workspaceDestinationsForRole(sessionController.roleName);
+    final workspaces = sessionController.workspacesForCurrentSession();
     final selectedWorkspace = workspaces.firstWhere(
       (workspace) => workspace.id == _selectedWorkspaceId,
       orElse: () => workspaces.first,
@@ -1923,6 +2141,10 @@ class _WorkspaceDetail extends StatelessWidget {
               label: 'Station count',
               value: sessionController.stations.length.toString(),
             ),
+            _ContextChip(
+              label: 'Enabled optional modules',
+              value: sessionController.enabledOptionalModuleLabel,
+            ),
           ],
         ),
         const SizedBox(height: 24),
@@ -2029,8 +2251,11 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
       final allowedRoleNames = widget.sessionController.creatableRoles.toSet();
       final workerRoles = roles.where((role) {
         final roleName = role['name'] as String? ?? '';
-        return allowedRoleNames.contains(roleName) &&
-            roleName != 'StationAdmin';
+        if (!allowedRoleNames.contains(roleName)) return false;
+        if (roleName == 'StationAdmin') {
+          return widget.sessionController.isMultiStationTenant;
+        }
+        return true;
       }).toList();
       setState(() {
         _roles = workerRoles;
@@ -2273,7 +2498,9 @@ class _UserManagementPanelState extends State<_UserManagementPanel> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Single-station tenant rule: HeadOffice acts as station admin, so StationAdmin is hidden. New workers will be assigned to ${widget.sessionController.workingStationLabel}.',
+              widget.sessionController.isSingleStationTenant
+                  ? 'Single-station tenant rule: HeadOffice acts as station admin, so StationAdmin is hidden. New workers will be assigned to ${widget.sessionController.workingStationLabel}.'
+                  : 'Multi-station tenant rule: StationAdmin is available. Select/create users only for the working station once station assignment UI is added.',
             ),
             const SizedBox(height: 16),
             Wrap(
