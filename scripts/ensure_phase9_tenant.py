@@ -6,6 +6,7 @@ Run from the repository root:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from app.models.role import Role  # noqa: E402
 from app.models.station import Station  # noqa: E402
 from app.models.tank import Tank  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.services.station_modules import set_station_module  # noqa: E402
 
 
 def ensure_role(db, name: str) -> Role:
@@ -124,9 +126,9 @@ def ensure_station(db, organization: Organization) -> Station:
             display_name="check",
             use_organization_branding=True,
             setup_status="active",
-            has_shops=False,
-            has_pos=False,
-            has_tankers=False,
+            has_shops=True,
+            has_pos=True,
+            has_tankers=True,
             has_hardware=False,
             allow_meter_adjustments=True,
             is_active=True,
@@ -141,6 +143,9 @@ def ensure_station(db, organization: Organization) -> Station:
         station.is_head_office = True
         station.use_organization_branding = True
         station.setup_status = "active"
+        station.has_shops = True
+        station.has_pos = True
+        station.has_tankers = True
         station.is_active = True
         db.commit()
     return station
@@ -228,6 +233,12 @@ def ensure_forecourt(db, station: Station) -> None:
         db.commit()
 
     tanks = db.query(Tank).filter(Tank.station_id == station.id).order_by(Tank.id).all()
+    if os.environ.get("PPMS_RESET_PHASE9_FORECOURT") == "1":
+        for tank in tanks:
+            tank.capacity = max(float(tank.capacity or 0), 25000.0)
+            tank.current_volume = 10000.0
+            tank.low_stock_threshold = tank.low_stock_threshold or 2000
+        db.commit()
     dispensers = (
         db.query(Dispenser)
         .filter(Dispenser.station_id == station.id)
@@ -250,6 +261,13 @@ def ensure_forecourt(db, station: Station) -> None:
                         fuel_type_id=tank.fuel_type_id,
                     )
                 )
+        db.commit()
+
+    if os.environ.get("PPMS_RESET_PHASE9_FORECOURT") == "1":
+        nozzles = db.query(Nozzle).join(Dispenser).filter(Dispenser.station_id == station.id).all()
+        for nozzle in nozzles:
+            nozzle.meter_reading = 50000.0
+            nozzle.current_segment_start_reading = 50000.0
         db.commit()
 
 
@@ -283,6 +301,9 @@ def main() -> None:
         station = ensure_station(db, organization)
         ensure_invoice_profile(db, station)
         ensure_forecourt(db, station)
+        set_station_module(db, station.id, "tanker_operations", True)
+        set_station_module(db, station.id, "pos", True)
+        set_station_module(db, station.id, "mart", True)
 
         ensure_user(
             db,

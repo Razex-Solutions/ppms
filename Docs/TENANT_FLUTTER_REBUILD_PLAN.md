@@ -493,9 +493,14 @@ The runner uses the live backend API and creates known sample data for:
 - attendance records
 - salary additions and deductions
 - payroll run creation and finalization
+- POS products and sales
+- tanker records, compartments, trips, deliveries, expenses, and leftover transfer
+- scoped reports, saved report definitions, and report exports
+- financial document rendering
+- notification summary checks
 - tank dips across all tanks
 
-It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, supplier ledger, attendance, and payroll regressions while rebuilding the Flutter UI.
+It prints expected vs actual totals so we can quickly catch permission, stock, cash, purchase, dip, customer ledger, supplier ledger, attendance, payroll, POS, tanker, report, document, and notification regressions while rebuilding the Flutter UI.
 
 ## Phase 9 Acceptance For Rebuild
 

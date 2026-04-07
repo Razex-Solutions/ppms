@@ -115,6 +115,14 @@ What it does:
 - records salary additions and deductions
 - creates and finalizes a payroll run
 - verifies payroll line totals and payroll run net total
+- creates POS/shop products and a POS sale
+- verifies POS stock reduction
+- creates tanker records with compartments
+- creates and completes tanker trips with delivery, expense, and leftover transfer
+- verifies scenario tanker loaded, delivered, and transferred quantities
+- verifies scoped reports, report definition, and report export
+- verifies financial documents for sale/payment/ledger contexts
+- verifies notification summary is readable
 - records multiple tank dips across all tanks
 - prints expected vs actual values as JSON
 
@@ -126,6 +134,8 @@ Important business rule captured by the runner:
 - dip loss/gain should be zero when the physical calculated volume equals system stock
 - open shift cash expected currently does not include live sales until close
 - payroll currently runs against payroll-enabled login users, not profile-only staff records
+- tanker workspace summaries are cumulative, so scenario-specific checks validate the new trips directly
+- tanker leftover transfer currently transfers all remaining fuel when a transfer tank is supplied
 
 The runner should end with:
 

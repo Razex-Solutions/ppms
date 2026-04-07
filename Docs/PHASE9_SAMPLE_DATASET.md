@@ -128,6 +128,18 @@ The current automated runner now covers the first running-pump operations batch:
 - records salary additions and deductions
 - generates and finalizes a payroll run
 - verifies payroll line net amounts and run net total
+- creates POS/shop products
+- records POS sale and verifies stock reduction
+- creates own/hired tanker records with compartments
+- creates supplier-to-customer tanker trips
+- records tanker delivery and tanker expense
+- completes tanker trips with leftover transfer to station tanks
+- verifies scenario tanker loaded/delivered/transferred quantities
+- verifies core reports load with scoped data
+- creates a saved report definition
+- creates a completed report export job
+- renders financial documents for fuel sale, customer payment, supplier payment, customer ledger, and supplier ledger
+- verifies notification summary can be read after report export notification creation
 - records multiple tank dips across all tanks
 - prints expected vs actual totals
 
@@ -137,6 +149,8 @@ Known current backend behavior recorded by the runner:
 - closed shift cash expected and variance calculate correctly
 - Manager purchases require HeadOffice approval before stock and supplier payable balances update
 - payroll runs currently calculate from payroll-enabled login users, not profile-only staff records
+- tanker workspace summary is cumulative for the station, so scenario checks validate newly created trips directly
+- supplier-to-customer tanker trip completion currently transfers all leftover fuel when a transfer tank is provided and still reports the leftover quantity
 
 Command:
 
@@ -146,7 +160,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_phase9_scenario.ps
 
 ## Remaining Dataset Blocks
 
-The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, and tank dips at a first acceptance level.
+The runner already covers users/staff, shift/meter/cash, purchases, credit customers, supplier payments, ledgers, expenses, attendance, payroll, POS/shop, tankers, reports, documents, notifications, and tank dips at a first acceptance level.
 
 It still needs these blocks added.
 
@@ -318,17 +332,22 @@ attendance_hours = checkout_time - checkin_time
 
 ### 8. Tankers
 
-Create:
+Current automated coverage:
 
 - tanker master
 - second tanker master
 - compartments
 - tanker trip
 - second tanker trip
-- trip load
 - manual tanker sale
 - tanker expense
 - leftover transfer into station tank
+
+Current backend behavior:
+
+- supplier-to-customer tanker trip completion transfers the full leftover quantity to a tank when `transfer_to_tank_id` is provided
+- `leftover_quantity` is still reported after transfer
+- station tanker workspace summary is cumulative across previous scenario runs
 
 Expected formulas:
 
@@ -351,7 +370,7 @@ Tanker dataset should include:
 
 ### 9. POS / Shop
 
-Create:
+Current automated coverage:
 
 - POS product
 - POS sale
@@ -366,13 +385,19 @@ product_stock_after_sale = stock_before - quantity_sold
 
 ### 10. Notifications, Documents, And Reports
 
-Create or verify:
+Current automated coverage:
 
-- notification preference
+- notification summary
 - notification inbox/delivery log
 - financial document generation
 - report export job
 - saved report definition
+
+Still to add:
+
+- notification preference update
+- due delivery processing/retry where useful
+- direct dispatch send checks if we want to verify local/mock delivery records
 
 Expected checks:
 

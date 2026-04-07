@@ -543,6 +543,233 @@ def create_payroll_flow(
     }
 
 
+def create_pos_flow(
+    *,
+    manager: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    product_specs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    products: list[dict[str, Any]] = []
+    for index, product_spec in enumerate(product_specs, start=1):
+        products.append(
+            manager.post(
+                "/pos-products/",
+                {
+                    "name": f"{scenario_id} {product_spec['product_name']}",
+                    "code": f"{scenario_id}-POS-{index}",
+                    "category": "lubricants",
+                    "module": "mart",
+                    "price": product_spec["unit_price"],
+                    "stock_quantity": product_spec["stock_before"],
+                    "track_inventory": True,
+                    "is_active": True,
+                    "station_id": station_id,
+                },
+            )
+        )
+    sale = manager.post(
+        "/pos-sales/",
+        {
+            "station_id": station_id,
+            "module": "mart",
+            "payment_method": "cash",
+            "customer_name": f"{scenario_id} walk-in shop customer",
+            "notes": "Created by the Phase 9 scenario runner",
+            "items": [
+                {"product_id": product["id"], "quantity": product_spec["quantity_sold"]}
+                for product, product_spec in zip(products, product_specs)
+            ],
+        },
+    )
+    products_after_sale = [manager.get(f"/pos-products/{product['id']}") for product in products]
+    return {
+        "products": products,
+        "sale": sale,
+        "products_after_sale": products_after_sale,
+    }
+
+
+def create_tanker_flow(
+    *,
+    manager: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    tanks: list[dict[str, Any]],
+    tanker_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    tankers: list[dict[str, Any]] = []
+    trips: list[dict[str, Any]] = []
+    completed_trips: list[dict[str, Any]] = []
+    suppliers: list[dict[str, Any]] = []
+    tanks_by_fuel_type = {int(tank["fuel_type_id"]): tank for tank in tanks}
+
+    for index, tanker_spec in enumerate(tanker_manifest["fleet"], start=1):
+        tank = tanks[(index - 1) % len(tanks)]
+        supplier = manager.post(
+            "/suppliers/",
+            {
+                "name": f"{scenario_id} Tanker Supplier {index}",
+                "code": f"{scenario_id}-TSUP-{index}",
+                "phone": "000-000",
+                "address": "Phase 9 tanker supplier",
+            },
+        )
+        suppliers.append(supplier)
+        capacity = sum(float(value) for value in tanker_spec["compartments"])
+        tanker = manager.post(
+            "/tankers/",
+            {
+                "registration_no": f"{scenario_id}-{tanker_spec['vehicle_number']}",
+                "name": tanker_spec["vehicle_number"],
+                "capacity": capacity,
+                "ownership_type": "owned" if tanker_spec["ownership_type"] == "own" else tanker_spec["ownership_type"],
+                "owner_name": "Phase 9 Station" if tanker_spec["ownership_type"] == "own" else "Phase 9 Hired Owner",
+                "driver_name": tanker_spec["driver_profile"],
+                "driver_phone": "0300-555-0000",
+                "status": "active",
+                "station_id": station_id,
+                "fuel_type_id": tank["fuel_type_id"],
+                "compartments": [
+                    {
+                        "code": f"{scenario_id}-TANKER-{index}-C{compartment_index}",
+                        "name": f"Compartment {compartment_index}",
+                        "capacity": compartment_capacity,
+                        "position": compartment_index,
+                        "is_active": True,
+                    }
+                    for compartment_index, compartment_capacity in enumerate(tanker_spec["compartments"], start=1)
+                ],
+            },
+        )
+        tankers.append(tanker)
+        transfer_tank = tanks_by_fuel_type[int(tanker["fuel_type_id"])]
+        trip = manager.post(
+            "/tankers/trips",
+            {
+                "tanker_id": tanker["id"],
+                "supplier_id": supplier["id"],
+                "fuel_type_id": tanker["fuel_type_id"],
+                "trip_type": "supplier_to_customer",
+                "destination_name": f"{scenario_id} tanker field delivery {index}",
+                "notes": "Created by the Phase 9 scenario runner",
+                "loaded_quantity": tanker_spec["loaded_quantity"],
+                "purchase_rate": 220,
+            },
+        )
+        trip = manager.post(
+            f"/tankers/trips/{trip['id']}/deliveries",
+            {
+                "destination_name": f"{scenario_id} manual tanker sale {index}",
+                "quantity": tanker_spec["manual_sale_quantity"],
+                "fuel_rate": 300,
+                "delivery_charge": 0,
+                "sale_type": "cash",
+                "paid_amount": tanker_spec["manual_sale_quantity"] * 300,
+            },
+        )
+        trip = manager.post(
+            f"/tankers/trips/{trip['id']}/expenses",
+            {
+                "expense_type": "diesel",
+                "amount": tanker_spec["expense_amount"],
+                "notes": "Created by the Phase 9 scenario runner",
+            },
+        )
+        completed_trip = manager.post(
+            f"/tankers/trips/{trip['id']}/complete",
+            {"reason": "Phase 9 tanker trip complete", "transfer_to_tank_id": transfer_tank["id"]},
+        )
+        trips.append(trip)
+        completed_trips.append(completed_trip)
+
+    summary = manager.get("/tankers/summary", query={"station_id": station_id})
+    return {
+        "tankers": tankers,
+        "suppliers": suppliers,
+        "trips": trips,
+        "completed_trips": completed_trips,
+        "summary": summary,
+    }
+
+
+def create_reports_documents_notifications_flow(
+    *,
+    accountant: ApiClient,
+    scenario_id: str,
+    station_id: int,
+    organization_id: int,
+    shift_results: list[dict[str, Any]],
+    credit_customer_flow: dict[str, Any],
+    supplier_finance: dict[str, Any],
+) -> dict[str, Any]:
+    report_date = date.today().isoformat()
+    reports = {
+        "daily_closing": accountant.get(
+            "/reports/daily-closing",
+            query={"station_id": station_id, "report_date": report_date},
+        ),
+        "shift_variance": accountant.get("/reports/shift-variance", query={"station_id": station_id}),
+        "stock_movement": accountant.get("/reports/stock-movement", query={"station_id": station_id}),
+        "customer_balances": accountant.get("/reports/customer-balances", query={"station_id": station_id}),
+        "supplier_balances": accountant.get("/reports/supplier-balances", query={"station_id": station_id}),
+        "tanker_profit": accountant.get("/reports/tanker-profit", query={"station_id": station_id}),
+        "tanker_deliveries": accountant.get("/reports/tanker-deliveries", query={"station_id": station_id}),
+        "tanker_expenses": accountant.get("/reports/tanker-expenses", query={"station_id": station_id}),
+    }
+    report_definition = accountant.post(
+        "/report-definitions/",
+        {
+            "name": f"{scenario_id} daily closing saved view",
+            "report_type": "daily_closing",
+            "station_id": station_id,
+            "organization_id": organization_id,
+            "is_shared": False,
+            "filters": {"report_date": report_date, "station_id": station_id},
+        },
+    )
+    export_job = accountant.post(
+        "/report-exports/",
+        {
+            "report_type": "daily_closing",
+            "format": "csv",
+            "report_date": report_date,
+            "station_id": station_id,
+            "organization_id": organization_id,
+        },
+    )
+    first_cash_sale = shift_results[0]["sales"][0]
+    first_customer = credit_customer_flow["customers"][0]
+    first_customer_payment = credit_customer_flow["customer_payments"][0]
+    first_supplier_payment = supplier_finance["supplier_payments"][0]
+    first_supplier_id = supplier_finance["approved_purchases"][0]["supplier_id"]
+    documents = {
+        "fuel_sale_invoice": accountant.get(f"/financial-documents/fuel-sales/{first_cash_sale['id']}"),
+        "fuel_sale_einvoice": accountant.get(f"/financial-documents/fuel-sales/{first_cash_sale['id']}/einvoice"),
+        "customer_payment_receipt": accountant.get(
+            f"/financial-documents/customer-payments/{first_customer_payment['id']}"
+        ),
+        "supplier_payment_voucher": accountant.get(
+            f"/financial-documents/supplier-payments/{first_supplier_payment['id']}"
+        ),
+        "customer_ledger": accountant.get(f"/financial-documents/customer-ledgers/{first_customer['id']}"),
+        "supplier_ledger": accountant.get(
+            f"/financial-documents/supplier-ledgers/{first_supplier_id}",
+            query={"station_id": station_id},
+        ),
+    }
+    notification_summary = accountant.get("/notifications/summary")
+    notifications = accountant.get("/notifications/")
+    return {
+        "reports": reports,
+        "report_definition": report_definition,
+        "export_job": export_job,
+        "documents": documents,
+        "notification_summary": notification_summary,
+        "notifications": notifications,
+    }
+
+
 def create_dips(
     *,
     manager: ApiClient,
@@ -579,6 +806,7 @@ def create_dips(
 
 def main() -> int:
     print("Preparing Phase 9 tenant...")
+    os.environ["PPMS_RESET_PHASE9_FORECOURT"] = "1"
     ensure_phase9_tenant()
     manifest = load_manifest()
 
@@ -699,6 +927,19 @@ def main() -> int:
         extra_users=extra_users,
         payroll_specs=manifest["payroll"],
     )
+    pos_flow = create_pos_flow(
+        manager=manager,
+        scenario_id=scenario_id,
+        station_id=station_id,
+        product_specs=manifest["pos"]["products"],
+    )
+    tanker_flow = create_tanker_flow(
+        manager=manager,
+        scenario_id=scenario_id,
+        station_id=station_id,
+        tanks=setup_before["tanks"],
+        tanker_manifest=manifest["tankers"],
+    )
     setup_after_sales_and_approved_purchases = manager.get(f"/stations/{station_id}/setup-foundation")
     tanks_after_sales_and_approved_purchases_by_id = {
         int(tank["id"]): float(tank["current_volume"])
@@ -709,6 +950,15 @@ def main() -> int:
         scenario_id=scenario_id,
         station_id=station_id,
         dip_specs=manifest["operations"]["dip_scenarios"],
+    )
+    reports_documents_notifications = create_reports_documents_notifications_flow(
+        accountant=accountant,
+        scenario_id=scenario_id,
+        station_id=station_id,
+        organization_id=organization_id,
+        shift_results=shift_results,
+        credit_customer_flow=credit_customer_flow,
+        supplier_finance=supplier_finance,
     )
 
     setup_after = manager.get(f"/stations/{station_id}/setup-foundation")
@@ -931,6 +1181,96 @@ def main() -> int:
         ]
     )
 
+    pos_expected_total = sum(
+        float(product["quantity_sold"]) * float(product["unit_price"])
+        for product in manifest["pos"]["products"]
+    )
+    checks.append(
+        check(
+            "POS sale total",
+            pos_flow["sale"]["total_amount"],
+            pos_expected_total,
+            approximate=True,
+        )
+    )
+    for product_after_sale, product_spec in zip(pos_flow["products_after_sale"], manifest["pos"]["products"]):
+        checks.append(
+            check(
+                f"POS product {product_after_sale['id']} stock after sale",
+                product_after_sale["stock_quantity"],
+                product_spec["expected_stock_after_sale"],
+                approximate=True,
+            )
+        )
+
+    expected_loaded_quantity = sum(float(item["loaded_quantity"]) for item in manifest["tankers"]["fleet"])
+    expected_manual_sale_quantity = sum(float(item["manual_sale_quantity"]) for item in manifest["tankers"]["fleet"])
+    current_backend_expected_transferred = sum(
+        float(item["loaded_quantity"]) - float(item["manual_sale_quantity"])
+        for item in manifest["tankers"]["fleet"]
+    )
+    scenario_tanker_loaded_quantity = sum(float(trip["loaded_quantity"] or 0) for trip in tanker_flow["completed_trips"])
+    scenario_tanker_delivered_quantity = sum(float(trip["total_quantity"]) for trip in tanker_flow["completed_trips"])
+    scenario_tanker_transferred_quantity = sum(float(trip["transferred_quantity"]) for trip in tanker_flow["completed_trips"])
+    checks.extend(
+        [
+            check("tanker count created", len(tanker_flow["tankers"]), len(manifest["tankers"]["fleet"])),
+            check(
+                "scenario tanker completed trip count",
+                len(tanker_flow["completed_trips"]),
+                len(manifest["tankers"]["fleet"]),
+            ),
+            check(
+                "scenario tanker loaded quantity",
+                scenario_tanker_loaded_quantity,
+                expected_loaded_quantity,
+                approximate=True,
+            ),
+            check(
+                "scenario tanker delivered quantity",
+                scenario_tanker_delivered_quantity,
+                expected_manual_sale_quantity,
+                approximate=True,
+            ),
+            check(
+                "scenario tanker transferred quantity current backend",
+                scenario_tanker_transferred_quantity,
+                current_backend_expected_transferred,
+                approximate=True,
+            ),
+        ]
+    )
+
+    report_checks = reports_documents_notifications["reports"]
+    checks.extend(
+        [
+            check("daily closing report station scope", report_checks["daily_closing"].get("station_id"), station_id),
+            check("customer balance report has rows", len(report_checks["customer_balances"].get("items", [])) >= 2, True),
+            check("supplier balance report has rows", len(report_checks["supplier_balances"].get("items", [])) >= 2, True),
+            check("tanker profit report has rows", len(report_checks["tanker_profit"].get("items", [])) >= 2, True),
+            check("report definition created", reports_documents_notifications["report_definition"]["report_type"], "daily_closing"),
+            check("report export completed", reports_documents_notifications["export_job"]["status"], "completed"),
+        ]
+    )
+    document_checks = reports_documents_notifications["documents"]
+    checks.extend(
+        [
+            check("fuel sale document type", document_checks["fuel_sale_invoice"]["document_type"], "fuel_sale_invoice"),
+            check("customer payment document type", document_checks["customer_payment_receipt"]["document_type"], "customer_payment_receipt"),
+            check("supplier payment document type", document_checks["supplier_payment_voucher"]["document_type"], "supplier_payment_voucher"),
+            check("customer ledger document type", document_checks["customer_ledger"]["document_type"], "customer_ledger_statement"),
+            check("supplier ledger document type", document_checks["supplier_ledger"]["document_type"], "supplier_ledger_statement"),
+        ]
+    )
+    checks.append(
+        check(
+            "notification summary readable",
+            "unread" in reports_documents_notifications["notification_summary"]
+            and "total" in reports_documents_notifications["notification_summary"],
+            True,
+        )
+    )
+
     expected_loss_gains = [
         reading["expected_loss_gain"]
         for tank_spec in manifest["operations"]["dip_scenarios"]
@@ -962,11 +1302,21 @@ def main() -> int:
         total_purchase_liters_by_tank[tank_id] = (
             total_purchase_liters_by_tank.get(tank_id, 0.0) + float(purchase["quantity"])
         )
+    total_tanker_transfer_liters_by_tank: dict[int, float] = {}
+    for completed_trip in tanker_flow["completed_trips"]:
+        tank_id = completed_trip.get("transfer_tank_id")
+        if tank_id is None:
+            continue
+        total_tanker_transfer_liters_by_tank[int(tank_id)] = (
+            total_tanker_transfer_liters_by_tank.get(int(tank_id), 0.0)
+            + float(completed_trip["transferred_quantity"])
+        )
     for tank_id, tank_before in tanks_before_by_id.items():
         expected_volume = (
             tank_before
             - total_sale_liters_by_tank.get(tank_id, 0.0)
             + total_purchase_liters_by_tank.get(tank_id, 0.0)
+            + total_tanker_transfer_liters_by_tank.get(tank_id, 0.0)
         )
         checks.append(
             check(
@@ -1002,6 +1352,12 @@ def main() -> int:
             "attendance_record_ids": [record["id"] for record in payroll_flow["attendance_records"]],
             "salary_adjustment_ids": [adjustment["id"] for adjustment in payroll_flow["salary_adjustments"]],
             "payroll_run_id": payroll_flow["payroll_run"]["id"],
+            "pos_product_ids": [product["id"] for product in pos_flow["products"]],
+            "pos_sale_id": pos_flow["sale"]["id"],
+            "tanker_ids": [tanker["id"] for tanker in tanker_flow["tankers"]],
+            "tanker_trip_ids": [trip["id"] for trip in tanker_flow["completed_trips"]],
+            "report_definition_id": reports_documents_notifications["report_definition"]["id"],
+            "report_export_id": reports_documents_notifications["export_job"]["id"],
             "tank_dip_ids": [dip["id"] for dip in dips],
         },
         "totals": {
@@ -1013,6 +1369,13 @@ def main() -> int:
             "customer_payments": sum(float(payment["amount"]) for payment in credit_customer_flow["customer_payments"]),
             "supplier_payments": sum(float(payment["amount"]) for payment in supplier_finance["supplier_payments"]),
             "payroll_net": payroll_flow["payroll_run"]["total_net_amount"],
+            "pos_sales": pos_flow["sale"]["total_amount"],
+            "scenario_tanker_loaded_quantity": sum(
+                float(trip["loaded_quantity"] or 0) for trip in tanker_flow["completed_trips"]
+            ),
+            "scenario_tanker_transferred_quantity": sum(
+                float(trip["transferred_quantity"]) for trip in tanker_flow["completed_trips"]
+            ),
         },
         "known_gaps": [
             {
@@ -1029,6 +1392,11 @@ def main() -> int:
                 "area": "profile-only payroll",
                 "current_backend_behavior": "payroll runs calculate from payroll-enabled login users only",
                 "desired_manifest_behavior": "profile-only staff payroll should be supported or clearly separated in UI",
+            },
+            {
+                "area": "tanker leftover transfer",
+                "current_backend_behavior": "supplier-to-customer trip completion transfers all leftover fuel to a tank and still reports leftover_quantity",
+                "desired_manifest_behavior": "partial leftover transfer and remaining tanker leftover should be modeled separately",
             }
         ],
         "checks": checks,
