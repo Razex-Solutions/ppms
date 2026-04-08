@@ -14,12 +14,11 @@ Old Flutter app.
 
 Status:
 
-- kept in the repository
-- reference only
+- removed from the repository
+- kept only as historical context in older docs and commit history
 - not the future source of truth
-- do not delete automatically
 
-Use it only to inspect previous ideas, old screens, or possible UI behavior.
+Use git history if old screen ideas need to be inspected later.
 
 ### `ppms_tenant_flutter`
 
@@ -27,14 +26,11 @@ Clean tenant Flutter experiment.
 
 Status:
 
-- kept in the repository
-- contains the login/session/shell experiment
-- contains Flutter navigation tests
-- contains integration-test automation record
-- not final until the backend/matrix-first strategy is applied domain by domain
-- do not delete automatically
+- removed from the repository
+- its useful learnings now live mainly in the matrix files, API smoke scripts, docs, CI history, and git history
+- not final and not to be restored automatically
 
-Use it as a record of how Flutter automation can be wired, not as a final app guarantee.
+Use the remaining automation files as the record of how Flutter automation can be wired.
 
 ### `support_console`
 
@@ -80,16 +76,14 @@ Purpose:
 - opens backend log watcher
 - prepares Phase 9 tenant data unless skipped
 - starts support console
-- starts the tenant Flutter experiment by default
+- no longer starts Flutter because the previous app folders were removed
 
 Important:
 
-- this still points at `ppms_tenant_flutter` for local convenience
-- after the pivot, do not assume this means `ppms_tenant_flutter` is final
+- this is now a backend/support-console helper only until a new Flutter app exists
 
 Useful options:
 
-- `-UseOldFlutter` starts `ppms_flutter`
 - `-SkipTenantPrep` skips test tenant preparation
 
 ### `run_phase9_scenario.ps1`
@@ -296,34 +290,11 @@ Important:
 
 ## Flutter Test Files
 
-### `ppms_tenant_flutter/test/widget_test.dart`
+### Historical Flutter Tests
 
-Purpose:
+The earlier Flutter widget and integration tests were removed together with the old app folders.
 
-- checks tenant navigation definitions
-- checks role matrix screen labels
-- checks minimal-module hiding behavior at a light widget-test level
-
-Treat as:
-
-- useful reference
-- not enough to prove real UI flows
-
-### `ppms_tenant_flutter/integration_test/tenant_action_smoke_test.dart`
-
-Purpose:
-
-- reads `scripts/tenant_ui_action_matrix.json`
-- logs into the Flutter experiment
-- opens role screens
-- checks expected text
-- taps limited safe actions
-- catches Flutter rendering/runtime errors
-
-Treat as:
-
-- useful future automation pattern
-- not the final app acceptance test
+Treat the remaining JSON matrices, API smoke, workflow history, and git history as the preserved automation record for the next rebuild.
 
 ## GitHub Actions
 
@@ -391,4 +362,3 @@ When disabled:
 - no reports/documents/notifications tied only to that module
 - no UI API calls for that module
 - the tenant experience should look like the module was never installed
-

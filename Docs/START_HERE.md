@@ -1,5 +1,11 @@
 # Start Here
 
+## Current Note
+
+Both previous Flutter app folders were intentionally removed from the repository.
+
+Keep using the backend, support console, scenario runner, matrix JSON files, and API smoke scripts as the active Phase 9 foundation while a new Flutter plan is defined.
+
 When returning to this project, use these files in this order:
 
 1. [FINAL_PHASED_MASTER_ROADMAP.md](FINAL_PHASED_MASTER_ROADMAP.md)
@@ -65,7 +71,8 @@ from:
 Current direction:
 
 - keep the existing project
-- keep the old Flutter app and clean tenant Flutter experiment in the repo for record/reference
+- keep the Flutter automation, matrices, and CI knowledge in the repo for record/reference
+- do not bring back the deleted Flutter app folders automatically
 - pause broad Flutter building until each screen is discussed and defined in a backend/matrix contract
 - use backend scenario data and matrix-first rules as the source of truth
 - build modules separately first, then integrate after each module is proven

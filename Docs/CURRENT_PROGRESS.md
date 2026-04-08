@@ -43,34 +43,20 @@ Important note:
 - the newer planning direction is to keep approvals optional and exception-based, not mandatory for normal operational facts
 
 ### Flutter
-The existing Flutter app in `ppms_flutter` is now kept as a reference while the tenant UI is rebuilt cleanly in `ppms_tenant_flutter`.
+The previous Flutter app folders were intentionally removed from the repository after the tenant UI direction became too confusing and unstable.
 
-The old Flutter app is beyond simple placeholders. It includes real workspaces for:
-- login
-- role-aware dashboards
-- onboarding
-- station setup
-- admin
-- sales
-- shifts
-- finance
-- documents
-- parties
-- governance
-- expenses
-- hardware
-- tankers
-- reports
-- payroll
-- attendance
-- notifications
-- settings
+What remains active for frontend planning:
+- backend contracts
+- role and module matrices
+- Phase 9 scenario runner
+- tenant UI API smoke automation
+- support console
+- documentation describing the product rules and rebuild direction
 
 Current Phase 9 tenant rebuild decision:
-- keep `ppms_flutter` intact as a reference
-- keep `ppms_tenant_flutter` intact as the clean tenant app experiment and automation record
+- keep the Flutter automation and matrix files intact for reuse
+- do not recreate the deleted Flutter app folders until a new plan is agreed
 - pause broad Flutter building because screen behavior was moving faster than agreed product rules
-- do not delete either Flutter folder automatically
 - use `FLUTTER_UI_AUTOMATION_RECORD_AND_REBUILD_STRATEGY.md` before any new Flutter UI work
 - use `AUTOMATION_AND_MATRIX_BUNDLE.md` to understand the current automation scripts, JSON matrices, Flutter test files, and CI workflow
 - build future UI from backend/matrix contracts only, after discussing the real workflow first
@@ -189,10 +175,6 @@ Root: [C:\Fuel Management System](/C:/Fuel%20Management%20System)
 ### Important top-level folders
 - [ppms](/C:/Fuel%20Management%20System/ppms)
   - FastAPI backend source
-- [ppms_flutter](/C:/Fuel%20Management%20System/ppms_flutter)
-  - existing Flutter desktop/mobile client kept as a reference during Phase 9
-- [ppms_tenant_flutter](/C:/Fuel%20Management%20System/ppms_tenant_flutter)
-  - clean tenant Flutter rebuild client
 - [support_console](/C:/Fuel%20Management%20System/support_console)
   - Next.js MasterAdmin/support web console
 - [alembic](/C:/Fuel%20Management%20System/alembic)
@@ -205,6 +187,10 @@ Root: [C:\Fuel Management System](/C:/Fuel%20Management%20System)
   - older Python desktop prototype/reference client
 - [backups](/C:/Fuel%20Management%20System/backups)
   - local backup outputs
+
+Historical note:
+- earlier Flutter folders referenced elsewhere in this document were removed intentionally
+- treat those later file-path references as archive context from before the reset, not as active paths in the current checkout
 
 ### Important top-level files
 - [README.md](/C:/Fuel%20Management%20System/README.md)
@@ -723,10 +709,8 @@ venv\Scripts\python.exe -m pytest tests
 ```
 
 Flutter:
-```powershell
-cd C:\Fuel Management System\ppms_flutter
-flutter analyze
-flutter test
+```text
+No Flutter app folder is currently present. Use backend tests, scenario automation, and support-console checks until the new Flutter codebase exists.
 ```
 
 ## 10. Local Runtime And Workflow
@@ -742,8 +726,8 @@ This helper:
 - restarts the backend on `127.0.0.1:8012`
 - opens a backend log monitor so HTTP `200`, `400`, `403`, and server errors are visible while testing
 - restarts the support console dev server
-- restarts Flutter Windows with `PPMS_API_BASE_URL=http://127.0.0.1:8012`
-- opens support console and Flutter in separate PowerShell windows
+- no longer starts Flutter because the previous app folders were removed
+- opens the support console in a separate PowerShell window
 
 Backend-only restart:
 ```powershell
@@ -763,10 +747,8 @@ This helper:
 - checks `/health`
 
 ### Tenant Flutter run
-```powershell
-cd C:\Fuel Management System\ppms_tenant_flutter
-flutter run -d windows --dart-define=PPMS_API_BASE_URL=http://127.0.0.1:8012
-```
+
+No active tenant Flutter app exists in the repository right now.
 
 ### Main local DB rule
 Use:

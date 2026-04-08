@@ -1,4 +1,4 @@
-name: Phase 9 Tenant Automation
+name: Phase 9 Backend And Contract Automation
 
 on:
   push:
@@ -65,37 +65,7 @@ jobs:
         run: |
           .\run_phase9_tenant_ui_api_smoke.ps1
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      - name: Install Flutter dependencies
+      - name: Flutter note
         shell: pwsh
-        working-directory: ppms_tenant_flutter
         run: |
-          flutter pub get
-
-      - name: Analyze tenant Flutter
-        shell: pwsh
-        working-directory: ppms_tenant_flutter
-        run: |
-          flutter analyze --no-pub
-
-      - name: Run tenant Flutter navigation tests
-        shell: pwsh
-        working-directory: ppms_tenant_flutter
-        run: |
-          flutter test --no-pub
-
-      - name: Run tenant Flutter UI action smoke
-        shell: pwsh
-        working-directory: ppms_tenant_flutter
-        run: |
-          flutter test --no-pub integration_test
-
-      - name: Build tenant Flutter Windows debug app
-        shell: pwsh
-        working-directory: ppms_tenant_flutter
-        run: |
-          flutter build windows --debug --no-pub --dart-define=PPMS_API_BASE_URL=http://127.0.0.1:8012
+          Write-Host "Flutter app folders were intentionally removed. Matrix and API smoke automation stay in place for the future rebuild."

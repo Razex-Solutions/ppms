@@ -158,38 +158,12 @@ Or:
 venv\Scripts\python.exe -m desktop_app.main
 ```
 
-## Flutter Client Foundation
+## Flutter Reset
 
-- The real shared frontend path now starts in [ppms_flutter](/C:/Fuel%20Management%20System/ppms_flutter).
-- This Flutter app is intended to become the common desktop and mobile client instead of growing the Python desktop prototype indefinitely.
-- Current Flutter foundation includes:
-  - backend URL login flow
-  - persisted session restore
-  - shared API client for PPMS backend endpoints
-  - role-aware home shell
-  - live dashboard loading
-  - live forecourt sales screen
-  - live attendance screen
-  - live payroll screen
-  - live reports screen
-  - live document center
-  - live notifications screen
-  - live settings screen
-
-Run it with:
-
-```bash
-cd ppms_flutter
-flutter pub get
-flutter run -d windows
-```
-
-For Android later:
-
-```bash
-cd ppms_flutter
-flutter run -d android
-```
+- Both previous Flutter app folders were intentionally removed from the repository.
+- The backend, support console, and Phase 9 automation remain the active source of truth while a new Flutter plan is defined.
+- Historical Flutter-related automation inputs are still kept under `scripts/` and `.github/workflows/` so a future rebuild can reuse the role matrix, API smoke, and dataset work.
+- Treat the current repository state as backend-first until a new frontend structure is agreed and committed.
 
 ## Scripts
 

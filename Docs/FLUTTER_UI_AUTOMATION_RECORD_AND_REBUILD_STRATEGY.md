@@ -4,10 +4,9 @@
 
 The current Flutter UI work is paused for product decisions.
 
-- `ppms_flutter` remains in the repository as the old reference app.
-- `ppms_tenant_flutter` remains in the repository as the clean tenant-app experiment.
-- Neither Flutter folder should be treated as the final product path until we finish the matrix-first rebuild discussion.
-- Do not delete either Flutter folder automatically. If deletion is needed later, it should be done deliberately after review.
+- Both previous Flutter app folders were intentionally removed from the repository.
+- The rebuild decision still stands: backend and matrix contracts come first, and a new Flutter codebase should start only after the workflow is agreed.
+- Keep the automation, matrices, and CI record so the future rebuild can reuse them instead of starting blind.
 
 ## Why We Paused
 
@@ -29,8 +28,12 @@ The current automation files are still valuable as a future skill/reference:
 - `scripts/tenant_ui_action_matrix.json`
 - `scripts/run_phase9_tenant_ui_api_smoke.py`
 - `run_phase9_tenant_ui_api_smoke.ps1`
-- `ppms_tenant_flutter/integration_test/tenant_action_smoke_test.dart`
 - `.github/workflows/phase9-tenant-automation.yml`
+
+Historical note:
+
+- old Flutter test files referenced in earlier docs are no longer present because the app folders were removed
+- keep the matrices and API smoke path as the reusable part of the automation stack
 
 The stable committed automation already proves:
 

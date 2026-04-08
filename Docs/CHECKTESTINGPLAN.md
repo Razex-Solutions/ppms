@@ -206,12 +206,7 @@ Confirm backend health URL works:
 http://127.0.0.1:8012/health
 ```
 
-Manual Flutter command, only if the restart helper is not used:
-
-```powershell
-cd C:\Fuel Management System\ppms_flutter
-flutter run -d windows --dart-define=PPMS_API_BASE_URL=http://127.0.0.1:8012
-```
+There is currently no Flutter app folder to run manually. Phase 9 work should use the backend, support console, scenario runner, and API smoke path until the new Flutter plan is committed.
 
 Manual support console command, only if the restart helper is not used:
 
@@ -784,10 +779,8 @@ cd C:\Fuel Management System
 venv\Scripts\python.exe -m pytest tests
 ```
 
-```powershell
-cd C:\Fuel Management System\ppms_flutter
-flutter analyze
-flutter test
+```text
+No Flutter app folder is currently present, so there is no Flutter analyze/test step in this reset state.
 ```
 
 ```powershell
@@ -799,8 +792,7 @@ npm.cmd run build
 Acceptance:
 
 - backend tests pass
-- Flutter analyze passes
-- Flutter tests pass
+- Flutter verification is deferred until the new app exists
 - support console lint passes
 - support console build passes
 - no unresolved manual acceptance blocker remains
