@@ -36,7 +36,7 @@ def list_internal_fuel_usage(
 ):
     require_permission(current_user, "internal_fuel_usage", "read", detail="You do not have permission to view internal fuel usage")
     query = db.query(InternalFuelUsage)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         if station_id is not None:
             query = query.filter(InternalFuelUsage.station_id == station_id)
     elif is_head_office_user(current_user):

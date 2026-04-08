@@ -7,6 +7,7 @@ from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.dispenser import Dispenser
 from app.models.fuel_type import FuelType
+from app.models.fuel_sale import FuelSale
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle import Nozzle
 from app.models.nozzle_reading import NozzleReading
@@ -50,11 +51,20 @@ def create_nozzle(
     dispenser = db.query(Dispenser).filter(Dispenser.id == nozzle_data.dispenser_id).first()
     if not dispenser:
         raise HTTPException(status_code=404, detail="Dispenser not found")
-    require_station_access(current_user, dispenser.station_id)
+    if not dispenser.is_active:
+        raise HTTPException(status_code=400, detail="Cannot create a nozzle on an inactive dispenser")
+    if is_head_office_user(current_user):
+        station = db.query(Station).filter(Station.id == dispenser.station_id).first()
+        if not station or station.organization_id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
+    else:
+        require_station_access(current_user, dispenser.station_id)
 
     tank = db.query(Tank).filter(Tank.id == nozzle_data.tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
+    if not tank.is_active:
+        raise HTTPException(status_code=400, detail="Cannot assign an inactive tank to a nozzle")
     if tank.station_id != dispenser.station_id:
         raise HTTPException(status_code=400, detail="Nozzle tank must belong to the same station as the dispenser")
 
@@ -76,6 +86,7 @@ def create_nozzle(
         code=generated_code,
         meter_reading=nozzle_data.meter_reading,
         current_segment_start_reading=nozzle_data.meter_reading,
+        is_active=nozzle_data.is_active,
         dispenser_id=nozzle_data.dispenser_id,
         tank_id=nozzle_data.tank_id,
         fuel_type_id=nozzle_data.fuel_type_id,
@@ -93,19 +104,28 @@ def list_nozzles(
     station_id: int | None = Query(None),
     dispenser_id: int | None = Query(None),
     fuel_type_id: int | None = Query(None),
+    include_inactive: bool = Query(False),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
-        station_id = current_user.station_id
-
     query = db.query(Nozzle)
-    if station_id:
-        query = query.join(Dispenser).filter(Dispenser.station_id == station_id)
+    if is_head_office_user(current_user):
+        user_organization_id = get_user_organization_id(current_user)
+        query = query.join(Dispenser, Dispenser.id == Nozzle.dispenser_id).join(Station, Station.id == Dispenser.station_id).filter(Station.organization_id == user_organization_id)
+        if station_id is not None:
+            query = query.filter(Dispenser.station_id == station_id)
+    elif not is_master_admin(current_user):
+        station_id = current_user.station_id
+        if station_id:
+            query = query.join(Dispenser, Dispenser.id == Nozzle.dispenser_id).filter(Dispenser.station_id == station_id)
+    elif station_id:
+        query = query.join(Dispenser, Dispenser.id == Nozzle.dispenser_id).filter(Dispenser.station_id == station_id)
     if dispenser_id:
         query = query.filter(Nozzle.dispenser_id == dispenser_id)
     if fuel_type_id:
         query = query.filter(Nozzle.fuel_type_id == fuel_type_id)
+    if not include_inactive:
+        query = query.filter(Nozzle.is_active.is_(True))
     return query.offset(skip).limit(limit).all()
 
 
@@ -120,7 +140,7 @@ def get_nozzle(
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
     require_permission(current_user, "nozzles", "read", detail="You do not have permission to view nozzles")
-    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    _require_nozzle_station_access(db, current_user, nozzle, detail="Not authorized for this nozzle")
     return nozzle
 
 
@@ -136,7 +156,7 @@ def update_nozzle(
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
     require_permission(current_user, "nozzles", "update", detail="You do not have permission to update nozzles")
-    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    _require_nozzle_station_access(db, current_user, nozzle, detail="Not authorized for this nozzle")
 
     changes = data.model_dump(exclude_unset=True)
     if "meter_reading" in changes:
@@ -147,10 +167,17 @@ def update_nozzle(
         tank = db.query(Tank).filter(Tank.id == new_tank_id).first()
         if not tank:
             raise HTTPException(status_code=404, detail="Tank not found")
+        if not tank.is_active:
+            raise HTTPException(status_code=400, detail="Cannot assign an inactive tank to a nozzle")
         if tank.station_id != nozzle.dispenser.station_id:
             raise HTTPException(status_code=400, detail="Nozzle tank must belong to the same station as the dispenser")
     else:
         tank = nozzle.tank
+    if changes.get("is_active") is True:
+        if nozzle.dispenser is not None and not nozzle.dispenser.is_active:
+            raise HTTPException(status_code=400, detail="Cannot activate a nozzle while its dispenser is inactive")
+        if tank is not None and not tank.is_active:
+            raise HTTPException(status_code=400, detail="Cannot activate a nozzle while its tank is inactive")
     if "fuel_type_id" in changes:
         fuel_type = db.query(FuelType).filter(FuelType.id == new_fuel_type_id).first()
         if not fuel_type:
@@ -175,7 +202,14 @@ def delete_nozzle(
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
     require_permission(current_user, "nozzles", "delete", detail="You do not have permission to delete nozzles")
-    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    _require_nozzle_station_access(db, current_user, nozzle, detail="Not authorized for this nozzle")
+    has_readings = db.query(NozzleReading).filter(NozzleReading.nozzle_id == nozzle.id).first()
+    has_adjustments = db.query(MeterAdjustmentEvent).filter(MeterAdjustmentEvent.nozzle_id == nozzle.id).first()
+    has_sales = db.query(FuelSale).filter(FuelSale.nozzle_id == nozzle.id).first()
+    if has_readings or has_adjustments or has_sales:
+        nozzle.is_active = False
+        db.commit()
+        return {"message": "Nozzle deactivated because history exists", "action": "deactivated"}
     db.delete(nozzle)
     db.commit()
     return {"message": "Nozzle deleted"}
@@ -194,7 +228,7 @@ def get_nozzle_readings(
         raise HTTPException(status_code=404, detail="Nozzle not found")
 
     require_permission(current_user, "nozzles", "read_meter_history", detail="You do not have permission to view nozzle meter history")
-    require_station_access(current_user, nozzle.dispenser.station_id, detail="Not authorized for this nozzle")
+    _require_nozzle_station_access(db, current_user, nozzle, detail="Not authorized for this nozzle")
 
     return (
         db.query(NozzleReading)

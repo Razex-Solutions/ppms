@@ -62,3 +62,35 @@ class OrganizationResponse(BaseModel):
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OrganizationDashboardRoleCount(BaseModel):
+    role_name: str
+    user_count: int
+
+
+class OrganizationDashboardModuleStatus(BaseModel):
+    module_name: str
+    enabled_station_count: int
+    total_station_count: int
+    fully_enabled: bool
+
+
+class OrganizationDashboardSummaryResponse(BaseModel):
+    organization_id: int
+    organization_name: str
+    organization_code: str
+    active_station_count: int
+    inactive_station_count: int
+    completed_station_setup_count: int
+    pending_station_setup_count: int
+    active_forecourt_tank_count: int
+    active_forecourt_dispenser_count: int
+    active_forecourt_nozzle_count: int
+    open_shift_count: int
+    active_staff_count: int
+    pending_customer_balance_total: float
+    pending_supplier_balance_total: float
+    unread_notification_count: int
+    role_counts: list[OrganizationDashboardRoleCount]
+    module_statuses: list[OrganizationDashboardModuleStatus]

@@ -34,7 +34,7 @@ from app.services.pdf_renderer import render_financial_document_pdf
 
 
 def _ensure_station_access(current_user: User, station: Station) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         if station.organization_id == get_user_organization_id(current_user):
@@ -596,7 +596,7 @@ def list_document_dispatches_filtered(
     channel: str | None = None,
 ) -> list[FinancialDocumentDispatch]:
     query = db.query(FinancialDocumentDispatch)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         pass
     elif current_user.role.name == "HeadOffice":
         organization_id = get_user_organization_id(current_user)

@@ -10,6 +10,8 @@ from app.models.payroll_run import PayrollRun
 from app.models.salary_adjustment import SalaryAdjustment
 from app.models.station import Station
 from app.models.user import User
+from app.services.organization_modules import is_organization_module_enabled
+from app.services.station_modules import is_station_module_enabled
 from app.schemas.payroll import PayrollRunCreate
 from app.services.audit import log_audit_event
 
@@ -18,7 +20,7 @@ def ensure_payroll_access(db: Session, station_id: int, current_user: User) -> S
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         if station.organization_id == get_user_organization_id(current_user):
@@ -30,6 +32,14 @@ def ensure_payroll_access(db: Session, station_id: int, current_user: User) -> S
 
 def _date_count(start_date, end_date) -> int:
     return (end_date - start_date).days + 1
+
+
+def _is_attendance_linked_for_payroll(db: Session, station: Station) -> bool:
+    if is_station_module_enabled(db, station.id, "attendance_payroll_linkage"):
+        return True
+    if station.organization_id and is_organization_module_enabled(db, station.organization_id, "attendance_payroll_linkage"):
+        return True
+    return False
 
 
 def _get_adjustment_totals(
@@ -63,7 +73,7 @@ def _get_adjustment_totals(
 
 
 def create_payroll_run(db: Session, *, data: PayrollRunCreate, current_user: User) -> PayrollRun:
-    ensure_payroll_access(db, data.station_id, current_user)
+    station = ensure_payroll_access(db, data.station_id, current_user)
     if data.period_end < data.period_start:
         raise HTTPException(status_code=400, detail="Payroll period end must be after the start date")
 
@@ -99,6 +109,7 @@ def create_payroll_run(db: Session, *, data: PayrollRunCreate, current_user: Use
         .all()
     )
     period_days = _date_count(data.period_start, data.period_end)
+    attendance_linked = _is_attendance_linked_for_payroll(db, station)
     payroll_run = PayrollRun(
         station_id=data.station_id,
         period_start=data.period_start,
@@ -116,28 +127,36 @@ def create_payroll_run(db: Session, *, data: PayrollRunCreate, current_user: Use
     total_staff = 0
 
     for user in users:
-        records = (
-            db.query(AttendanceRecord)
-            .filter(
-                AttendanceRecord.user_id == user.id,
-                AttendanceRecord.station_id == data.station_id,
-                AttendanceRecord.attendance_date >= data.period_start,
-                AttendanceRecord.attendance_date <= data.period_end,
-            )
-            .all()
-        )
-        present_days = sum(1 for record in records if record.status == "present")
-        leave_days = sum(1 for record in records if record.status == "leave")
-        half_days = sum(1 for record in records if record.status == "half_day")
-        payable_days = present_days + leave_days + half_days
-        absent_days = max(period_days - payable_days, 0)
         monthly_salary = round(user.monthly_salary or 0.0, 2)
-        gross_amount = round((monthly_salary / 30.0) * (present_days + leave_days + (half_days * 0.5)), 2)
-        attendance_deduction_amount = (
-            round((monthly_salary / 30.0) * max(absent_days - leave_days, 0), 2)
-            if monthly_salary
-            else 0.0
-        )
+        if attendance_linked:
+            records = (
+                db.query(AttendanceRecord)
+                .filter(
+                    AttendanceRecord.user_id == user.id,
+                    AttendanceRecord.station_id == data.station_id,
+                    AttendanceRecord.attendance_date >= data.period_start,
+                    AttendanceRecord.attendance_date <= data.period_end,
+                )
+                .all()
+            )
+            present_days = sum(1 for record in records if record.status == "present")
+            leave_days = sum(1 for record in records if record.status == "leave")
+            half_days = sum(1 for record in records if record.status == "half_day")
+            payable_days = present_days + leave_days + half_days
+            absent_days = max(period_days - payable_days, 0)
+            gross_amount = round((monthly_salary / 30.0) * (present_days + leave_days + (half_days * 0.5)), 2)
+            attendance_deduction_amount = (
+                round((monthly_salary / 30.0) * max(absent_days - leave_days, 0), 2)
+                if monthly_salary
+                else 0.0
+            )
+        else:
+            present_days = period_days
+            leave_days = 0
+            absent_days = 0
+            payable_days = period_days
+            gross_amount = monthly_salary
+            attendance_deduction_amount = 0.0
         adjustment_additions, adjustment_deductions = _get_adjustment_totals(
             db,
             station_id=data.station_id,
@@ -171,28 +190,36 @@ def create_payroll_run(db: Session, *, data: PayrollRunCreate, current_user: Use
         total_net += net_amount
 
     for profile in profile_staff:
-        records = (
-            db.query(AttendanceRecord)
-            .filter(
-                AttendanceRecord.employee_profile_id == profile.id,
-                AttendanceRecord.station_id == data.station_id,
-                AttendanceRecord.attendance_date >= data.period_start,
-                AttendanceRecord.attendance_date <= data.period_end,
-            )
-            .all()
-        )
-        present_days = sum(1 for record in records if record.status == "present")
-        leave_days = sum(1 for record in records if record.status == "leave")
-        half_days = sum(1 for record in records if record.status == "half_day")
-        payable_days = present_days + leave_days + half_days
-        absent_days = max(period_days - payable_days, 0)
         monthly_salary = round(profile.monthly_salary or 0.0, 2)
-        gross_amount = round((monthly_salary / 30.0) * (present_days + leave_days + (half_days * 0.5)), 2)
-        attendance_deduction_amount = (
-            round((monthly_salary / 30.0) * max(absent_days - leave_days, 0), 2)
-            if monthly_salary
-            else 0.0
-        )
+        if attendance_linked:
+            records = (
+                db.query(AttendanceRecord)
+                .filter(
+                    AttendanceRecord.employee_profile_id == profile.id,
+                    AttendanceRecord.station_id == data.station_id,
+                    AttendanceRecord.attendance_date >= data.period_start,
+                    AttendanceRecord.attendance_date <= data.period_end,
+                )
+                .all()
+            )
+            present_days = sum(1 for record in records if record.status == "present")
+            leave_days = sum(1 for record in records if record.status == "leave")
+            half_days = sum(1 for record in records if record.status == "half_day")
+            payable_days = present_days + leave_days + half_days
+            absent_days = max(period_days - payable_days, 0)
+            gross_amount = round((monthly_salary / 30.0) * (present_days + leave_days + (half_days * 0.5)), 2)
+            attendance_deduction_amount = (
+                round((monthly_salary / 30.0) * max(absent_days - leave_days, 0), 2)
+                if monthly_salary
+                else 0.0
+            )
+        else:
+            present_days = period_days
+            leave_days = 0
+            absent_days = 0
+            payable_days = period_days
+            gross_amount = monthly_salary
+            attendance_deduction_amount = 0.0
         adjustment_additions, adjustment_deductions = _get_adjustment_totals(
             db,
             station_id=data.station_id,

@@ -36,7 +36,7 @@ def list_payroll_runs(
 ):
     require_permission(current_user, "payroll", "read", detail="You do not have permission to view payroll")
     query = db.query(PayrollRun)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         pass
     elif current_user.role.name == "HeadOffice":
         organization_id = get_user_organization_id(current_user)

@@ -29,7 +29,7 @@ def _ensure_pricing_station_access(
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         if station.organization_id != get_user_organization_id(current_user):

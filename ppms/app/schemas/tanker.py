@@ -35,8 +35,6 @@ class TankerCreate(BaseModel):
     capacity: float
     ownership_type: str = "owned"
     owner_name: str | None = None
-    driver_name: str | None = None
-    driver_phone: str | None = None
     status: str = "active"
     station_id: int
     fuel_type_id: int
@@ -48,9 +46,8 @@ class TankerUpdate(BaseModel):
     capacity: float | None = None
     ownership_type: str | None = None
     owner_name: str | None = None
-    driver_name: str | None = None
-    driver_phone: str | None = None
     status: str | None = None
+    fuel_type_id: int | None = None
 
 
 class TankerResponse(BaseModel):
@@ -60,30 +57,68 @@ class TankerResponse(BaseModel):
     capacity: float
     ownership_type: str
     owner_name: str | None = None
-    driver_name: str | None = None
-    driver_phone: str | None = None
     status: str
+    organization_id: int
     station_id: int
-    fuel_type_id: int
+    fuel_type_id: int | None = None
     compartments: list[TankerCompartmentResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TankerTripCompartmentLoadCreate(BaseModel):
+    compartment_id: int
+    fuel_type_id: int
+    loaded_quantity: float
+    purchase_rate: float
+
+
+class TankerTripCompartmentLoadResponse(BaseModel):
+    id: int
+    trip_id: int
+    compartment_id: int
+    fuel_type_id: int
+    loaded_quantity: float
+    remaining_quantity: float
+    purchase_rate: float
+    purchase_total: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TankerTripDriverAssignmentCreate(BaseModel):
+    user_id: int
+    assignment_role: str = "driver"
+
+
+class TankerTripDriverAssignmentResponse(BaseModel):
+    id: int
+    trip_id: int
+    user_id: int
+    assignment_role: str
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class TankerTripCreate(BaseModel):
     tanker_id: int
+    station_id: int | None = None
     supplier_id: int | None = None
-    fuel_type_id: int
+    fuel_type_id: int | None = None
     trip_type: str
     linked_tank_id: int | None = None
     destination_name: str | None = None
     notes: str | None = None
     loaded_quantity: float | None = None
     purchase_rate: float | None = None
+    compartment_loads: list[TankerTripCompartmentLoadCreate] = []
+    driver_assignments: list[TankerTripDriverAssignmentCreate] = []
 
 
 class TankerDeliveryCreate(BaseModel):
     customer_id: int | None = None
+    fuel_type_id: int
+    compartment_load_id: int | None = None
     destination_name: str | None = None
     quantity: float
     fuel_rate: float
@@ -102,6 +137,25 @@ class TankerTripComplete(BaseModel):
     reason: str | None = None
     transfer_to_tank_id: int | None = None
     transfer_quantity: float | None = None
+
+
+class TankerDeliveryPaymentCreate(BaseModel):
+    amount: float
+    payment_method: str | None = None
+    reference_no: str | None = None
+    notes: str | None = None
+
+
+class TankerDeliveryPaymentResponse(BaseModel):
+    id: int
+    delivery_id: int
+    amount: float
+    payment_method: str | None = None
+    reference_no: str | None = None
+    notes: str | None = None
+    received_by_user_id: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FuelTransferResponse(BaseModel):
@@ -128,6 +182,8 @@ class TankerDeliveryResponse(BaseModel):
     id: int
     trip_id: int
     customer_id: int | None = None
+    fuel_type_id: int
+    compartment_load_id: int | None = None
     destination_name: str | None = None
     quantity: float
     fuel_rate: float
@@ -136,6 +192,7 @@ class TankerDeliveryResponse(BaseModel):
     sale_type: str
     paid_amount: float
     outstanding_amount: float
+    payments: list[TankerDeliveryPaymentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -153,9 +210,10 @@ class TankerTripExpenseResponse(BaseModel):
 class TankerTripResponse(BaseModel):
     id: int
     tanker_id: int
+    organization_id: int
     station_id: int
     supplier_id: int | None = None
-    fuel_type_id: int
+    fuel_type_id: int | None = None
     trip_type: str
     status: str
     settlement_status: str
@@ -174,6 +232,8 @@ class TankerTripResponse(BaseModel):
     delivery_revenue: float
     expense_total: float
     net_profit: float
+    compartment_loads: list[TankerTripCompartmentLoadResponse] = []
+    driver_assignments: list[TankerTripDriverAssignmentResponse] = []
     deliveries: list[TankerDeliveryResponse] = []
     expenses: list[TankerTripExpenseResponse] = []
     fuel_transfers: list[FuelTransferResponse] = []
@@ -183,6 +243,7 @@ class TankerTripResponse(BaseModel):
 
 
 class TankerWorkspaceSummaryResponse(BaseModel):
+    organization_id: int | None = None
     station_id: int | None = None
     tanker_count: int
     active_tanker_count: int

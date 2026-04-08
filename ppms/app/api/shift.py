@@ -8,13 +8,13 @@ from app.core.permissions import require_permission
 from app.models.shift import Shift
 from app.models.user import User
 from app.schemas.shift_cash import CashSubmissionCreate, CashSubmissionResponse, ShiftCashResponse
-from app.schemas.shift import ShiftCreate, ShiftUpdate, ShiftResponse
+from app.schemas.shift import CurrentShiftWorkspaceResponse, ShiftCloseValidationResponse, ShiftCreate, ShiftUpdate, ShiftResponse
 from app.services.shifts import close_shift as close_shift_service
 from app.services.shifts import create_cash_submission as create_cash_submission_service
 from app.services.shifts import create_shift as create_shift_service
 from app.services.shifts import ensure_shift_access
 from app.services.shifts import ensure_shift_cash, list_cash_submissions as list_cash_submissions_service
-from app.services.shifts import sync_shift_cash
+from app.services.shifts import get_current_shift_workspace, sync_shift_cash, validate_shift_close
 
 router = APIRouter(prefix="/shifts", tags=["Shifts"])
 
@@ -48,6 +48,19 @@ def open_shift(
     return create_shift_service(db, data, current_user)
 
 
+@router.get("/current-workspace", response_model=CurrentShiftWorkspaceResponse)
+def get_current_shift_workspace_route(
+    station_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "shifts", "read", detail="You do not have permission to view shifts")
+    effective_station_id = station_id or current_user.station_id
+    if effective_station_id is None:
+        raise HTTPException(status_code=400, detail="station_id is required for this user")
+    return get_current_shift_workspace(db, station_id=effective_station_id, current_user=current_user)
+
+
 @router.post("/{shift_id}/close", response_model=ShiftResponse)
 def close_shift(
     shift_id: int,
@@ -60,6 +73,26 @@ def close_shift(
         raise HTTPException(status_code=404, detail="Shift not found")
     require_permission(current_user, "shifts", "close", detail="You do not have permission to close shifts")
     return close_shift_service(db, shift, data, current_user)
+
+
+@router.post("/{shift_id}/close-check", response_model=ShiftCloseValidationResponse)
+def close_shift_check(
+    shift_id: int,
+    data: ShiftUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    shift = db.query(Shift).filter(Shift.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    require_permission(current_user, "shifts", "close", detail="You do not have permission to validate shift close")
+    ensure_shift_access(shift, current_user)
+    return validate_shift_close(
+        db,
+        shift=shift,
+        actual_cash_collected=data.actual_cash_collected,
+        nozzle_readings=data.nozzle_readings,
+    )
 
 
 @router.get("/", response_model=list[ShiftResponse])
@@ -76,7 +109,7 @@ def list_shifts(
     requested_station_id = station_id
     
     # Multi-tenancy check
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if not is_master_admin(current_user):
         if requested_station_id is not None and requested_station_id != current_user.station_id:
             raise HTTPException(status_code=403, detail="Not authorized for this station")
         station_id = current_user.station_id

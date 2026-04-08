@@ -7,7 +7,8 @@ class EmployeeProfileCreate(BaseModel):
     station_id: int
     linked_user_id: int | None = None
     full_name: str
-    staff_type: str
+    staff_type: str | None = None
+    staff_title: str | None = None
     employee_code: str | None = None
     phone: str | None = None
     national_id: str | None = None
@@ -24,6 +25,7 @@ class EmployeeProfileUpdate(BaseModel):
     linked_user_id: int | None = None
     full_name: str | None = None
     staff_type: str | None = None
+    staff_title: str | None = None
     employee_code: str | None = None
     phone: str | None = None
     national_id: str | None = None
@@ -42,6 +44,9 @@ class EmployeeProfileResponse(BaseModel):
     linked_user_id: int | None = None
     full_name: str
     staff_type: str
+    staff_title: str | None = None
+    linked_user_role_id: int | None = None
+    linked_user_role_name: str | None = None
     employee_code: str | None = None
     phone: str | None = None
     national_id: str | None = None

@@ -15,6 +15,7 @@ from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
     AdminResetPasswordRequest,
+    AuthMeResponse,
     ChangePasswordRequest,
     LoginRequest,
     PasswordActionResponse,
@@ -86,7 +87,7 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
     )
 
 
-@router.get("/me")
+@router.get("/me", response_model=AuthMeResponse)
 def get_me(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

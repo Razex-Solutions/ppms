@@ -7,12 +7,14 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.customer_payment import CustomerPayment
-from app.schemas.customer_payment import CustomerPaymentCreate, CustomerPaymentResponse, ReversalRequest
+from app.schemas.customer_payment import CustomerPaymentCreate, CustomerPaymentResponse, CustomerPaymentUpdate, ReversalRequest
 from app.services.payments import approve_customer_payment_reversal as approve_customer_payment_reversal_service
 from app.services.payments import create_customer_payment as create_customer_payment_service
+from app.services.payments import delete_customer_payment as delete_customer_payment_service
 from app.services.payments import ensure_customer_payment_access, reverse_customer_payment as reverse_customer_payment_service
 from app.services.payments import reject_customer_payment_reversal as reject_customer_payment_reversal_service
 from app.services.payments import request_customer_payment_reversal as request_customer_payment_reversal_service
+from app.services.payments import update_customer_payment as update_customer_payment_service
 
 router = APIRouter(prefix="/customer-payments", tags=["Customer Payments"])
 
@@ -38,7 +40,7 @@ def list_customer_payments(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if not is_master_admin(current_user):
         station_id = current_user.station_id
 
     q = db.query(CustomerPayment)
@@ -67,6 +69,34 @@ def get_customer_payment(
     return payment
 
 
+@router.put("/{payment_id}", response_model=CustomerPaymentResponse)
+def update_customer_payment(
+    payment_id: int,
+    data: CustomerPaymentUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    payment = db.query(CustomerPayment).filter(CustomerPayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Customer payment not found")
+    require_permission(current_user, "customer_payments", "update", detail="You do not have permission to update customer payments")
+    return update_customer_payment_service(db, payment, data, current_user)
+
+
+@router.delete("/{payment_id}")
+def delete_customer_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    payment = db.query(CustomerPayment).filter(CustomerPayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Customer payment not found")
+    require_permission(current_user, "customer_payments", "delete", detail="You do not have permission to delete customer payments")
+    delete_customer_payment_service(db, payment, current_user)
+    return {"message": "Customer payment deleted"}
+
+
 @router.post("/{payment_id}/reverse", response_model=CustomerPaymentResponse)
 def reverse_customer_payment(
     payment_id: int,
@@ -79,7 +109,7 @@ def reverse_customer_payment(
         raise HTTPException(status_code=404, detail="Customer payment not found")
 
     require_permission(current_user, "customer_payments", "reverse", detail="You do not have permission to reverse customer payments")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return reverse_customer_payment_service(db, payment, current_user)
     return request_customer_payment_reversal_service(db, payment, current_user, data.reason if data else None)
 

@@ -16,6 +16,7 @@ class Customer(Base):
     address = Column(String, nullable=True)
     credit_limit = Column(Float, default=0)
     outstanding_balance = Column(Float, default=0)
+    tanker_outstanding_balance = Column(Float, default=0)
     credit_override_status = Column(String, nullable=True, index=True)
     credit_override_amount = Column(Float, default=0)
     credit_override_requested_amount = Column(Float, default=0)

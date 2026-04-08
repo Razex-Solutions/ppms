@@ -23,6 +23,8 @@ from app.models.station import Station
 from app.models.fuel_type import FuelType
 from app.models.fuel_price_history import FuelPriceHistory
 from app.models.tank import Tank
+from app.models.tank_calibration_chart import TankCalibrationChart
+from app.models.tank_calibration_chart_line import TankCalibrationChartLine
 from app.models.dispenser import Dispenser
 from app.models.nozzle import Nozzle
 from app.models.fuel_sale import FuelSale
@@ -55,3 +57,6 @@ from app.models.station_module_setting import StationModuleSetting
 from app.models.tanker_trip import TankerTrip
 from app.models.tanker_delivery import TankerDelivery
 from app.models.tanker_trip_expense import TankerTripExpense
+from app.models.tanker_trip_compartment_load import TankerTripCompartmentLoad
+from app.models.tanker_trip_driver_assignment import TankerTripDriverAssignment
+from app.models.tanker_delivery_payment import TankerDeliveryPayment

@@ -14,8 +14,8 @@ from app.models.tank import Tank
 from app.models.tanker import Tanker
 from app.models.user import User
 from app.schemas.station import StationCreate, StationUpdate, StationResponse
-from app.schemas.setup_foundation import StationSetupFoundationResponse
-from app.services.setup_foundation import build_station_setup_foundation
+from app.schemas.setup_foundation import StationSetupApplyRequest, StationSetupFoundationResponse
+from app.services.setup_foundation import apply_station_setup, build_station_setup_foundation
 
 router = APIRouter(prefix="/stations", tags=["Stations"])
 
@@ -116,7 +116,7 @@ def list_stations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         query = db.query(Station)
         if organization_id is not None:
             query = query.filter(Station.organization_id == organization_id)
@@ -145,7 +145,7 @@ def get_station(
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return _serialize_station(station)
     if is_head_office_user(current_user):
         require_permission(current_user, "stations", "read", detail="You do not have permission to view stations")
@@ -166,7 +166,7 @@ def get_station_setup_foundation(
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return build_station_setup_foundation(db, station)
     if is_head_office_user(current_user):
         require_permission(current_user, "stations", "read", detail="You do not have permission to view stations")
@@ -176,6 +176,25 @@ def get_station_setup_foundation(
     if current_user.station_id != station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     return build_station_setup_foundation(db, station)
+
+
+@router.post("/{station_id}/setup-wizard/apply", response_model=StationSetupFoundationResponse)
+def apply_station_setup_wizard(
+    station_id: int,
+    data: StationSetupApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station:
+        raise HTTPException(status_code=404, detail="Station not found")
+    require_permission(current_user, "stations", "update", detail="You do not have permission to configure stations")
+    if not is_master_admin(current_user) and station.organization_id != get_user_organization_id(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized for this station")
+    try:
+        return apply_station_setup(db, station=station, payload=data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.put("/{station_id}", response_model=StationResponse)

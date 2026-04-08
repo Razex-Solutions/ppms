@@ -18,9 +18,11 @@ class Tanker(Base):
     driver_phone = Column(String, nullable=True)
     status = Column(String, default="active")  # active / inactive / maintenance
 
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     station_id = Column(Integer, ForeignKey("stations.id"), nullable=False)
-    fuel_type_id = Column(Integer, ForeignKey("fuel_types.id"), nullable=False)
+    fuel_type_id = Column(Integer, ForeignKey("fuel_types.id"), nullable=True)
 
+    organization = relationship("Organization")
     station = relationship("Station")
     fuel_type = relationship("FuelType")
     compartments = relationship(
@@ -29,3 +31,4 @@ class Tanker(Base):
         cascade="all, delete-orphan",
         order_by="TankerCompartment.position",
     )
+    trips = relationship("TankerTrip", back_populates="tanker")

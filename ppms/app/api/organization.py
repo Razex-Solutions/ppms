@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_admin
@@ -6,14 +7,46 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.brand_catalog import BrandCatalog
+from app.models.customer import Customer
+from app.models.dispenser import Dispenser
+from app.models.notification import Notification
+from app.models.nozzle import Nozzle
 from app.models.organization import Organization
+from app.models.organization_module_setting import OrganizationModuleSetting
+from app.models.shift import Shift
 from app.models.station import Station
+from app.models.supplier import Supplier
+from app.models.tank import Tank
 from app.models.user import User
-from app.schemas.organization import OrganizationCreate, OrganizationResponse, OrganizationUpdate
-from app.schemas.setup_foundation import OrganizationSetupFoundationResponse
-from app.services.setup_foundation import build_organization_setup_foundation
+from app.schemas.organization import (
+    OrganizationCreate,
+    OrganizationDashboardModuleStatus,
+    OrganizationDashboardRoleCount,
+    OrganizationDashboardSummaryResponse,
+    OrganizationResponse,
+    OrganizationUpdate,
+)
+from app.schemas.setup_foundation import (
+    OrganizationOnboardingApplyRequest,
+    OrganizationOnboardingApplyResponse,
+    OrganizationOnboardingSummaryResponse,
+    OrganizationSetupFoundationResponse,
+)
+from app.services.setup_foundation import (
+    apply_organization_onboarding,
+    build_organization_onboarding_summary,
+    build_organization_setup_foundation,
+)
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
+
+
+def _require_organization_write_access(current_user: User, organization_id: int | None = None) -> None:
+    if is_master_admin(current_user):
+        return
+    require_permission(current_user, "organizations", "update", detail="You do not have permission to manage organizations")
+    if organization_id is not None and organization_id != get_user_organization_id(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized for this organization")
 
 
 def _resolve_branding(
@@ -155,6 +188,35 @@ def get_organization_setup_foundation(
     raise HTTPException(status_code=403, detail="Admin access required")
 
 
+@router.post("/onboarding/apply", response_model=OrganizationOnboardingApplyResponse)
+def apply_organization_onboarding_route(
+    data: OrganizationOnboardingApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_admin(current_user)
+    return apply_organization_onboarding(db, payload=data, current_user=current_user)
+
+
+@router.get("/{organization_id}/onboarding-summary", response_model=OrganizationOnboardingSummaryResponse)
+def get_organization_onboarding_summary(
+    organization_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if is_master_admin(current_user):
+        return build_organization_onboarding_summary(db, organization)
+    if is_head_office_user(current_user):
+        require_permission(current_user, "organizations", "read", detail="You do not have permission to view organizations")
+        if organization.id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this organization")
+        return build_organization_onboarding_summary(db, organization)
+    raise HTTPException(status_code=403, detail="Admin access required")
+
+
 @router.put("/{organization_id}", response_model=OrganizationResponse)
 def update_organization(
     organization_id: int,
@@ -162,10 +224,10 @@ def update_organization(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_admin(current_user)
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
+    _require_organization_write_access(current_user, organization.id)
     updates = data.model_dump(exclude_unset=True)
     updates.update(
         _resolve_branding(
@@ -181,6 +243,108 @@ def update_organization(
     db.commit()
     db.refresh(organization)
     return _serialize_organization(organization)
+
+
+@router.get("/{organization_id}/dashboard-summary", response_model=OrganizationDashboardSummaryResponse)
+def get_organization_dashboard_summary(
+    organization_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if not is_master_admin(current_user):
+        require_permission(current_user, "organizations", "read", detail="You do not have permission to view organization dashboards")
+        if organization.id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this organization")
+
+    stations = db.query(Station).filter(Station.organization_id == organization.id).all()
+    station_ids = [station.id for station in stations]
+    active_station_count = sum(1 for station in stations if station.is_active)
+    inactive_station_count = len(stations) - active_station_count
+    completed_station_setup_count = sum(1 for station in stations if station.setup_status == "completed")
+    pending_station_setup_count = len(stations) - completed_station_setup_count
+
+    users = db.query(User).filter(User.organization_id == organization.id).all()
+    role_counts = [
+        OrganizationDashboardRoleCount(role_name=role_name, user_count=count)
+        for role_name, count in sorted(
+            {
+                role_name: sum(1 for user in users if user.role and user.role.name == role_name and user.is_active)
+                for role_name in {user.role.name for user in users if user.role is not None}
+            }.items()
+        )
+    ]
+
+    active_forecourt_tank_count = 0
+    active_forecourt_dispenser_count = 0
+    active_forecourt_nozzle_count = 0
+    open_shift_count = 0
+    pending_customer_balance_total = 0.0
+    pending_supplier_balance_total = 0.0
+    if station_ids:
+        active_forecourt_tank_count = db.query(Tank).filter(Tank.station_id.in_(station_ids), Tank.is_active.is_(True)).count()
+        active_forecourt_dispenser_count = db.query(Dispenser).filter(Dispenser.station_id.in_(station_ids), Dispenser.is_active.is_(True)).count()
+        active_forecourt_nozzle_count = (
+            db.query(Nozzle)
+            .join(Dispenser, Dispenser.id == Nozzle.dispenser_id)
+            .filter(Dispenser.station_id.in_(station_ids), Nozzle.is_active.is_(True), Dispenser.is_active.is_(True))
+            .count()
+        )
+        open_shift_count = db.query(Shift).filter(Shift.station_id.in_(station_ids), Shift.status == "open").count()
+        pending_customer_balance_total = float(
+            db.query(func.coalesce(func.sum(Customer.outstanding_balance), 0.0))
+            .filter(Customer.station_id.in_(station_ids))
+            .scalar()
+            or 0.0
+        )
+
+    pending_supplier_balance_total = float(
+        db.query(func.coalesce(func.sum(Supplier.payable_balance), 0.0)).scalar() or 0.0
+    )
+
+    unread_notification_count = db.query(Notification).filter(
+        Notification.organization_id == organization.id,
+        Notification.is_read.is_(False),
+    ).count()
+
+    module_rows = (
+        db.query(OrganizationModuleSetting)
+        .filter(OrganizationModuleSetting.organization_id == organization.id)
+        .order_by(OrganizationModuleSetting.module_name.asc())
+        .all()
+    )
+    station_total = len(stations)
+    module_statuses = [
+        OrganizationDashboardModuleStatus(
+            module_name=row.module_name,
+            enabled_station_count=station_total if row.is_enabled else 0,
+            total_station_count=station_total,
+            fully_enabled=bool(row.is_enabled),
+        )
+        for row in module_rows
+    ]
+
+    return OrganizationDashboardSummaryResponse(
+        organization_id=organization.id,
+        organization_name=organization.name,
+        organization_code=organization.code,
+        active_station_count=active_station_count,
+        inactive_station_count=inactive_station_count,
+        completed_station_setup_count=completed_station_setup_count,
+        pending_station_setup_count=pending_station_setup_count,
+        active_forecourt_tank_count=active_forecourt_tank_count,
+        active_forecourt_dispenser_count=active_forecourt_dispenser_count,
+        active_forecourt_nozzle_count=active_forecourt_nozzle_count,
+        open_shift_count=open_shift_count,
+        active_staff_count=sum(1 for user in users if user.is_active),
+        pending_customer_balance_total=round(pending_customer_balance_total, 2),
+        pending_supplier_balance_total=round(pending_supplier_balance_total, 2),
+        unread_notification_count=unread_notification_count,
+        role_counts=role_counts,
+        module_statuses=module_statuses,
+    )
 
 
 @router.delete("/{organization_id}")

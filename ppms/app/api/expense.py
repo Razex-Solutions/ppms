@@ -45,7 +45,7 @@ def list_expenses(
 ):
     q = db.query(Expense)
     requested_station_id = station_id
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         if station_id is not None and organization_id is not None:
             station = db.query(Station).filter(Station.id == station_id).first()
             if not station or station.organization_id != organization_id:
@@ -65,7 +65,7 @@ def list_expenses(
 
     if station_id:
         q = q.filter(Expense.station_id == station_id)
-    elif organization_id and (current_user.role.name == "Admin" or is_master_admin(current_user)):
+    elif organization_id and (is_master_admin(current_user)):
         q = q.join(Station, Station.id == Expense.station_id).filter(Station.organization_id == organization_id)
     if category:
         q = q.filter(Expense.category == category)
@@ -117,8 +117,6 @@ def delete_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     require_station_access(current_user, expense.station_id, detail="Not authorized for this expense")
     require_permission(current_user, "expenses", "delete", detail="You do not have permission to delete expenses")
-    if expense.status != "pending":
-        raise HTTPException(status_code=400, detail="Only pending expenses can be deleted")
     log_audit_event(
         db,
         current_user=current_user,
@@ -127,7 +125,15 @@ def delete_expense(
         entity_type="expense",
         entity_id=expense.id,
         station_id=expense.station_id,
-        details={"title": expense.title, "amount": expense.amount},
+        details={
+            "before": {
+                "title": expense.title,
+                "category": expense.category,
+                "amount": expense.amount,
+                "notes": expense.notes,
+                "status": expense.status,
+            }
+        },
     )
     db.delete(expense)
     db.commit()

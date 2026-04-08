@@ -39,7 +39,7 @@ def list_customers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if not is_master_admin(current_user):
         station_id = current_user.station_id
 
     q = db.query(Customer)

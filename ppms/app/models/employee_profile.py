@@ -14,6 +14,7 @@ class EmployeeProfile(Base):
     linked_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, unique=True, index=True)
     full_name = Column(String, nullable=False, index=True)
     staff_type = Column(String, nullable=False, index=True)
+    staff_title = Column(String, nullable=True, index=True)
     employee_code = Column(String, nullable=True, index=True)
     phone = Column(String, nullable=True)
     national_id = Column(String, nullable=True)

@@ -30,7 +30,7 @@ def get_dashboard(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         if station_id is not None and organization_id is not None:
             station = db.query(Station).filter(Station.id == station_id).first()
             if not station or station.organization_id != organization_id:

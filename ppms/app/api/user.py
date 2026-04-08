@@ -58,14 +58,10 @@ def _normalize_user_scope(
     if not scope_rule["requires_station"]:
         station_id = None
 
-    if current_user.role.name not in {"MasterAdmin", "Admin"} and not current_user.is_platform_user:
+    if not is_master_admin(current_user):
         current_org_id = get_user_organization_id(current_user)
         if organization_id != current_org_id:
             raise HTTPException(status_code=403, detail="You can only manage users inside your organization")
-    elif current_user.role.name == "Admin" and organization_id is not None:
-        current_org_id = get_user_organization_id(current_user)
-        if current_org_id is not None and organization_id != current_org_id:
-            raise HTTPException(status_code=403, detail="Admin can only manage users inside the assigned organization")
 
     normalized_scope_level = str(scope_rule["scope_level"])
     if requested_scope_level and requested_scope_level != normalized_scope_level:

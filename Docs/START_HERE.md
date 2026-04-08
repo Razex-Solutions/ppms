@@ -19,6 +19,12 @@ Read these files in this order:
 3. [08_FINALIZED_PRODUCT_DIRECTION_SO_FAR.md](/C:/Fuel%20Management%20System/Docs/08_FINALIZED_PRODUCT_DIRECTION_SO_FAR.md)
    - the detailed decision log behind the master spec
 
+4. [11_BACKEND_GAP_AUDIT.md](/C:/Fuel%20Management%20System/Docs/11_BACKEND_GAP_AUDIT.md)
+   - compares the finalized product plan against the current backend and highlights what is ready, partial, or missing
+
+5. [12_BACKEND_TASK_LIST.md](/C:/Fuel%20Management%20System/Docs/12_BACKEND_TASK_LIST.md)
+   - turns the backend gap audit into a concrete implementation queue with priorities and coding order
+
 ## Supporting Reference Docs
 
 Use these when deeper backend/schema/architecture reference is needed:

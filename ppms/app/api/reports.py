@@ -11,8 +11,11 @@ from app.models.station import Station
 from app.models.user import User
 from app.services.audit import log_audit_event
 from app.services.reports import (
+    STANDARD_REPORT_FILTERS,
     build_customer_balance_report,
     build_daily_closing_report,
+    build_exception_variance_report,
+    build_staff_payroll_summary_report,
     build_shift_variance_report,
     build_stock_movement_report,
     build_supplier_balance_report,
@@ -30,7 +33,7 @@ def _resolve_report_scope(
     station_id: int | None,
     organization_id: int | None,
 ) -> tuple[int | None, int | None]:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         if station_id is not None and organization_id is not None:
             station = db.query(Station).filter(Station.id == station_id).first()
             if not station or station.organization_id != organization_id:
@@ -48,6 +51,25 @@ def _resolve_report_scope(
         return station_id, organization_id
 
     return current_user.station_id, get_user_organization_id(current_user)
+
+
+@router.get("/catalog")
+def report_catalog():
+    return {
+        "standard_filters": STANDARD_REPORT_FILTERS,
+        "reports": [
+            {"key": "daily_closing", "family": "operational", "filters": ["date_range", "station"]},
+            {"key": "shift_variance", "family": "exception_variance", "filters": ["date_range", "station", "staff_user", "status"]},
+            {"key": "stock_movement", "family": "operational", "filters": ["date_range", "station", "fuel_type"]},
+            {"key": "customer_balances", "family": "finance", "filters": ["station"]},
+            {"key": "supplier_balances", "family": "finance", "filters": ["station"]},
+            {"key": "staff_payroll_summary", "family": "staff_payroll", "filters": ["date_range", "station", "staff_user", "status"]},
+            {"key": "exception_variance", "family": "exception_variance", "filters": ["date_range", "station", "staff_user", "status"]},
+            {"key": "tanker_profit", "family": "operational", "filters": ["date_range", "station", "status"]},
+            {"key": "tanker_deliveries", "family": "operational", "filters": ["date_range", "station", "fuel_type", "status", "staff_user"]},
+            {"key": "tanker_expenses", "family": "finance", "filters": ["date_range", "station", "status"]},
+        ],
+    }
 
 
 @router.get("/daily-closing")
@@ -80,12 +102,14 @@ def shift_variance_report(
     organization_id: int | None = Query(None),
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
+    user_id: int | None = Query(None),
+    status: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
     station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
-    report = build_shift_variance_report(db, station_id, from_date, to_date, organization_id)
+    report = build_shift_variance_report(db, station_id, from_date, to_date, organization_id, user_id, status)
     log_audit_event(
         db,
         current_user=current_user,
@@ -109,12 +133,13 @@ def stock_movement_report(
     organization_id: int | None = Query(None),
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
+    fuel_type_id: int | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
     station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
-    report = build_stock_movement_report(db, station_id, from_date, to_date, organization_id)
+    report = build_stock_movement_report(db, station_id, from_date, to_date, organization_id, fuel_type_id)
     log_audit_event(
         db,
         current_user=current_user,
@@ -184,6 +209,7 @@ def tanker_profit_report(
     organization_id: int | None = Query(None),
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
+    status: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -204,6 +230,9 @@ def tanker_profit_report(
         },
     )
     db.commit()
+    if status is not None:
+        report["items"] = [item for item in report["items"] if item["status"] == status]
+        report["count"] = len(report["items"])
     return report
 
 
@@ -213,12 +242,15 @@ def tanker_delivery_report(
     organization_id: int | None = Query(None),
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
+    fuel_type_id: int | None = Query(None),
+    status: str | None = Query(None),
+    user_id: int | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
     station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
-    report = build_tanker_delivery_report(db, station_id, from_date, to_date, organization_id)
+    report = build_tanker_delivery_report(db, station_id, from_date, to_date, organization_id, fuel_type_id, status, user_id)
     log_audit_event(
         db,
         current_user=current_user,
@@ -242,12 +274,13 @@ def tanker_expense_report(
     organization_id: int | None = Query(None),
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
+    status: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
     station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
-    report = build_tanker_expense_report(db, station_id, from_date, to_date, organization_id)
+    report = build_tanker_expense_report(db, station_id, from_date, to_date, organization_id, status)
     log_audit_event(
         db,
         current_user=current_user,
@@ -260,6 +293,60 @@ def tanker_expense_report(
             "to_date": str(to_date) if to_date else None,
             "organization_id": organization_id,
         },
+    )
+    db.commit()
+    return report
+
+
+@router.get("/staff-payroll-summary")
+def staff_payroll_summary_report(
+    station_id: int | None = Query(None),
+    organization_id: int | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    user_id: int | None = Query(None),
+    status: str | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
+    station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
+    report = build_staff_payroll_summary_report(db, station_id, from_date, to_date, organization_id, user_id, status)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="reports",
+        action="reports.staff_payroll_summary",
+        entity_type="report",
+        station_id=station_id,
+        details={"organization_id": organization_id},
+    )
+    db.commit()
+    return report
+
+
+@router.get("/exception-variance")
+def exception_variance_report(
+    station_id: int | None = Query(None),
+    organization_id: int | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    user_id: int | None = Query(None),
+    status: str | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "reports", "read", detail="You do not have permission to view reports")
+    station_id, organization_id = _resolve_report_scope(db, current_user, station_id, organization_id)
+    report = build_exception_variance_report(db, station_id, from_date, to_date, organization_id, user_id, status)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="reports",
+        action="reports.exception_variance",
+        entity_type="report",
+        station_id=station_id,
+        details={"organization_id": organization_id},
     )
     db.commit()
     return report

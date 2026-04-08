@@ -5,7 +5,6 @@ from datetime import datetime
 class TankDipCreate(BaseModel):
     tank_id: int
     dip_reading_mm: float
-    calculated_volume: float
     notes: str | None = None
 
 

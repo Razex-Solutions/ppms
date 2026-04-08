@@ -35,7 +35,7 @@ def _serialize(definition: ReportDefinition) -> ReportDefinitionResponse:
 
 
 def _apply_scope(query, current_user: User):
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return query
     if current_user.role.name == "HeadOffice":
         organization_id = current_user.station.organization_id if current_user.station else None
@@ -47,7 +47,7 @@ def _apply_scope(query, current_user: User):
 
 
 def _ensure_definition_access(definition: ReportDefinition, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if current_user.role.name == "HeadOffice":
         organization_id = current_user.station.organization_id if current_user.station else None
@@ -78,14 +78,14 @@ def create_report_definition(
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "reports", "read", detail="You do not have permission to save report definitions")
-    if current_user.role.name not in {"Admin", "HeadOffice"} and not is_master_admin(current_user):
+    if current_user.role.name != "HeadOffice" and not is_master_admin(current_user):
         data.organization_id = None
         data.station_id = current_user.station_id
     if data.station_id is not None:
         station = db.query(Station).filter(Station.id == data.station_id).first()
         if not station:
             raise HTTPException(status_code=404, detail="Station not found")
-        if current_user.role.name not in {"Admin"} and not is_master_admin(current_user):
+        if not is_master_admin(current_user):
             if current_user.role.name == "HeadOffice":
                 if station.organization_id != current_user.station.organization_id:
                     raise HTTPException(status_code=403, detail="Not authorized for this station")

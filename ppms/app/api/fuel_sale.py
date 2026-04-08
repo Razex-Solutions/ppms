@@ -53,7 +53,7 @@ def reverse_fuel_sale(
         raise HTTPException(status_code=404, detail="Fuel sale not found")
 
     require_permission(current_user, "fuel_sales", "reverse", detail="You do not have permission to reverse fuel sales")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return reverse_fuel_sale_service(db, sale, current_user)
     return request_fuel_sale_reversal_service(db, sale, current_user, data.reason if data else None)
 
@@ -106,7 +106,7 @@ def list_fuel_sales(
     q = db.query(FuelSale)
     
     # Multi-tenancy check
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if not is_master_admin(current_user):
         station_id = current_user.station_id
         
     if station_id:

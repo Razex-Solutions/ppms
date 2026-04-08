@@ -1,7 +1,39 @@
 import os
+from pathlib import Path
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ppms.db")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_SQLITE_DB_PATH = (PROJECT_ROOT / "ppms.db").resolve()
+DEFAULT_BACKUP_DIRECTORY = (PROJECT_ROOT / "backups").resolve()
+
+
+def _sqlite_url_for_path(path: Path) -> str:
+    return f"sqlite:///{path.resolve().as_posix()}"
+
+
+def _resolve_database_url(raw_value: str | None) -> str:
+    if not raw_value:
+        return _sqlite_url_for_path(DEFAULT_SQLITE_DB_PATH)
+
+    if raw_value.startswith("sqlite:///./"):
+        relative_part = raw_value.removeprefix("sqlite:///./")
+        return _sqlite_url_for_path(PROJECT_ROOT / relative_part)
+
+    if raw_value == "sqlite:///ppms.db":
+        return _sqlite_url_for_path(DEFAULT_SQLITE_DB_PATH)
+
+    return raw_value
+
+
+def _resolve_backup_directory(raw_value: str | None) -> str:
+    if not raw_value:
+        return str(DEFAULT_BACKUP_DIRECTORY)
+    if raw_value.startswith("./"):
+        return str((PROJECT_ROOT / raw_value.removeprefix("./")).resolve())
+    return raw_value
+
+
+DATABASE_URL = _resolve_database_url(os.getenv("DATABASE_URL"))
 SECRET_KEY = os.getenv("SECRET_KEY", "ppms-secret-key-change-in-production")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
@@ -24,7 +56,7 @@ TWILIO_SMS_FROM = os.getenv("TWILIO_SMS_FROM", "")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "")
 DELIVERY_WORKER_ENABLED = os.getenv("DELIVERY_WORKER_ENABLED", "false").lower() == "true"
 DELIVERY_WORKER_INTERVAL_SECONDS = int(os.getenv("DELIVERY_WORKER_INTERVAL_SECONDS", "30"))
-BACKUP_DIRECTORY = os.getenv("BACKUP_DIRECTORY", "./backups")
+BACKUP_DIRECTORY = _resolve_backup_directory(os.getenv("BACKUP_DIRECTORY"))
 BACKUP_RETENTION_COUNT = int(os.getenv("BACKUP_RETENTION_COUNT", "10"))
 ONLINE_HOOKS_MODE = os.getenv("ONLINE_HOOKS_MODE", "mock").lower()
 HARDWARE_VENDOR_MODE = os.getenv("HARDWARE_VENDOR_MODE", "mock").lower()

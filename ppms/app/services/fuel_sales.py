@@ -13,11 +13,17 @@ from app.models.station import Station
 from app.models.user import User
 from app.schemas.fuel_sale import FuelSaleCreate
 from app.services.audit import log_audit_event
-from app.services.notifications import notify_approval_requested, notify_decision
+from app.services.notifications import (
+    EVENT_FUEL_SALE_REVERSAL_APPROVED,
+    EVENT_FUEL_SALE_REVERSAL_REJECTED,
+    EVENT_FUEL_SALE_REVERSAL_REQUESTED,
+    notify_approval_requested,
+    notify_decision,
+)
 
 
 def ensure_sale_access(sale: FuelSale, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         if sale.station and sale.station.organization_id == get_user_organization_id(current_user):
@@ -28,7 +34,7 @@ def ensure_sale_access(sale: FuelSale, current_user: User) -> None:
 
 
 def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User) -> FuelSale:
-    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != sale_data.station_id:
+    if not is_master_admin(current_user) and current_user.station_id != sale_data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
 
     shift_id = sale_data.shift_id
@@ -120,7 +126,15 @@ def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User)
         details={"sale_type": sale.sale_type, "total_amount": sale.total_amount, "quantity": sale.quantity},
     )
 
-    db.add(NozzleReading(nozzle_id=sale.nozzle_id, reading=sale.closing_meter, sale_id=sale.id))
+    db.add(
+        NozzleReading(
+            nozzle_id=sale.nozzle_id,
+            reading=sale.closing_meter,
+            sale_id=sale.id,
+            shift_id=shift_id,
+            reading_type="sale",
+        )
+    )
     nozzle.meter_reading = closing_meter
     if nozzle.tank:
         nozzle.tank.current_volume -= quantity
@@ -158,7 +172,7 @@ def create_fuel_sale(db: Session, sale_data: FuelSaleCreate, current_user: User)
 
 def reverse_fuel_sale(db: Session, sale: FuelSale, current_user: User) -> FuelSale:
     ensure_sale_access(sale, current_user)
-    if sale.reversal_request_status != "approved" and current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if sale.reversal_request_status != "approved" and not is_master_admin(current_user):
         raise HTTPException(status_code=400, detail="Fuel sale reversal must be approved first")
     if sale.is_reversed:
         raise HTTPException(status_code=400, detail="Fuel sale is already reversed")
@@ -238,7 +252,7 @@ def request_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, 
         entity_id=sale.id,
         title="Fuel sale reversal requested",
         message=f"{current_user.full_name} requested reversal for fuel sale #{sale.id}.",
-        event_type="fuel_sale.reversal_requested",
+        event_type=EVENT_FUEL_SALE_REVERSAL_REQUESTED,
     )
     db.commit()
     db.refresh(sale)
@@ -276,7 +290,7 @@ def approve_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, 
         entity_id=sale.id,
         title="Fuel sale reversal approved",
         message=f"Reversal for fuel sale #{sale.id} was approved.",
-        event_type="fuel_sale.reversal_approved",
+        event_type=EVENT_FUEL_SALE_REVERSAL_APPROVED,
     )
     db.flush()
     return reverse_fuel_sale(db, sale, current_user)
@@ -313,7 +327,7 @@ def reject_fuel_sale_reversal(db: Session, sale: FuelSale, current_user: User, r
         entity_id=sale.id,
         title="Fuel sale reversal rejected",
         message=f"Reversal for fuel sale #{sale.id} was rejected.",
-        event_type="fuel_sale.reversal_rejected",
+        event_type=EVENT_FUEL_SALE_REVERSAL_REJECTED,
     )
     db.commit()
     db.refresh(sale)

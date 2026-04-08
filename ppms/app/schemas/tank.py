@@ -8,6 +8,7 @@ class TankCreate(BaseModel):
     current_volume: float = 0
     low_stock_threshold: float = 1000
     location: str | None = None
+    is_active: bool = True
     station_id: int
     fuel_type_id: int
 
@@ -18,6 +19,7 @@ class TankUpdate(BaseModel):
     current_volume: float | None = None
     low_stock_threshold: float | None = None
     location: str | None = None
+    is_active: bool | None = None
 
 
 class TankResponse(BaseModel):
@@ -28,6 +30,7 @@ class TankResponse(BaseModel):
     current_volume: float
     low_stock_threshold: float
     location: str | None = None
+    is_active: bool
     station_id: int
     fuel_type_id: int
 

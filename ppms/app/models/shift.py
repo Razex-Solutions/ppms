@@ -33,3 +33,4 @@ class Shift(Base):
     shift_template = relationship("StationShiftTemplate", back_populates="shifts")
     shift_cash = relationship("ShiftCash", back_populates="shift", uselist=False)
     fuel_sales = relationship("FuelSale", back_populates="shift")
+    nozzle_readings = relationship("NozzleReading", back_populates="shift")

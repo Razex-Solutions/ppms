@@ -40,6 +40,7 @@ from app.api.station_shift_template import router as station_shift_template_rout
 from app.api.supplier import router as supplier_router
 from app.api.supplier_payment import router as supplier_payment_router
 from app.api.tank import router as tank_router
+from app.api.tank_calibration import router as tank_calibration_router
 from app.api.tank_dip import router as tank_dip_router
 from app.api.tanker import router as tanker_router
 from app.api.user import router as user_router
@@ -59,6 +60,7 @@ ROUTER_REGISTRY = [
     {"name": "users", "router": user_router, "protected": True},
     {"name": "fuel_types", "router": fuel_type_router, "protected": True},
     {"name": "tanks", "router": tank_router, "protected": True},
+    {"name": "tank_calibrations", "router": tank_calibration_router, "protected": True},
     {"name": "dispensers", "router": dispenser_router, "protected": True},
     {"name": "nozzles", "router": nozzle_router, "protected": True},
     {"name": "notifications", "router": notification_router, "protected": True},

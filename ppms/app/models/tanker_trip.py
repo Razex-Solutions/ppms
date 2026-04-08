@@ -10,11 +10,12 @@ class TankerTrip(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tanker_id = Column(Integer, ForeignKey("tankers.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     station_id = Column(Integer, ForeignKey("stations.id"), nullable=False, index=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True, index=True)
-    fuel_type_id = Column(Integer, ForeignKey("fuel_types.id"), nullable=False, index=True)
-    trip_type = Column(String, nullable=False, index=True)  # supplier_to_station / supplier_to_customer
-    status = Column(String, nullable=False, default="planned", index=True)
+    fuel_type_id = Column(Integer, ForeignKey("fuel_types.id"), nullable=True, index=True)
+    trip_type = Column(String, nullable=False, index=True)  # supplier_to_station / supplier_to_customer / mixed_delivery
+    status = Column(String, nullable=False, default="draft", index=True)
     settlement_status = Column(String, nullable=False, default="unpaid", index=True)
     linked_tank_id = Column(Integer, ForeignKey("tanks.id"), nullable=True, index=True)
     linked_purchase_id = Column(Integer, ForeignKey("purchases.id"), nullable=True, index=True)
@@ -34,7 +35,8 @@ class TankerTrip(Base):
     created_at = Column(DateTime, nullable=False, default=utc_now)
     completed_at = Column(DateTime, nullable=True)
 
-    tanker = relationship("Tanker")
+    tanker = relationship("Tanker", back_populates="trips")
+    organization = relationship("Organization")
     station = relationship("Station")
     supplier = relationship("Supplier")
     fuel_type = relationship("FuelType")
@@ -44,3 +46,5 @@ class TankerTrip(Base):
     deliveries = relationship("TankerDelivery", back_populates="trip", cascade="all, delete-orphan")
     expenses = relationship("TankerTripExpense", back_populates="trip", cascade="all, delete-orphan")
     fuel_transfers = relationship("FuelTransfer", back_populates="tanker_trip", cascade="all, delete-orphan")
+    compartment_loads = relationship("TankerTripCompartmentLoad", back_populates="trip", cascade="all, delete-orphan")
+    driver_assignments = relationship("TankerTripDriverAssignment", back_populates="trip", cascade="all, delete-orphan")

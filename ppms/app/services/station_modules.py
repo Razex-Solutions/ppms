@@ -24,7 +24,7 @@ def ensure_station_module_access(db: Session, station_id: int, current_user: Use
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return station
     if current_user.role.name == "HeadOffice":
         user_organization_id = get_user_organization_id(current_user)

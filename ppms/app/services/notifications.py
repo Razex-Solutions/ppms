@@ -3,12 +3,20 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
+from app.core.access import is_master_admin
 from app.models.notification import Notification
 from app.models.notification_delivery import NotificationDelivery
 from app.models.notification_preference import NotificationPreference
 from app.models.user import User
 from app.services.delivery_queue import next_retry_time, should_retry
 from app.services.delivery_channels import deliver_email, deliver_sms, deliver_whatsapp
+
+
+EVENT_TANK_DIP_LOW_USAGE_SKIP = "tank_dip.low_usage_skip"
+EVENT_REPORT_EXPORT_COMPLETED = "report_export.completed"
+EVENT_FUEL_SALE_REVERSAL_REQUESTED = "fuel_sale.reversal_requested"
+EVENT_FUEL_SALE_REVERSAL_APPROVED = "fuel_sale.reversal_approved"
+EVENT_FUEL_SALE_REVERSAL_REJECTED = "fuel_sale.reversal_rejected"
 
 
 def _organization_id_for_user(user: User | None) -> int | None:
@@ -179,7 +187,7 @@ def process_notification_delivery(db: Session, *, delivery: NotificationDelivery
 
 
 def get_station_approvers(db: Session, station_id: int, organization_id: int | None) -> list[User]:
-    users = _eligible_users_query(db).filter(User.role.has(name="Admin")).all()
+    users = _eligible_users_query(db).filter(User.role.has(name="MasterAdmin")).all()
     if organization_id is not None:
         users += (
             _eligible_users_query(db)
@@ -204,7 +212,7 @@ def get_station_watchers(db: Session, station_id: int, organization_id: int | No
             .filter(User.role.has(name="HeadOffice"), User.station.has(organization_id=organization_id))
             .all()
         )
-    users += _eligible_users_query(db).filter(User.role.has(name="Admin")).all()
+    users += _eligible_users_query(db).filter(User.role.has(name="MasterAdmin")).all()
     return _distinct_users(users)
 
 
@@ -358,7 +366,7 @@ def delivery_diagnostics(db: Session, *, current_user: User) -> dict:
 
 def retry_delivery(db: Session, *, delivery: NotificationDelivery, current_user: User) -> NotificationDelivery:
     owner = _get_delivery_owner(db, delivery)
-    if owner.id != current_user.id and current_user.role.name not in {"Admin", "HeadOffice"}:
+    if owner.id != current_user.id and not (is_master_admin(current_user) or current_user.role.name == "HeadOffice"):
         raise HTTPException(status_code=403, detail="Not authorized for this delivery")
     if delivery.status not in {"failed", "retrying"}:
         raise HTTPException(status_code=400, detail="Delivery is not eligible for retry")
@@ -472,4 +480,31 @@ def notify_actor(
         message=message,
         entity_type=entity_type,
         entity_id=entity_id,
+    )
+
+
+def notify_station_low_usage_dip_skip(
+    db: Session,
+    *,
+    actor_user: User,
+    station_id: int,
+    organization_id: int | None,
+    tank_id: int,
+    usage_liters: float,
+) -> None:
+    recipients = get_station_watchers(db, station_id, organization_id)
+    notify_users(
+        db,
+        recipients=recipients,
+        actor_user=actor_user,
+        station_id=station_id,
+        organization_id=organization_id,
+        event_type=EVENT_TANK_DIP_LOW_USAGE_SKIP,
+        title="Dip skipped due to low usage",
+        message=(
+            f"Tank #{tank_id} stayed below the dip threshold during shift close. "
+            f"Recorded usage was {round(usage_liters, 2)} liters, so a dip was not required."
+        ),
+        entity_type="tank",
+        entity_id=tank_id,
     )

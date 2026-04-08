@@ -11,6 +11,13 @@ class SupplierPaymentCreate(BaseModel):
     notes: str | None = None
 
 
+class SupplierPaymentUpdate(BaseModel):
+    amount: float | None = None
+    payment_method: str | None = None
+    reference_no: str | None = None
+    notes: str | None = None
+
+
 class ReversalRequest(BaseModel):
     reason: str | None = None
 

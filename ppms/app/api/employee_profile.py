@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -15,6 +15,32 @@ from app.services.employee_profiles import create_employee_profile, ensure_emplo
 router = APIRouter(prefix="/employee-profiles", tags=["Employee Profiles"])
 
 
+def _serialize_employee_profile(profile: EmployeeProfile) -> EmployeeProfileResponse:
+    linked_user = profile.linked_user
+    return EmployeeProfileResponse(
+        id=profile.id,
+        organization_id=profile.organization_id,
+        station_id=profile.station_id,
+        linked_user_id=profile.linked_user_id,
+        full_name=profile.full_name,
+        staff_type=profile.staff_type,
+        staff_title=profile.staff_title or profile.staff_type,
+        linked_user_role_id=linked_user.role_id if linked_user is not None else None,
+        linked_user_role_name=linked_user.role.name if linked_user is not None and linked_user.role is not None else None,
+        employee_code=profile.employee_code,
+        phone=profile.phone,
+        national_id=profile.national_id,
+        address=profile.address,
+        is_active=profile.is_active,
+        payroll_enabled=profile.payroll_enabled,
+        monthly_salary=profile.monthly_salary,
+        can_login=profile.can_login,
+        notes=profile.notes,
+        created_at=profile.created_at,
+        updated_at=profile.updated_at,
+    )
+
+
 @router.post("/", response_model=EmployeeProfileResponse)
 def post_employee_profile(
     data: EmployeeProfileCreate,
@@ -22,7 +48,7 @@ def post_employee_profile(
     current_user: User = Depends(get_current_user),
 ):
     require_permission(current_user, "employee_profiles", "create", detail="You do not have permission to create employee profiles")
-    return create_employee_profile(db, data=data, current_user=current_user)
+    return _serialize_employee_profile(create_employee_profile(db, data=data, current_user=current_user))
 
 
 @router.get("/", response_model=list[EmployeeProfileResponse])
@@ -38,7 +64,7 @@ def list_employee_profiles(
 ):
     require_permission(current_user, "employee_profiles", "read", detail="You do not have permission to view employee profiles")
     query = db.query(EmployeeProfile)
-    if current_user.role.name in {"MasterAdmin", "Admin"} or current_user.is_platform_user:
+    if is_master_admin(current_user):
         if organization_id is not None:
             query = query.filter(EmployeeProfile.organization_id == organization_id)
     elif is_head_office_user(current_user):
@@ -58,7 +84,10 @@ def list_employee_profiles(
         query = query.filter(EmployeeProfile.staff_type == staff_type)
     if is_active is not None:
         query = query.filter(EmployeeProfile.is_active == is_active)
-    return query.order_by(EmployeeProfile.full_name.asc(), EmployeeProfile.id.asc()).offset(skip).limit(limit).all()
+    return [
+        _serialize_employee_profile(profile)
+        for profile in query.order_by(EmployeeProfile.full_name.asc(), EmployeeProfile.id.asc()).offset(skip).limit(limit).all()
+    ]
 
 
 @router.get("/{profile_id}", response_model=EmployeeProfileResponse)
@@ -72,7 +101,7 @@ def get_employee_profile(
     if not profile:
         raise HTTPException(status_code=404, detail="Employee profile not found")
     ensure_employee_profile_access(db, profile.station_id, current_user)
-    return profile
+    return _serialize_employee_profile(profile)
 
 
 @router.put("/{profile_id}", response_model=EmployeeProfileResponse)
@@ -86,7 +115,7 @@ def put_employee_profile(
     profile = db.query(EmployeeProfile).filter(EmployeeProfile.id == profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Employee profile not found")
-    return update_employee_profile(db, profile=profile, data=data, current_user=current_user)
+    return _serialize_employee_profile(update_employee_profile(db, profile=profile, data=data, current_user=current_user))
 
 
 @router.delete("/{profile_id}")

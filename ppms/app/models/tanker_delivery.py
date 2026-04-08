@@ -11,6 +11,8 @@ class TankerDelivery(Base):
     id = Column(Integer, primary_key=True, index=True)
     trip_id = Column(Integer, ForeignKey("tanker_trips.id"), nullable=False, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
+    fuel_type_id = Column(Integer, ForeignKey("fuel_types.id"), nullable=False, index=True)
+    compartment_load_id = Column(Integer, ForeignKey("tanker_trip_compartment_loads.id"), nullable=True, index=True)
     destination_name = Column(String, nullable=True)
     quantity = Column(Float, nullable=False)
     fuel_rate = Column(Float, nullable=False)
@@ -23,3 +25,6 @@ class TankerDelivery(Base):
 
     trip = relationship("TankerTrip", back_populates="deliveries")
     customer = relationship("Customer")
+    fuel_type = relationship("FuelType")
+    compartment_load = relationship("TankerTripCompartmentLoad", back_populates="deliveries")
+    payments = relationship("TankerDeliveryPayment", back_populates="delivery", cascade="all, delete-orphan")

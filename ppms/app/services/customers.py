@@ -11,7 +11,7 @@ from app.services.audit import log_audit_event
 
 
 def _ensure_customer_scope(customer: Customer, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         if customer.station and customer.station.organization_id == get_user_organization_id(current_user):
@@ -22,7 +22,7 @@ def _ensure_customer_scope(customer: Customer, current_user: User) -> None:
 
 
 def create_customer(db: Session, data: CustomerCreate, current_user: User) -> Customer:
-    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
+    if not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     existing = db.query(Customer).filter(Customer.code == data.code).first()
     if existing:

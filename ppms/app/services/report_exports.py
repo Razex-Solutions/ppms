@@ -10,10 +10,12 @@ from app.models.report_export_job import ReportExportJob
 from app.models.station import Station
 from app.models.user import User
 from app.services.audit import log_audit_event
-from app.services.notifications import notify_actor
+from app.services.notifications import EVENT_REPORT_EXPORT_COMPLETED, notify_actor
 from app.services.reports import (
     build_customer_balance_report,
     build_daily_closing_report,
+    build_exception_variance_report,
+    build_staff_payroll_summary_report,
     build_shift_variance_report,
     build_stock_movement_report,
     build_supplier_balance_report,
@@ -29,6 +31,8 @@ SUPPORTED_REPORTS = {
     "stock_movement",
     "customer_balances",
     "supplier_balances",
+    "staff_payroll_summary",
+    "exception_variance",
     "tanker_profit",
     "tanker_deliveries",
     "tanker_expenses",
@@ -42,7 +46,7 @@ def resolve_report_scope(
     organization_id: int | None,
 ) -> tuple[int | None, int | None]:
     role_name = current_user.role.name
-    if role_name == "Admin":
+    if role_name == "MasterAdmin":
         if station_id is not None and organization_id is not None:
             station = db.query(Station).filter(Station.id == station_id).first()
             if not station or station.organization_id != organization_id:
@@ -84,6 +88,10 @@ def _build_report_data(
         return build_customer_balance_report(db, station_id, organization_id)
     if report_type == "supplier_balances":
         return build_supplier_balance_report(db, station_id, organization_id)
+    if report_type == "staff_payroll_summary":
+        return build_staff_payroll_summary_report(db, station_id, from_date, to_date, organization_id)
+    if report_type == "exception_variance":
+        return build_exception_variance_report(db, station_id, from_date, to_date, organization_id)
     if report_type == "tanker_profit":
         return build_tanker_profit_report(db, station_id, from_date, to_date, organization_id)
     if report_type == "tanker_deliveries":
@@ -116,6 +124,44 @@ def _render_csv(report_type: str, data: dict) -> str:
     return output.getvalue()
 
 
+def _render_pdf(report_type: str, data: dict) -> str:
+    lines = [f"{report_type.replace('_', ' ').title()}"]
+    for key, value in data.items():
+        if key == "items":
+            continue
+        lines.append(f"{key}: {value}")
+    items = data.get("items", [])
+    if items:
+        lines.append("")
+        lines.append("Items:")
+        for item in items:
+            lines.append(" | ".join(f"{k}={v}" for k, v in item.items()))
+    text_lines = []
+    for line in lines:
+        clean = str(line).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        text_lines.append(f"({clean}) Tj")
+        text_lines.append("T*")
+    text_stream = "BT /F1 10 Tf 40 780 Td " + " ".join(text_lines) + " ET"
+    objects = [
+        "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+        "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+        "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj",
+        "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj",
+        f"5 0 obj << /Length {len(text_stream.encode('utf-8'))} >> stream\n{text_stream}\nendstream endobj",
+    ]
+    pdf = "%PDF-1.4\n"
+    offsets = []
+    for obj in objects:
+        offsets.append(len(pdf.encode("utf-8")))
+        pdf += obj + "\n"
+    xref_offset = len(pdf.encode("utf-8"))
+    pdf += f"xref\n0 {len(objects)+1}\n0000000000 65535 f \n"
+    for offset in offsets:
+        pdf += f"{offset:010d} 00000 n \n"
+    pdf += f"trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF"
+    return pdf
+
+
 def create_report_export_job(
     db: Session,
     *,
@@ -130,13 +176,20 @@ def create_report_export_job(
 ) -> ReportExportJob:
     if report_type not in SUPPORTED_REPORTS:
         raise HTTPException(status_code=400, detail="Unsupported report type")
-    if export_format.lower() != "csv":
-        raise HTTPException(status_code=400, detail="Only csv exports are supported right now")
+    normalized_format = export_format.lower()
+    if normalized_format not in {"csv", "pdf"}:
+        raise HTTPException(status_code=400, detail="Only csv and pdf exports are supported right now")
 
     station_id, organization_id = resolve_report_scope(db, current_user, station_id, organization_id)
     report_data = _build_report_data(db, report_type, station_id, organization_id, report_date, from_date, to_date)
-    csv_text = _render_csv(report_type, report_data)
-    file_name = f"{report_type}_{station_id or organization_id or 'global'}.csv"
+    if normalized_format == "pdf":
+        rendered_text = _render_pdf(report_type, report_data)
+        file_name = f"{report_type}_{station_id or organization_id or 'global'}.pdf"
+        content_type = "application/pdf"
+    else:
+        rendered_text = _render_csv(report_type, report_data)
+        file_name = f"{report_type}_{station_id or organization_id or 'global'}.csv"
+        content_type = "text/csv"
     filters = {
         "station_id": station_id,
         "organization_id": organization_id,
@@ -147,15 +200,15 @@ def create_report_export_job(
 
     job = ReportExportJob(
         report_type=report_type,
-        format="csv",
+        format=normalized_format,
         status="completed",
         station_id=station_id,
         organization_id=organization_id,
         requested_by_user_id=current_user.id,
         filters_json=json.dumps(filters, sort_keys=True),
         file_name=file_name,
-        content_type="text/csv",
-        content_text=csv_text,
+        content_type=content_type,
+        content_text=rendered_text,
     )
     db.add(job)
     db.flush()
@@ -177,7 +230,7 @@ def create_report_export_job(
         entity_id=job.id,
         title="Report export ready",
         message=f"Your {report_type} export is ready to download.",
-        event_type="report_export.completed",
+        event_type=EVENT_REPORT_EXPORT_COMPLETED,
     )
     db.commit()
     db.refresh(job)
@@ -186,7 +239,7 @@ def create_report_export_job(
 
 def ensure_export_access(job: ReportExportJob, current_user: User) -> None:
     role_name = current_user.role.name
-    if role_name == "Admin":
+    if role_name == "MasterAdmin":
         return
     user_organization_id = current_user.station.organization_id if current_user.station else None
     if role_name == "HeadOffice":

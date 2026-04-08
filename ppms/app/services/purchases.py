@@ -15,7 +15,7 @@ from app.services.notifications import notify_approval_requested, notify_decisio
 
 
 def ensure_purchase_access(purchase: Purchase, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     station_id = purchase.tank.station_id
     if is_head_office_user(current_user):
@@ -30,7 +30,7 @@ def _validate_purchase_inputs(db: Session, data: PurchaseCreate, current_user: U
     tank = db.query(Tank).filter(Tank.id == data.tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
-    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != tank.station_id:
+    if not is_master_admin(current_user) and current_user.station_id != tank.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this tank")
 
     supplier = db.query(Supplier).filter(Supplier.id == data.supplier_id).first()
@@ -69,7 +69,7 @@ def _apply_purchase_effects(purchase: Purchase, tank: Tank, supplier: Supplier, 
 
 def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Purchase:
     tank, supplier, _, tanker, total_amount = _validate_purchase_inputs(db, data, current_user)
-    is_auto_approved = current_user.role.name in {"Admin", "HeadOffice", "StationAdmin", "Manager"} or is_master_admin(current_user)
+    is_auto_approved = current_user.role.name in {"HeadOffice", "StationAdmin", "Manager"} or is_master_admin(current_user)
 
     purchase = Purchase(
         supplier_id=data.supplier_id,
@@ -208,7 +208,7 @@ def reverse_purchase(db: Session, purchase: Purchase, current_user: User) -> Pur
     ensure_purchase_access(purchase, current_user)
     if purchase.status != "approved":
         raise HTTPException(status_code=400, detail="Only approved purchases can be reversed")
-    if purchase.reversal_request_status != "approved" and current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if purchase.reversal_request_status != "approved" and not is_master_admin(current_user):
         raise HTTPException(status_code=400, detail="Purchase reversal must be approved first")
     if purchase.is_reversed:
         raise HTTPException(status_code=400, detail="Purchase is already reversed")

@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.access import get_user_organization_id, is_head_office_user, require_station_access
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.models.employee_profile import EmployeeProfile
 from app.models.station import Station
 from app.models.user import User
@@ -12,7 +12,7 @@ def ensure_employee_profile_access(db: Session, station_id: int, current_user: U
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
-    if current_user.role.name in {"MasterAdmin", "Admin"} or current_user.is_platform_user:
+    if is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         if station.organization_id == get_user_organization_id(current_user):
@@ -33,14 +33,25 @@ def validate_linked_user(db: Session, *, linked_user_id: int | None, station_id:
     return user
 
 
+def resolve_staff_title(*, staff_type: str | None, staff_title: str | None) -> tuple[str, str]:
+    resolved_title = (staff_title or staff_type or "").strip()
+    if not resolved_title:
+        raise HTTPException(status_code=400, detail="Staff title is required")
+    return resolved_title, resolved_title
+
+
 def create_employee_profile(db: Session, *, data: EmployeeProfileCreate, current_user: User) -> EmployeeProfile:
     station = ensure_employee_profile_access(db, data.station_id, current_user)
     validate_linked_user(db, linked_user_id=data.linked_user_id, station_id=station.id, organization_id=station.organization_id)
     if data.can_login and data.linked_user_id is None:
         raise HTTPException(status_code=400, detail="Linked user is required when login access is enabled")
+    staff_type, staff_title = resolve_staff_title(staff_type=data.staff_type, staff_title=data.staff_title)
+    payload = data.model_dump()
+    payload["staff_type"] = staff_type
+    payload["staff_title"] = staff_title
     profile = EmployeeProfile(
         organization_id=station.organization_id,
-        **data.model_dump(),
+        **payload,
     )
     db.add(profile)
     db.commit()
@@ -63,6 +74,13 @@ def update_employee_profile(
     can_login = updates.get("can_login", profile.can_login)
     if can_login and linked_user_id is None:
         raise HTTPException(status_code=400, detail="Linked user is required when login access is enabled")
+    if "staff_type" in updates or "staff_title" in updates:
+        staff_type, staff_title = resolve_staff_title(
+            staff_type=updates.get("staff_type", profile.staff_type),
+            staff_title=updates.get("staff_title", profile.staff_title or profile.staff_type),
+        )
+        updates["staff_type"] = staff_type
+        updates["staff_title"] = staff_title
     updates["organization_id"] = station.organization_id
     for field, value in updates.items():
         setattr(profile, field, value)

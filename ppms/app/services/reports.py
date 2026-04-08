@@ -11,6 +11,8 @@ from app.models.internal_fuel_usage import InternalFuelUsage
 from app.models.nozzle import Nozzle
 from app.models.pos_sale import POSSale
 from app.models.purchase import Purchase
+from app.models.payroll_line import PayrollLine
+from app.models.payroll_run import PayrollRun
 from app.models.shift import Shift
 from app.models.station import Station
 from app.models.supplier import Supplier
@@ -19,6 +21,10 @@ from app.models.tank import Tank
 from app.models.tanker_delivery import TankerDelivery
 from app.models.tanker_trip import TankerTrip
 from app.models.tanker_trip_expense import TankerTripExpense
+from app.models.audit_log import AuditLog
+
+
+STANDARD_REPORT_FILTERS = ["date_range", "station", "fuel_type", "staff_user", "status"]
 
 
 def _day_bounds(report_date: date) -> tuple[datetime, datetime]:
@@ -116,6 +122,8 @@ def build_shift_variance_report(
     from_date: date | None,
     to_date: date | None,
     organization_id: int | None = None,
+    user_id: int | None = None,
+    status: str | None = None,
 ) -> dict:
     query = db.query(Shift).filter(Shift.status == "closed")
     if station_id is not None:
@@ -126,6 +134,10 @@ def build_shift_variance_report(
         query = query.filter(Shift.end_time >= from_date)
     if to_date:
         query = query.filter(Shift.end_time < to_date)
+    if user_id is not None:
+        query = query.filter(Shift.user_id == user_id)
+    if status is not None:
+        query = query.filter(Shift.status == status)
 
     shifts = query.order_by(Shift.end_time.desc()).all()
     items = [
@@ -157,12 +169,15 @@ def build_stock_movement_report(
     from_date: date | None,
     to_date: date | None,
     organization_id: int | None = None,
+    fuel_type_id: int | None = None,
 ) -> dict:
     tanks_query = db.query(Tank)
     if station_id is not None:
         tanks_query = tanks_query.filter(Tank.station_id == station_id)
     elif organization_id is not None:
         tanks_query = tanks_query.join(Station, Station.id == Tank.station_id).filter(Station.organization_id == organization_id)
+    if fuel_type_id is not None:
+        tanks_query = tanks_query.filter(Tank.fuel_type_id == fuel_type_id)
 
     items = []
     for tank in tanks_query.order_by(Tank.id.asc()).all():
@@ -319,6 +334,9 @@ def build_tanker_delivery_report(
     from_date: date | None,
     to_date: date | None,
     organization_id: int | None = None,
+    fuel_type_id: int | None = None,
+    status: str | None = None,
+    user_id: int | None = None,
 ) -> dict:
     query = db.query(TankerDelivery).join(TankerTrip, TankerTrip.id == TankerDelivery.trip_id)
     if station_id is not None:
@@ -329,6 +347,12 @@ def build_tanker_delivery_report(
         query = query.filter(TankerDelivery.created_at >= from_date)
     if to_date:
         query = query.filter(TankerDelivery.created_at < to_date)
+    if fuel_type_id is not None:
+        query = query.filter(TankerDelivery.fuel_type_id == fuel_type_id)
+    if status is not None:
+        query = query.filter(TankerTrip.status == status)
+    if user_id is not None:
+        query = query.filter(TankerDelivery.customer_id == user_id)
 
     deliveries = query.order_by(TankerDelivery.created_at.desc(), TankerDelivery.id.desc()).all()
     items = [
@@ -367,6 +391,7 @@ def build_tanker_expense_report(
     from_date: date | None,
     to_date: date | None,
     organization_id: int | None = None,
+    status: str | None = None,
 ) -> dict:
     query = db.query(TankerTripExpense).join(TankerTrip, TankerTrip.id == TankerTripExpense.trip_id)
     if station_id is not None:
@@ -377,6 +402,8 @@ def build_tanker_expense_report(
         query = query.filter(TankerTripExpense.created_at >= from_date)
     if to_date:
         query = query.filter(TankerTripExpense.created_at < to_date)
+    if status is not None:
+        query = query.filter(TankerTrip.status == status)
 
     expenses = query.order_by(TankerTripExpense.created_at.desc(), TankerTripExpense.id.desc()).all()
     items = [
@@ -494,4 +521,164 @@ def build_profit_summary(
         "total_internal_fuel_cost": round(internal_fuel_cost, 2),
         "gross_margin": round(gross_margin, 2),
         "net_profit": round(net_profit, 2),
+    }
+
+
+def build_staff_payroll_summary_report(
+    db: Session,
+    station_id: int | None,
+    from_date: date | None,
+    to_date: date | None,
+    organization_id: int | None = None,
+    user_id: int | None = None,
+    status: str | None = None,
+) -> dict:
+    query = db.query(PayrollRun).join(Station, Station.id == PayrollRun.station_id)
+    if station_id is not None:
+        query = query.filter(PayrollRun.station_id == station_id)
+    elif organization_id is not None:
+        query = query.filter(Station.organization_id == organization_id)
+    if from_date is not None:
+        query = query.filter(PayrollRun.period_start >= from_date)
+    if to_date is not None:
+        query = query.filter(PayrollRun.period_end <= to_date)
+    if status is not None:
+        query = query.filter(PayrollRun.status == status)
+
+    runs = query.order_by(PayrollRun.period_end.desc(), PayrollRun.id.desc()).all()
+    run_ids = [run.id for run in runs]
+    lines_query = db.query(PayrollLine).filter(PayrollLine.payroll_run_id.in_(run_ids)) if run_ids else db.query(PayrollLine).filter(False)
+    if user_id is not None:
+        lines_query = lines_query.filter(PayrollLine.user_id == user_id)
+    lines = lines_query.all()
+    lines_by_run: dict[int, list[PayrollLine]] = {}
+    for line in lines:
+        lines_by_run.setdefault(line.payroll_run_id, []).append(line)
+
+    items = []
+    for run in runs:
+        run_lines = lines_by_run.get(run.id, [])
+        if user_id is not None and not run_lines:
+            continue
+        items.append(
+            {
+                "payroll_run_id": run.id,
+                "station_id": run.station_id,
+                "status": run.status,
+                "period_start": run.period_start,
+                "period_end": run.period_end,
+                "staff_count": len(run_lines) if user_id is not None else run.total_staff,
+                "gross_amount": round(sum(line.gross_amount or 0.0 for line in run_lines), 2) if user_id is not None else round(run.total_gross_amount or 0.0, 2),
+                "deductions": round(sum(line.deductions or 0.0 for line in run_lines), 2) if user_id is not None else round(run.total_deductions or 0.0, 2),
+                "net_amount": round(sum(line.net_amount or 0.0 for line in run_lines), 2) if user_id is not None else round(run.total_net_amount or 0.0, 2),
+            }
+        )
+
+    return {
+        "station_id": station_id,
+        "organization_id": organization_id,
+        "count": len(items),
+        "total_gross_amount": round(sum(item["gross_amount"] for item in items), 2),
+        "total_deductions": round(sum(item["deductions"] for item in items), 2),
+        "total_net_amount": round(sum(item["net_amount"] for item in items), 2),
+        "items": items,
+    }
+
+
+def build_exception_variance_report(
+    db: Session,
+    station_id: int | None,
+    from_date: date | None,
+    to_date: date | None,
+    organization_id: int | None = None,
+    user_id: int | None = None,
+    status: str | None = None,
+) -> dict:
+    items: list[dict] = []
+
+    shift_query = db.query(Shift).filter(Shift.status == "closed")
+    if station_id is not None:
+        shift_query = shift_query.filter(Shift.station_id == station_id)
+    elif organization_id is not None:
+        shift_query = shift_query.join(Station, Station.id == Shift.station_id).filter(Station.organization_id == organization_id)
+    if from_date is not None:
+        shift_query = shift_query.filter(Shift.end_time >= from_date)
+    if to_date is not None:
+        shift_query = shift_query.filter(Shift.end_time < to_date)
+    if user_id is not None:
+        shift_query = shift_query.filter(Shift.user_id == user_id)
+    for shift in shift_query.all():
+        difference = round(shift.difference or 0.0, 2)
+        if difference != 0:
+            items.append(
+                {
+                    "category": "cash_variance",
+                    "severity": "medium" if abs(difference) < 500 else "high",
+                    "station_id": shift.station_id,
+                    "entity_type": "shift",
+                    "entity_id": shift.id,
+                    "status": shift.status,
+                    "amount": difference,
+                    "created_at": shift.end_time,
+                    "detail": f"Shift #{shift.id} closed with cash variance {difference}.",
+                }
+            )
+
+    customer_query = db.query(Customer)
+    if station_id is not None:
+        customer_query = customer_query.filter(Customer.station_id == station_id)
+    elif organization_id is not None:
+        customer_query = customer_query.join(Station, Station.id == Customer.station_id).filter(Station.organization_id == organization_id)
+    for customer in customer_query.all():
+        if (customer.credit_limit or 0.0) > 0 and (customer.outstanding_balance or 0.0) > customer.credit_limit:
+            items.append(
+                {
+                    "category": "credit_limit_breach",
+                    "severity": "high",
+                    "station_id": customer.station_id,
+                    "entity_type": "customer",
+                    "entity_id": customer.id,
+                    "status": "open",
+                    "amount": round(customer.outstanding_balance - customer.credit_limit, 2),
+                    "created_at": None,
+                    "detail": f"{customer.name} exceeded credit limit.",
+                }
+            )
+
+    audit_query = db.query(AuditLog)
+    if station_id is not None:
+        audit_query = audit_query.filter(AuditLog.station_id == station_id)
+    elif organization_id is not None:
+        audit_query = audit_query.join(Station, Station.id == AuditLog.station_id).filter(Station.organization_id == organization_id)
+    if from_date is not None:
+        audit_query = audit_query.filter(AuditLog.created_at >= from_date)
+    if to_date is not None:
+        audit_query = audit_query.filter(AuditLog.created_at < to_date)
+    if user_id is not None:
+        audit_query = audit_query.filter(AuditLog.user_id == user_id)
+    unusual_actions = {"customer_payments.delete", "supplier_payments.delete", "expenses.delete", "tankers.delivery_payment_create"}
+    for log in audit_query.all():
+        if log.action in unusual_actions:
+            items.append(
+                {
+                    "category": "unusual_edit_or_removal",
+                    "severity": "medium",
+                    "station_id": log.station_id,
+                    "entity_type": log.entity_type,
+                    "entity_id": log.entity_id,
+                    "status": "logged",
+                    "amount": None,
+                    "created_at": log.created_at,
+                    "detail": f"Audit action {log.action} was recorded.",
+                }
+            )
+
+    if status is not None:
+        items = [item for item in items if item["status"] == status]
+    items.sort(key=lambda item: (item["created_at"] is None, item["created_at"]), reverse=True)
+    return {
+        "station_id": station_id,
+        "organization_id": organization_id,
+        "count": len(items),
+        "items": items,
     }

@@ -61,7 +61,7 @@ def list_devices(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(HardwareDevice)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         pass
     elif is_head_office_user(current_user):
         organization_id = get_user_organization_id(current_user)
@@ -160,7 +160,7 @@ def list_events(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(HardwareEvent)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         pass
     elif is_head_office_user(current_user):
         organization_id = get_user_organization_id(current_user)

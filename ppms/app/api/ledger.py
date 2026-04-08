@@ -50,7 +50,7 @@ def _serialize_summary(
 
 def _ensure_customer_access(db: Session, *, customer: Customer, current_user: User) -> Station | None:
     station = db.query(Station).filter(Station.id == customer.station_id).first()
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return station
     if is_head_office_user(current_user):
         if station and station.organization_id == get_user_organization_id(current_user):
@@ -116,7 +116,7 @@ def _resolve_supplier_station_scope(
     station_id: int | None,
     current_user: User,
 ) -> Station | None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         if station_id is None:
             return None
         station = db.query(Station).filter(Station.id == station_id).first()
@@ -173,7 +173,7 @@ def _build_supplier_entries(
             .filter(Station.organization_id == organization_id)
         )
         payment_query = payment_query.join(Station, Station.id == SupplierPayment.station_id).filter(Station.organization_id == organization_id)
-    elif current_user.role.name not in {"Admin", "MasterAdmin"} and not is_master_admin(current_user):
+    elif not is_master_admin(current_user):
         purchase_query = purchase_query.join(Tank, Tank.id == Purchase.tank_id).filter(Tank.station_id == current_user.station_id)
         payment_query = payment_query.filter(SupplierPayment.station_id == current_user.station_id)
 
@@ -305,7 +305,7 @@ def supplier_ledger_summary(
     total_payments = sum(abs(float(entry["amount"])) for entry in entries if float(entry["amount"]) < 0)
     last_activity_at = entries[-1]["date"] if entries else None
     current_balance = entries[-1]["balance"] if entries else 0.0
-    if resolved_station_id is None and (current_user.role.name == "Admin" or is_master_admin(current_user)):
+    if resolved_station_id is None and (is_master_admin(current_user)):
         current_balance = supplier.payable_balance or 0.0
     return _serialize_summary(
         party_id=supplier.id,
@@ -345,7 +345,7 @@ def supplier_ledger(
     total_payments = sum(abs(float(entry["amount"])) for entry in entries if float(entry["amount"]) < 0)
     last_activity_at = entries[-1]["date"] if entries else None
     current_balance = entries[-1]["balance"] if entries else 0.0
-    if resolved_station_id is None and (current_user.role.name == "Admin" or is_master_admin(current_user)):
+    if resolved_station_id is None and (is_master_admin(current_user)):
         current_balance = supplier.payable_balance or 0.0
     summary = _serialize_summary(
         party_id=supplier.id,

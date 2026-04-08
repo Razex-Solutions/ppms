@@ -31,7 +31,7 @@ def list_audit_logs(
     require_permission(current_user, "audit_logs", "read", detail="You do not have permission to view audit logs")
 
     query = db.query(AuditLog)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         if station_id is not None and organization_id is not None:
             station = db.query(Station).filter(Station.id == station_id).first()
             if not station or station.organization_id != organization_id:
@@ -51,7 +51,7 @@ def list_audit_logs(
 
     if station_id is not None:
         query = query.filter(AuditLog.station_id == station_id)
-    elif organization_id is not None and (current_user.role.name == "Admin" or is_master_admin(current_user)):
+    elif organization_id is not None and (is_master_admin(current_user)):
         query = query.join(Station, Station.id == AuditLog.station_id).filter(Station.organization_id == organization_id)
     if module:
         query = query.filter(AuditLog.module == module)
@@ -74,7 +74,7 @@ def get_audit_log(
     audit_log = db.query(AuditLog).filter(AuditLog.id == audit_log_id).first()
     if not audit_log:
         raise HTTPException(status_code=404, detail="Audit log not found")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return audit_log
     if is_head_office_user(current_user):
         user_organization_id = get_user_organization_id(current_user)

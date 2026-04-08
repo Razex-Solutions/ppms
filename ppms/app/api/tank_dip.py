@@ -37,7 +37,7 @@ def list_tank_dips(
     current_user = Depends(get_current_user)
 ):
     # Multi-tenancy check
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if not is_master_admin(current_user):
         station_id = current_user.station_id
 
     q = db.query(TankDip)

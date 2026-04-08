@@ -76,7 +76,7 @@ def list_attendance(
 ):
     require_permission(current_user, "attendance", "read", detail="You do not have permission to view attendance")
     query = db.query(AttendanceRecord)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         pass
     elif current_user.role.name == "HeadOffice":
         organization_id = current_user.organization_id or (current_user.station.organization_id if current_user.station else None)

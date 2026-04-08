@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import is_master_admin
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -14,6 +14,7 @@ from app.schemas.tanker import (
     TankerCompartmentResponse,
     TankerCompartmentUpdate,
     TankerDeliveryCreate,
+    TankerDeliveryPaymentCreate,
     TankerResponse,
     TankerTripComplete,
     TankerTripCreate,
@@ -26,6 +27,7 @@ from app.services.station_modules import require_station_module_enabled
 from app.services.tanker_ops import (
     MODULE_NAME,
     add_trip_delivery,
+    add_trip_delivery_payment,
     add_trip_expense,
     apply_tanker_scope,
     build_tanker_workspace_summary,
@@ -41,26 +43,26 @@ router = APIRouter(prefix="/tankers", tags=["Tankers"])
 
 
 def _ensure_tanker_access(tanker: Tanker, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
-    if current_user.role.name == "HeadOffice":
-        user_organization_id = current_user.station.organization_id if current_user.station else None
-        if tanker.station.organization_id == user_organization_id:
+    if is_head_office_user(current_user):
+        user_organization_id = get_user_organization_id(current_user)
+        if tanker.organization_id == user_organization_id:
             return
         raise HTTPException(status_code=403, detail="Not authorized for this tanker")
-    if current_user.station_id != tanker.station_id:
+    if current_user.station_id != tanker.station_id or tanker.organization_id != get_user_organization_id(current_user):
         raise HTTPException(status_code=403, detail="Not authorized for this tanker")
 
 
 def _ensure_trip_access(trip: TankerTrip, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
-    if current_user.role.name == "HeadOffice":
-        user_organization_id = current_user.station.organization_id if current_user.station else None
-        if trip.station.organization_id == user_organization_id:
+    if is_head_office_user(current_user):
+        user_organization_id = get_user_organization_id(current_user)
+        if trip.organization_id == user_organization_id:
             return
         raise HTTPException(status_code=403, detail="Not authorized for this trip")
-    if current_user.station_id != trip.station_id:
+    if current_user.station_id != trip.station_id or trip.organization_id != get_user_organization_id(current_user):
         raise HTTPException(status_code=403, detail="Not authorized for this trip")
 
 
@@ -86,11 +88,10 @@ def list_trips(
 ):
     require_permission(current_user, "tankers", "read", detail="You do not have permission to view tanker trips")
     query = db.query(TankerTrip)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         pass
-    elif current_user.role.name == "HeadOffice":
-        user_organization_id = current_user.station.organization_id if current_user.station else None
-        query = query.join(TankerTrip.station).filter(TankerTrip.station.has(organization_id=user_organization_id))
+    elif is_head_office_user(current_user):
+        query = query.filter(TankerTrip.organization_id == get_user_organization_id(current_user))
     else:
         station_id = current_user.station_id
     if station_id:
@@ -167,6 +168,21 @@ def add_expense(
     return add_trip_expense(db, trip, data, current_user)
 
 
+@router.post("/trips/{trip_id}/deliveries/{delivery_id}/payments", response_model=TankerTripResponse)
+def add_delivery_payment(
+    trip_id: int,
+    delivery_id: int,
+    data: TankerDeliveryPaymentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "tankers", "delivery_create", detail="You do not have permission to record tanker payments")
+    trip = db.query(TankerTrip).filter(TankerTrip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Tanker trip not found")
+    return add_trip_delivery_payment(db, trip, delivery_id, data, current_user)
+
+
 @router.post("/trips/{trip_id}/complete", response_model=TankerTripResponse)
 def complete_trip_route(
     trip_id: int,
@@ -208,11 +224,10 @@ def list_tankers(
 ):
     require_permission(current_user, "tankers", "read", detail="You do not have permission to view tankers")
     query = db.query(Tanker)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         pass
-    elif current_user.role.name == "HeadOffice":
-        user_organization_id = current_user.station.organization_id if current_user.station else None
-        query = query.join(Tanker.station).filter(Tanker.station.has(organization_id=user_organization_id))
+    elif is_head_office_user(current_user):
+        query = query.filter(Tanker.organization_id == get_user_organization_id(current_user))
     else:
         station_id = current_user.station_id
     if station_id:

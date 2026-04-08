@@ -11,7 +11,7 @@ from app.services.audit import log_audit_event
 
 
 def ensure_internal_fuel_usage_access(record: InternalFuelUsage, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         if record.station.organization_id == get_user_organization_id(current_user):
@@ -30,7 +30,7 @@ def create_internal_fuel_usage(
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
 
-    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != tank.station_id:
+    if not is_master_admin(current_user) and current_user.station_id != tank.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this tank")
 
     fuel_type = db.query(FuelType).filter(FuelType.id == data.fuel_type_id).first()

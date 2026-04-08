@@ -9,14 +9,14 @@ from app.models.station import Station
 from app.models.supplier import Supplier
 from app.models.supplier_payment import SupplierPayment
 from app.models.user import User
-from app.schemas.customer_payment import CustomerPaymentCreate
-from app.schemas.supplier_payment import SupplierPaymentCreate
+from app.schemas.customer_payment import CustomerPaymentCreate, CustomerPaymentUpdate
+from app.schemas.supplier_payment import SupplierPaymentCreate, SupplierPaymentUpdate
 from app.services.audit import log_audit_event
 from app.services.notifications import notify_approval_requested, notify_decision
 
 
 def ensure_customer_payment_access(payment: CustomerPayment, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         station = payment.customer.station if hasattr(payment, "customer") and payment.customer else None
@@ -30,7 +30,7 @@ def ensure_customer_payment_access(payment: CustomerPayment, current_user: User)
 
 
 def ensure_supplier_payment_access(payment: SupplierPayment, current_user: User) -> None:
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         station = payment.station
@@ -42,7 +42,7 @@ def ensure_supplier_payment_access(payment: SupplierPayment, current_user: User)
 
 
 def create_customer_payment(db: Session, data: CustomerPaymentCreate, current_user: User) -> CustomerPayment:
-    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
+    if not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
@@ -86,9 +86,101 @@ def create_customer_payment(db: Session, data: CustomerPaymentCreate, current_us
     return payment
 
 
+def update_customer_payment(
+    db: Session,
+    payment: CustomerPayment,
+    data: CustomerPaymentUpdate,
+    current_user: User,
+) -> CustomerPayment:
+    ensure_customer_payment_access(payment, current_user)
+    if payment.is_reversed:
+        raise HTTPException(status_code=400, detail="Reversed customer payments cannot be edited")
+
+    customer = db.query(Customer).filter(Customer.id == payment.customer_id).first()
+    if customer is None:
+        raise HTTPException(status_code=400, detail="Customer record is missing")
+
+    before = {
+        "amount": payment.amount,
+        "payment_method": payment.payment_method,
+        "reference_no": payment.reference_no,
+        "notes": payment.notes,
+        "outstanding_balance": customer.outstanding_balance,
+    }
+    updates = data.model_dump(exclude_unset=True)
+    new_amount = updates.get("amount", payment.amount)
+    if new_amount is None or new_amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
+
+    outstanding_before_payment = round((customer.outstanding_balance or 0.0) + payment.amount, 2)
+    if new_amount > outstanding_before_payment:
+        raise HTTPException(status_code=400, detail="Updated payment exceeds outstanding balance")
+
+    customer.outstanding_balance = round(outstanding_before_payment - new_amount, 2)
+    payment.amount = new_amount
+    if "payment_method" in updates:
+        payment.payment_method = updates["payment_method"]
+    if "reference_no" in updates:
+        payment.reference_no = updates["reference_no"]
+    if "notes" in updates:
+        payment.notes = updates["notes"]
+
+    after = {
+        "amount": payment.amount,
+        "payment_method": payment.payment_method,
+        "reference_no": payment.reference_no,
+        "notes": payment.notes,
+        "outstanding_balance": customer.outstanding_balance,
+    }
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="customer_payments",
+        action="customer_payments.update",
+        entity_type="customer_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"before": before, "after": after},
+    )
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+def delete_customer_payment(db: Session, payment: CustomerPayment, current_user: User) -> None:
+    ensure_customer_payment_access(payment, current_user)
+    if payment.is_reversed:
+        raise HTTPException(status_code=400, detail="Reversed customer payments cannot be deleted")
+
+    customer = db.query(Customer).filter(Customer.id == payment.customer_id).first()
+    if customer is None:
+        raise HTTPException(status_code=400, detail="Customer record is missing")
+
+    before = {
+        "amount": payment.amount,
+        "payment_method": payment.payment_method,
+        "reference_no": payment.reference_no,
+        "notes": payment.notes,
+        "outstanding_balance": customer.outstanding_balance,
+    }
+    customer.outstanding_balance = round((customer.outstanding_balance or 0.0) + payment.amount, 2)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="customer_payments",
+        action="customer_payments.delete",
+        entity_type="customer_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"before": before, "after_outstanding_balance": customer.outstanding_balance},
+    )
+    db.delete(payment)
+    db.commit()
+
+
 def reverse_customer_payment(db: Session, payment: CustomerPayment, current_user: User) -> CustomerPayment:
     ensure_customer_payment_access(payment, current_user)
-    if payment.reversal_request_status != "approved" and current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if payment.reversal_request_status != "approved" and not is_master_admin(current_user):
         raise HTTPException(status_code=400, detail="Customer payment reversal must be approved first")
     if payment.is_reversed:
         raise HTTPException(status_code=400, detail="Customer payment is already reversed")
@@ -227,7 +319,7 @@ def reject_customer_payment_reversal(db: Session, payment: CustomerPayment, curr
 
 
 def create_supplier_payment(db: Session, data: SupplierPaymentCreate, current_user: User) -> SupplierPayment:
-    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
+    if not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
@@ -269,9 +361,101 @@ def create_supplier_payment(db: Session, data: SupplierPaymentCreate, current_us
     return payment
 
 
+def update_supplier_payment(
+    db: Session,
+    payment: SupplierPayment,
+    data: SupplierPaymentUpdate,
+    current_user: User,
+) -> SupplierPayment:
+    ensure_supplier_payment_access(payment, current_user)
+    if payment.is_reversed:
+        raise HTTPException(status_code=400, detail="Reversed supplier payments cannot be edited")
+
+    supplier = db.query(Supplier).filter(Supplier.id == payment.supplier_id).first()
+    if supplier is None:
+        raise HTTPException(status_code=400, detail="Supplier record is missing")
+
+    before = {
+        "amount": payment.amount,
+        "payment_method": payment.payment_method,
+        "reference_no": payment.reference_no,
+        "notes": payment.notes,
+        "payable_balance": supplier.payable_balance,
+    }
+    updates = data.model_dump(exclude_unset=True)
+    new_amount = updates.get("amount", payment.amount)
+    if new_amount is None or new_amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
+
+    payable_before_payment = round((supplier.payable_balance or 0.0) + payment.amount, 2)
+    if new_amount > payable_before_payment:
+        raise HTTPException(status_code=400, detail="Updated payment exceeds payable balance")
+
+    supplier.payable_balance = round(payable_before_payment - new_amount, 2)
+    payment.amount = new_amount
+    if "payment_method" in updates:
+        payment.payment_method = updates["payment_method"]
+    if "reference_no" in updates:
+        payment.reference_no = updates["reference_no"]
+    if "notes" in updates:
+        payment.notes = updates["notes"]
+
+    after = {
+        "amount": payment.amount,
+        "payment_method": payment.payment_method,
+        "reference_no": payment.reference_no,
+        "notes": payment.notes,
+        "payable_balance": supplier.payable_balance,
+    }
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="supplier_payments",
+        action="supplier_payments.update",
+        entity_type="supplier_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"before": before, "after": after},
+    )
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+def delete_supplier_payment(db: Session, payment: SupplierPayment, current_user: User) -> None:
+    ensure_supplier_payment_access(payment, current_user)
+    if payment.is_reversed:
+        raise HTTPException(status_code=400, detail="Reversed supplier payments cannot be deleted")
+
+    supplier = db.query(Supplier).filter(Supplier.id == payment.supplier_id).first()
+    if supplier is None:
+        raise HTTPException(status_code=400, detail="Supplier record is missing")
+
+    before = {
+        "amount": payment.amount,
+        "payment_method": payment.payment_method,
+        "reference_no": payment.reference_no,
+        "notes": payment.notes,
+        "payable_balance": supplier.payable_balance,
+    }
+    supplier.payable_balance = round((supplier.payable_balance or 0.0) + payment.amount, 2)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="supplier_payments",
+        action="supplier_payments.delete",
+        entity_type="supplier_payment",
+        entity_id=payment.id,
+        station_id=payment.station_id,
+        details={"before": before, "after_payable_balance": supplier.payable_balance},
+    )
+    db.delete(payment)
+    db.commit()
+
+
 def reverse_supplier_payment(db: Session, payment: SupplierPayment, current_user: User) -> SupplierPayment:
     ensure_supplier_payment_access(payment, current_user)
-    if payment.reversal_request_status != "approved" and current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if payment.reversal_request_status != "approved" and not is_master_admin(current_user):
         raise HTTPException(status_code=400, detail="Supplier payment reversal must be approved first")
     if payment.is_reversed:
         raise HTTPException(status_code=400, detail="Supplier payment is already reversed")

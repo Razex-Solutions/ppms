@@ -7,12 +7,14 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.supplier_payment import SupplierPayment
-from app.schemas.supplier_payment import ReversalRequest, SupplierPaymentCreate, SupplierPaymentResponse
+from app.schemas.supplier_payment import ReversalRequest, SupplierPaymentCreate, SupplierPaymentResponse, SupplierPaymentUpdate
 from app.services.payments import approve_supplier_payment_reversal as approve_supplier_payment_reversal_service
 from app.services.payments import create_supplier_payment as create_supplier_payment_service
+from app.services.payments import delete_supplier_payment as delete_supplier_payment_service
 from app.services.payments import ensure_supplier_payment_access, reverse_supplier_payment as reverse_supplier_payment_service
 from app.services.payments import reject_supplier_payment_reversal as reject_supplier_payment_reversal_service
 from app.services.payments import request_supplier_payment_reversal as request_supplier_payment_reversal_service
+from app.services.payments import update_supplier_payment as update_supplier_payment_service
 
 router = APIRouter(prefix="/supplier-payments", tags=["Supplier Payments"])
 
@@ -39,7 +41,7 @@ def list_supplier_payments(
     current_user = Depends(get_current_user)
 ):
     # Multi-tenancy check
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if not is_master_admin(current_user):
         station_id = current_user.station_id
 
     q = db.query(SupplierPayment)
@@ -68,6 +70,34 @@ def get_supplier_payment(
     return payment
 
 
+@router.put("/{payment_id}", response_model=SupplierPaymentResponse)
+def update_supplier_payment(
+    payment_id: int,
+    data: SupplierPaymentUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    payment = db.query(SupplierPayment).filter(SupplierPayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Supplier payment not found")
+    require_permission(current_user, "supplier_payments", "update", detail="You do not have permission to update supplier payments")
+    return update_supplier_payment_service(db, payment, data, current_user)
+
+
+@router.delete("/{payment_id}")
+def delete_supplier_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    payment = db.query(SupplierPayment).filter(SupplierPayment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Supplier payment not found")
+    require_permission(current_user, "supplier_payments", "delete", detail="You do not have permission to delete supplier payments")
+    delete_supplier_payment_service(db, payment, current_user)
+    return {"message": "Supplier payment deleted"}
+
+
 @router.post("/{payment_id}/reverse", response_model=SupplierPaymentResponse)
 def reverse_supplier_payment(
     payment_id: int,
@@ -80,7 +110,7 @@ def reverse_supplier_payment(
         raise HTTPException(status_code=404, detail="Supplier payment not found")
 
     require_permission(current_user, "supplier_payments", "reverse", detail="You do not have permission to reverse supplier payments")
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return reverse_supplier_payment_service(db, payment, current_user)
     return request_supplier_payment_reversal_service(db, payment, current_user, data.reason if data else None)
 

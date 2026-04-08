@@ -20,7 +20,7 @@ def _get_station(db: Session, station_id: int) -> Station:
 
 def _ensure_expense_read_access(db: Session, expense: Expense, current_user: User) -> None:
     station = _get_station(db, expense.station_id)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user):
         if station.organization_id != get_user_organization_id(current_user):
@@ -32,7 +32,7 @@ def _ensure_expense_read_access(db: Session, expense: Expense, current_user: Use
 
 def _ensure_expense_approval_access(db: Session, expense: Expense, current_user: User) -> None:
     station = _get_station(db, expense.station_id)
-    if current_user.role.name == "Admin" or is_master_admin(current_user):
+    if is_master_admin(current_user):
         return
     if is_head_office_user(current_user) and station.organization_id == get_user_organization_id(current_user):
         return
@@ -41,7 +41,7 @@ def _ensure_expense_approval_access(db: Session, expense: Expense, current_user:
 
 def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expense:
     station = _get_station(db, data.station_id)
-    if current_user.role.name != "Admin" and not is_master_admin(current_user) and current_user.station_id != data.station_id:
+    if not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
@@ -81,15 +81,25 @@ def create_expense(db: Session, data: ExpenseCreate, current_user: User) -> Expe
 
 
 def update_expense(expense: Expense, data: ExpenseUpdate, db: Session, current_user: User | None = None) -> Expense:
-    if expense.status != "pending":
-        raise HTTPException(status_code=400, detail="Only pending expenses can be updated")
+    before = {
+        "title": expense.title,
+        "category": expense.category,
+        "amount": expense.amount,
+        "notes": expense.notes,
+        "status": expense.status,
+    }
     updates = data.model_dump(exclude_unset=True)
     if "amount" in updates and updates["amount"] is not None and updates["amount"] <= 0:
         raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
     for field, value in updates.items():
         setattr(expense, field, value)
-    expense.rejected_at = None
-    expense.rejection_reason = None
+    after = {
+        "title": expense.title,
+        "category": expense.category,
+        "amount": expense.amount,
+        "notes": expense.notes,
+        "status": expense.status,
+    }
     log_audit_event(
         db,
         current_user=current_user,
@@ -98,7 +108,7 @@ def update_expense(expense: Expense, data: ExpenseUpdate, db: Session, current_u
         entity_type="expense",
         entity_id=expense.id,
         station_id=expense.station_id,
-        details=updates,
+        details={"before": before, "after": after},
     )
     db.commit()
     db.refresh(expense)

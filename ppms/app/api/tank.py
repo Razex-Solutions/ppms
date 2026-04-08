@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.access import is_master_admin, require_station_access
+from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin, require_station_access
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
@@ -17,6 +17,14 @@ from app.schemas.tank import TankCreate, TankUpdate, TankResponse
 router = APIRouter(prefix="/tanks", tags=["Tanks"])
 
 
+def _require_tank_station_access(current_user: User, tank: Tank, db: Session, detail: str = "Not authorized for this tank") -> None:
+    if is_head_office_user(current_user):
+        station = db.query(Station).filter(Station.id == tank.station_id).first()
+        if station and station.organization_id == get_user_organization_id(current_user):
+            return
+    require_station_access(current_user, tank.station_id, detail=detail)
+
+
 def _next_tank_index(db: Session, station_id: int) -> int:
     return db.query(Tank).filter(Tank.station_id == station_id).count() + 1
 
@@ -28,11 +36,15 @@ def create_tank(
     current_user: User = Depends(get_current_user)
 ):
     require_permission(current_user, "tanks", "create", detail="You do not have permission to create tanks")
-    require_station_access(current_user, tank_data.station_id)
 
     station = db.query(Station).filter(Station.id == tank_data.station_id).first()
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
+    if is_head_office_user(current_user):
+        if station.organization_id != get_user_organization_id(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized for this station")
+    else:
+        require_station_access(current_user, tank_data.station_id)
 
     fuel_type = db.query(FuelType).filter(FuelType.id == tank_data.fuel_type_id).first()
     if not fuel_type:
@@ -52,6 +64,7 @@ def create_tank(
         current_volume=tank_data.current_volume,
         low_stock_threshold=tank_data.low_stock_threshold,
         location=tank_data.location,
+        is_active=tank_data.is_active,
         station_id=tank_data.station_id,
         fuel_type_id=tank_data.fuel_type_id
     )
@@ -67,18 +80,27 @@ def list_tanks(
     limit: int = Query(50, ge=1, le=500),
     station_id: int | None = Query(None),
     fuel_type_id: int | None = Query(None),
+    include_inactive: bool = Query(False),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     q = db.query(Tank)
     
-    if current_user.role.name != "Admin" and not is_master_admin(current_user):
+    if is_head_office_user(current_user):
+        user_organization_id = get_user_organization_id(current_user)
+        q = q.join(Station, Station.id == Tank.station_id).filter(Station.organization_id == user_organization_id)
+        if station_id is not None:
+            q = q.filter(Tank.station_id == station_id)
+    elif not is_master_admin(current_user):
         station_id = current_user.station_id
-        
-    if station_id:
+        if station_id:
+            q = q.filter(Tank.station_id == station_id)
+    elif station_id:
         q = q.filter(Tank.station_id == station_id)
     if fuel_type_id:
         q = q.filter(Tank.fuel_type_id == fuel_type_id)
+    if not include_inactive:
+        q = q.filter(Tank.is_active.is_(True))
     return q.offset(skip).limit(limit).all()
 
 
@@ -91,7 +113,7 @@ def get_tank(
     tank = db.query(Tank).filter(Tank.id == tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
-    require_station_access(current_user, tank.station_id, detail="Not authorized for this tank")
+    _require_tank_station_access(current_user, tank, db, detail="Not authorized for this tank")
     return tank
 
 
@@ -105,10 +127,13 @@ def update_tank(
     tank = db.query(Tank).filter(Tank.id == tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
-    require_station_access(current_user, tank.station_id, detail="Not authorized for this tank")
+    _require_tank_station_access(current_user, tank, db, detail="Not authorized for this tank")
     require_permission(current_user, "tanks", "update", detail="You do not have permission to update tanks")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    for field, value in updates.items():
         setattr(tank, field, value)
+    if updates.get("is_active") is False:
+        db.query(Nozzle).filter(Nozzle.tank_id == tank.id).update({"is_active": False}, synchronize_session=False)
     db.commit()
     db.refresh(tank)
     return tank
@@ -123,13 +148,16 @@ def delete_tank(
     tank = db.query(Tank).filter(Tank.id == tank_id).first()
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
-    require_station_access(current_user, tank.station_id, detail="Not authorized for this tank")
+    _require_tank_station_access(current_user, tank, db, detail="Not authorized for this tank")
     require_permission(current_user, "tanks", "delete", detail="You do not have permission to delete tanks")
     has_nozzles = db.query(Nozzle).filter(Nozzle.tank_id == tank.id).first()
     has_purchases = db.query(Purchase).filter(Purchase.tank_id == tank.id).first()
     has_dips = db.query(TankDip).filter(TankDip.tank_id == tank.id).first()
     if has_nozzles or has_purchases or has_dips:
-        raise HTTPException(status_code=400, detail="Tank cannot be deleted while dependent records exist")
+        tank.is_active = False
+        db.query(Nozzle).filter(Nozzle.tank_id == tank.id).update({"is_active": False}, synchronize_session=False)
+        db.commit()
+        return {"message": "Tank deactivated because dependent records exist", "action": "deactivated"}
     db.delete(tank)
     db.commit()
     return {"message": "Tank deleted"}
