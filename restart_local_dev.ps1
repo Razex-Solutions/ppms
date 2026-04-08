@@ -2,17 +2,14 @@
 param(
     [switch]$SkipBackend,
     [switch]$SkipBackendLogs,
-    [switch]$SkipSupportConsole,
     [switch]$SkipFlutter,
     [switch]$SkipTenantPrep,
-    [string]$ApiBaseUrl = "http://127.0.0.1:8012",
-    [int]$SupportConsolePort = 3000
+    [string]$ApiBaseUrl = "http://127.0.0.1:8012"
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PythonExe = Join-Path $RepoRoot "venv\Scripts\python.exe"
-$SupportConsoleDir = Join-Path $RepoRoot "support_console"
 
 function Stop-PortListener {
     param([int]$Port)
@@ -60,12 +57,7 @@ function Start-DevWindow {
     Start-Process powershell.exe -ArgumentList @("-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $script) -WorkingDirectory $WorkingDirectory
 }
 
-Write-Host "Restarting PPMS local development stack from $RepoRoot"
-
-if (-not $SkipSupportConsole) {
-    Stop-ProcessByCommandLineMatch -Label "support console" -Needle $SupportConsoleDir
-    Stop-PortListener -Port $SupportConsolePort
-}
+Write-Host "Restarting PPMS local backend stack from $RepoRoot"
 
 if (-not $SkipFlutter) {
     Stop-ProcessByCommandLineMatch -Label "old Flutter PPMS Windows app" -Needle "ppms_flutter.exe"
@@ -92,11 +84,6 @@ if (-not $SkipBackend) {
         Write-Host "Preparing Phase 9 tenant test users..."
         & $PythonExe (Join-Path $RepoRoot "scripts\ensure_phase9_tenant.py")
     }
-}
-
-if (-not $SkipSupportConsole) {
-    Write-Host "Starting support console in a new window..."
-    Start-DevWindow -Title "PPMS Support Console" -WorkingDirectory $SupportConsoleDir -Command "npm.cmd run dev"
 }
 
 if (-not $SkipFlutter) {

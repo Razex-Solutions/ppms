@@ -50,7 +50,6 @@ What remains active for frontend planning:
 - role and module matrices
 - Phase 9 scenario runner
 - tenant UI API smoke automation
-- support console
 - documentation describing the product rules and rebuild direction
 
 Current Phase 9 tenant rebuild decision:

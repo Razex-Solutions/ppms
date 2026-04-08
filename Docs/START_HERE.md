@@ -2,9 +2,9 @@
 
 ## Current Note
 
-Both previous Flutter app folders were intentionally removed from the repository.
+The previous desktop app, support console, and Flutter app folders were intentionally removed from the repository.
 
-Keep using the backend, support console, scenario runner, matrix JSON files, and API smoke scripts as the active Phase 9 foundation while a new Flutter plan is defined.
+Keep using the backend, scenario runner, matrix JSON files, and API smoke scripts as the active Phase 9 foundation while a new frontend plan is defined.
 
 When returning to this project, use these files in this order:
 

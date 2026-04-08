@@ -190,14 +190,14 @@ cd C:\Fuel Management System
 .\restart_local_dev.ps1
 ```
 
-This restarts the backend, support console, and Flutter Windows app. It also opens support console and Flutter in separate PowerShell windows.
+This restarts the backend and opens the backend log monitor window.
 It opens a backend log monitor window too, so HTTP `200`, validation errors, authorization failures, and server errors are visible during manual testing.
 
 If you only need the backend:
 
 ```powershell
 cd C:\Fuel Management System
-.\restart_local_dev.ps1 -SkipSupportConsole -SkipFlutter
+.\restart_local_dev.ps1 -SkipFlutter
 ```
 
 Confirm backend health URL works:
@@ -206,14 +206,7 @@ Confirm backend health URL works:
 http://127.0.0.1:8012/health
 ```
 
-There is currently no Flutter app folder to run manually. Phase 9 work should use the backend, support console, scenario runner, and API smoke path until the new Flutter plan is committed.
-
-Manual support console command, only if the restart helper is not used:
-
-```powershell
-cd C:\Fuel Management System\support_console
-npm.cmd run dev
-```
+There is currently no Flutter app folder to run manually. Phase 9 work should use the backend, scenario runner, and API smoke path until the new frontend plan is committed.
 
 ## Test Accounts
 

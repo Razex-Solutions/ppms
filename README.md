@@ -134,34 +134,16 @@ The API will be available at `http://127.0.0.1:8000`.
 - **Interactive Documentation (Swagger UI)**: `http://127.0.0.1:8000/docs`
 - **Alternative Documentation (Redoc)**: `http://127.0.0.1:8000/redoc`
 
-## Desktop Client Foundation
+## Frontend Reset
 
-- The repository now includes a Windows-friendly desktop foundation in [desktop_app](/C:/Fuel%20Management%20System/desktop_app).
-- It is a lightweight Tkinter client that talks to the existing backend instead of duplicating business logic locally.
-- Current desktop foundation includes:
-  - backend URL login screen
-  - authenticated session handling with refresh-aware API calls
-  - module-aware navigation based on backend permissions
-  - live dashboard loading
-  - session visibility screen
-  - placeholders for sales, inventory, reports, attendance, payroll, notifications, and settings
-
-Run it with:
-
-```bash
-venv\Scripts\python.exe main.py
-```
-
-Or:
-
-```bash
-venv\Scripts\python.exe -m desktop_app.main
-```
+- The previous desktop app, Flutter apps, and support console were intentionally removed from the repository.
+- The backend and Phase 9 automation are now the active source of truth while a new frontend plan is defined.
+- Keep using the backend contracts, dataset runner, and API smoke flow as the stable base for the eventual rebuild.
 
 ## Flutter Reset
 
 - Both previous Flutter app folders were intentionally removed from the repository.
-- The backend, support console, and Phase 9 automation remain the active source of truth while a new Flutter plan is defined.
+- The backend and Phase 9 automation remain the active source of truth while a new frontend plan is defined.
 - Historical Flutter-related automation inputs are still kept under `scripts/` and `.github/workflows/` so a future rebuild can reuse the role matrix, API smoke, and dataset work.
 - Treat the current repository state as backend-first until a new frontend structure is agreed and committed.
 
