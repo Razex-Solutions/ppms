@@ -655,8 +655,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             _metricCard(
               context,
               context.l10n.text('receivingCard'),
-              dashboard.receivingAmount.toStringAsFixed(0),
               '${dashboard.receivingLiters.toStringAsFixed(0)} ${context.l10n.text('liters')}',
+              '${dashboard.receivingCount} ${context.l10n.text('entries')}',
             ),
             _metricCard(
               context,

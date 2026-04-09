@@ -909,6 +909,7 @@ class ManagerDashboardData {
       purchases.fold(0, (sum, item) => sum + item.totalAmount);
   double get receivingLiters =>
       purchases.fold(0, (sum, item) => sum + item.quantity);
+  int get receivingCount => purchases.length;
   double get expenseAmount =>
       expenses.fold(0, (sum, item) => sum + item.amount);
   double get recoveryAmount =>
