@@ -112,12 +112,20 @@ def get_tanker_summary(
     require_permission(current_user, "tankers", "read", detail="You do not have permission to view tanker summaries")
     if station_id is not None:
         tanker_query = db.query(Tanker)
-        tanker_query, scoped_station_id = apply_tanker_scope(tanker_query, Tanker, current_user)
+        tanker_query, _, scoped_station_id = apply_tanker_scope(
+            tanker_query,
+            Tanker,
+            current_user,
+        )
         effective_station_id = scoped_station_id or station_id
         tanker = tanker_query.filter(Tanker.station_id == effective_station_id).first()
         if tanker is None and scoped_station_id is None:
             station_trip_query = db.query(TankerTrip)
-            station_trip_query, _ = apply_tanker_scope(station_trip_query, TankerTrip, current_user)
+            station_trip_query, _, _ = apply_tanker_scope(
+                station_trip_query,
+                TankerTrip,
+                current_user,
+            )
             trip = station_trip_query.filter(TankerTrip.station_id == station_id).first()
             if trip is None:
                 raise HTTPException(status_code=403, detail="Not authorized for this station")

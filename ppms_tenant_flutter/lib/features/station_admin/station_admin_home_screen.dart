@@ -1,0 +1,2772 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import '../../app/localization/app_localizations.dart';
+import '../../app/session/session_controller.dart';
+import '../accountant/accountant_home_screen.dart';
+import '../manager/manager_home_screen.dart';
+import 'station_admin_repository.dart';
+
+enum StationAdminSection {
+  overview,
+  staff,
+  forecourt,
+  settings,
+  meter,
+  tanker,
+  operations,
+  finance,
+}
+
+enum StationAdminRangePreset { daily, weekly, monthly, yearly }
+
+class StationAdminHomeScreen extends ConsumerStatefulWidget {
+  const StationAdminHomeScreen({super.key});
+
+  @override
+  ConsumerState<StationAdminHomeScreen> createState() =>
+      _StationAdminHomeScreenState();
+}
+
+class _StationAdminHomeScreenState
+    extends ConsumerState<StationAdminHomeScreen> {
+  late Future<_StationAdminBundle> _bundleFuture;
+  StationAdminSection _selectedSection = StationAdminSection.overview;
+  StationAdminRangePreset _selectedRange = StationAdminRangePreset.monthly;
+  int? _selectedNozzleId;
+  String? _selectedTemplateType;
+  String? _actionMessage;
+  String? _actionError;
+
+  @override
+  void initState() {
+    super.initState();
+    _bundleFuture = _loadBundle();
+  }
+
+  Future<_StationAdminBundle> _loadBundle() async {
+    final session = ref.read(sessionControllerProvider).session;
+    final stationId = session?.stationId;
+    if (stationId == null) {
+      throw Exception('Station scope is required for StationAdmin workspace.');
+    }
+    final repo = ref.read(stationAdminRepositoryProvider);
+    final range = _resolveRange(_selectedRange);
+
+    final results = await Future.wait([
+      repo.getDashboard(
+        stationId: stationId,
+        fromDate: range.start,
+        toDate: range.end,
+      ),
+      repo.getStation(stationId),
+      repo.listStationModules(stationId),
+      repo.listRoles(),
+      repo.listUsers(stationId: stationId),
+      repo.listEmployeeProfiles(stationId: stationId),
+      repo.listFuelTypes(),
+      repo.listTanks(stationId: stationId),
+      repo.listDispensers(stationId: stationId),
+      repo.listNozzles(stationId: stationId),
+      _safeMap(() => repo.getInvoiceProfile(stationId)),
+      _safeList(() => repo.listDocumentTemplates(stationId)),
+      _safeMap(() => repo.getTankerSummary(stationId: stationId)),
+      _safeList(() => repo.listTankers(stationId: stationId)),
+      _safeList(() => repo.listTankerTrips(stationId: stationId)),
+    ]);
+
+    final bundle = _StationAdminBundle(
+      dashboard: results[0] as Map<String, dynamic>,
+      station: results[1] as Map<String, dynamic>,
+      stationModules: results[2] as List<Map<String, dynamic>>,
+      roles: results[3] as List<Map<String, dynamic>>,
+      users: results[4] as List<Map<String, dynamic>>,
+      employeeProfiles: results[5] as List<Map<String, dynamic>>,
+      fuelTypes: results[6] as List<Map<String, dynamic>>,
+      tanks: results[7] as List<Map<String, dynamic>>,
+      dispensers: results[8] as List<Map<String, dynamic>>,
+      nozzles: results[9] as List<Map<String, dynamic>>,
+      invoiceProfile: results[10] as Map<String, dynamic>,
+      documentTemplates: results[11] as List<Map<String, dynamic>>,
+      tankerSummary: results[12] as Map<String, dynamic>,
+      tankers: results[13] as List<Map<String, dynamic>>,
+      tankerTrips: results[14] as List<Map<String, dynamic>>,
+    );
+
+    _selectedNozzleId ??=
+        bundle.nozzles.isNotEmpty ? bundle.nozzles.first['id'] as int : null;
+    _selectedTemplateType ??= bundle.documentTemplates.isNotEmpty
+        ? bundle.documentTemplates.first['document_type'] as String?
+        : null;
+    return bundle;
+  }
+
+  Future<List<Map<String, dynamic>>> _safeList(
+    Future<List<Map<String, dynamic>>> Function() loader,
+  ) async {
+    try {
+      return await loader();
+    } on DioException {
+      return const [];
+    }
+  }
+
+  Future<Map<String, dynamic>> _safeMap(
+    Future<Map<String, dynamic>> Function() loader,
+  ) async {
+    try {
+      return await loader();
+    } on DioException {
+      return const <String, dynamic>{};
+    }
+  }
+
+  Future<void> _reloadAll() async {
+    setState(() {
+      _actionMessage = null;
+      _actionError = null;
+      _bundleFuture = _loadBundle();
+    });
+    await _bundleFuture;
+  }
+
+  Future<void> _performAction(
+    Future<void> Function() action, {
+    required String successMessage,
+  }) async {
+    final saveFailedLabel = context.l10n.text('saveFailed');
+    try {
+      await action();
+      if (!mounted) return;
+      setState(() {
+        _actionMessage = successMessage;
+        _actionError = null;
+      });
+      await _reloadAll();
+    } on DioException catch (error) {
+      final detail = error.response?.data is Map<String, dynamic>
+          ? ((error.response?.data as Map<String, dynamic>)['detail']
+                  ?.toString() ??
+              saveFailedLabel)
+          : saveFailedLabel;
+      if (!mounted) return;
+      setState(() {
+        _actionError = detail;
+        _actionMessage = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _actionError = saveFailedLabel;
+        _actionMessage = null;
+      });
+    }
+  }
+
+  _DateRange _resolveRange(StationAdminRangePreset preset) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    switch (preset) {
+      case StationAdminRangePreset.daily:
+        return _DateRange(
+          todayStart,
+          todayStart
+              .add(const Duration(days: 1))
+              .subtract(const Duration(milliseconds: 1)),
+        );
+      case StationAdminRangePreset.weekly:
+        final start = todayStart.subtract(Duration(days: now.weekday - 1));
+        return _DateRange(
+          start,
+          start
+              .add(const Duration(days: 7))
+              .subtract(const Duration(milliseconds: 1)),
+        );
+      case StationAdminRangePreset.monthly:
+        final start = DateTime(now.year, now.month, 1);
+        return _DateRange(
+          start,
+          DateTime(now.year, now.month + 1, 1)
+              .subtract(const Duration(milliseconds: 1)),
+        );
+      case StationAdminRangePreset.yearly:
+        final start = DateTime(now.year, 1, 1);
+        return _DateRange(
+          start,
+          DateTime(now.year + 1, 1, 1)
+              .subtract(const Duration(milliseconds: 1)),
+        );
+    }
+  }
+
+  String _money(num? value) => ((value ?? 0).toDouble()).toStringAsFixed(0);
+
+  String _dateLabel(String? raw) {
+    if (raw == null || raw.isEmpty) return '-';
+    return DateFormat('dd MMM yyyy').format(DateTime.parse(raw).toLocal());
+  }
+
+  String _rangeLabel(StationAdminRangePreset preset) {
+    switch (preset) {
+      case StationAdminRangePreset.daily:
+        return context.l10n.text('dailySummary');
+      case StationAdminRangePreset.weekly:
+        return context.l10n.text('weeklySummary');
+      case StationAdminRangePreset.monthly:
+        return context.l10n.text('monthlySummary');
+      case StationAdminRangePreset.yearly:
+        return context.l10n.text('yearlySummary');
+    }
+  }
+
+  String _sectionLabel(StationAdminSection section) {
+    switch (section) {
+      case StationAdminSection.overview:
+        return context.l10n.text('overview');
+      case StationAdminSection.staff:
+        return context.l10n.text('staffManagement');
+      case StationAdminSection.forecourt:
+        return context.l10n.text('forecourtManagement');
+      case StationAdminSection.settings:
+        return context.l10n.text('settingsLabel');
+      case StationAdminSection.meter:
+        return context.l10n.text('meterAdjustmentLabel');
+      case StationAdminSection.tanker:
+        return context.l10n.text('tankerWorkspace');
+      case StationAdminSection.operations:
+        return context.l10n.text('managerWorkspace');
+      case StationAdminSection.finance:
+        return context.l10n.text('accountantWorkspace');
+    }
+  }
+
+  Future<void> _changeRange(StationAdminRangePreset preset) async {
+    if (_selectedRange == preset) return;
+    setState(() {
+      _selectedRange = preset;
+      _bundleFuture = _loadBundle();
+    });
+    await _bundleFuture;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = ref.watch(sessionControllerProvider).session;
+    return FutureBuilder<_StationAdminBundle>(
+      future: _bundleFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData || session == null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(context.l10n.text('loadFailed')),
+            ),
+          );
+        }
+
+        final bundle = snapshot.data!;
+        return ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            Text(
+              context.l10n.text('stationAdminTitle'),
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.l10n.text('stationAdminSubtitle'),
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: StationAdminSection.values.map((section) {
+                return ChoiceChip(
+                  label: Text(_sectionLabel(section)),
+                  selected: section == _selectedSection,
+                  onSelected: (_) =>
+                      setState(() => _selectedSection = section),
+                );
+              }).toList(),
+            ),
+            if (_actionMessage != null) ...[
+              const SizedBox(height: 12),
+              _MessageBanner(
+                message: _actionMessage!,
+                color: Colors.green.shade700,
+              ),
+            ],
+            if (_actionError != null) ...[
+              const SizedBox(height: 12),
+              _MessageBanner(
+                message: _actionError!,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ],
+            const SizedBox(height: 24),
+            _buildSectionBody(bundle, session.stationId ?? 0),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionBody(_StationAdminBundle bundle, int stationId) {
+    switch (_selectedSection) {
+      case StationAdminSection.overview:
+        return _buildOverviewSection(bundle);
+      case StationAdminSection.staff:
+        return _buildStaffSection(bundle, stationId);
+      case StationAdminSection.forecourt:
+        return _buildForecourtSection(bundle, stationId);
+      case StationAdminSection.settings:
+        return _buildSettingsSection(bundle, stationId);
+      case StationAdminSection.meter:
+        return _buildMeterSection(bundle);
+      case StationAdminSection.tanker:
+        return _buildTankerSection(bundle, stationId);
+      case StationAdminSection.operations:
+        return const ManagerHomeScreen();
+      case StationAdminSection.finance:
+        return const AccountantHomeScreen();
+    }
+  }
+
+  Widget _buildOverviewSection(_StationAdminBundle bundle) {
+    final dashboard = bundle.dashboard;
+    final sales = Map<String, dynamic>.from(
+      dashboard['sales'] as Map? ?? const {},
+    );
+    final lowStock = (dashboard['low_stock_alerts'] as List<dynamic>? ?? const [])
+        .cast<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final creditAlerts =
+        (dashboard['credit_limit_alerts'] as List<dynamic>? ?? const [])
+            .cast<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+    final tanker = Map<String, dynamic>.from(
+      dashboard['tanker'] as Map? ?? const {},
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: StationAdminRangePreset.values.map((preset) {
+            return ChoiceChip(
+              label: Text(_rangeLabel(preset)),
+              selected: preset == _selectedRange,
+              onSelected: (_) => _changeRange(preset),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            _MetricCard(
+              title: context.l10n.text('totalSalesLabel'),
+              value: _money(sales['total']),
+              subtitle: '${sales['count'] ?? 0} ${context.l10n.text('entries')}',
+            ),
+            _MetricCard(
+              title: context.l10n.text('expenseCard'),
+              value: _money(dashboard['expenses']),
+              subtitle: _rangeLabel(_selectedRange),
+            ),
+            _MetricCard(
+              title: context.l10n.text('netProfitLabel'),
+              value: _money(dashboard['net_profit']),
+              subtitle: context.l10n.text('financeSummary'),
+            ),
+            _MetricCard(
+              title: context.l10n.text('remainingFuelLabel'),
+              value: _money(dashboard['fuel_stock_liters']),
+              subtitle: context.l10n.text('litersLabel'),
+            ),
+            _MetricCard(
+              title: context.l10n.text('overdueCustomers'),
+              value: _money(dashboard['receivables']),
+              subtitle: context.l10n.text('customerLedger'),
+            ),
+            _MetricCard(
+              title: context.l10n.text('supplierDues'),
+              value: _money(dashboard['payables']),
+              subtitle: context.l10n.text('supplierLedger'),
+            ),
+            _MetricCard(
+              title: context.l10n.text('tankerWorkspace'),
+              value: _money(tanker['net_profit']),
+              subtitle:
+                  '${tanker['completed_trips'] ?? 0} ${context.l10n.text('completedTripsLabel')}',
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _SectionCard(
+          title: context.l10n.text('stationSnapshot'),
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: [
+              _InlineInfo(
+                label: context.l10n.text('stationName'),
+                value: bundle.station['name']?.toString() ?? '-',
+              ),
+              _InlineInfo(
+                label: context.l10n.text('displayName'),
+                value: bundle.station['display_name']?.toString() ??
+                    bundle.station['name']?.toString() ??
+                    '-',
+              ),
+              _InlineInfo(
+                label: context.l10n.text('setupStatusLabel'),
+                value: bundle.station['setup_status']?.toString() ?? '-',
+              ),
+              _InlineInfo(
+                label: context.l10n.text('active'),
+                value: bundle.station['is_active'] == true
+                    ? context.l10n.text('yesLabel')
+                    : context.l10n.text('noLabel'),
+              ),
+              _InlineInfo(
+                label: context.l10n.text('moduleToggles'),
+                value: '${bundle.stationModules.length}',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        _SectionCard(
+          title: context.l10n.text('financeAlerts'),
+          child: (lowStock.isEmpty && creditAlerts.isEmpty)
+              ? Text(context.l10n.text('noRecentItems'))
+              : Column(
+                  children: [
+                    ...lowStock.map(
+                      (item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.local_gas_station_outlined),
+                        title: Text(
+                          '${item['tank_name']} (${item['fuel_type']})',
+                        ),
+                        subtitle: Text(
+                          '${context.l10n.text('remainingFuelLabel')}: ${_money(item['current_volume'])} / ${_money(item['threshold'])}',
+                        ),
+                      ),
+                    ),
+                    ...creditAlerts.map(
+                      (item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading:
+                            const Icon(Icons.account_balance_wallet_outlined),
+                        title: Text(item['customer_name']?.toString() ?? '-'),
+                        subtitle: Text(
+                          '${_money(item['outstanding_balance'])} / ${_money(item['credit_limit'])}',
+                        ),
+                        trailing:
+                            Text('${item['usage_percentage']?.toString() ?? '0'}%'),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStaffSection(_StationAdminBundle bundle, int stationId) {
+    final assignableRoles = bundle.roles.where((role) {
+      final name = (role['name']?.toString() ?? '').toLowerCase();
+      return name != 'masteradmin' && name != 'headoffice';
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: () => _showUserDialog(
+                stationId: stationId,
+                roles: assignableRoles,
+              ),
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: Text(context.l10n.text('createStaffUser')),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: () => _showEmployeeProfileDialog(
+                stationId: stationId,
+                users: bundle.users,
+              ),
+              icon: const Icon(Icons.badge_outlined),
+              label: Text(context.l10n.text('createStaffProfile')),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('staffUsers'),
+          child: bundle.users.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  children: bundle.users.map((user) {
+                    final role = bundle.roles.firstWhere(
+                      (item) => item['id'] == user['role_id'],
+                      orElse: () => const <String, dynamic>{},
+                    );
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(user['full_name']?.toString() ?? '-'),
+                      subtitle: Text(
+                        '${user['username'] ?? '-'} · ${role['name'] ?? '-'}',
+                      ),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _showUserDialog(
+                              stationId: stationId,
+                              roles: assignableRoles,
+                              existing: user,
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: Text(context.l10n.text('editLabel')),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _performAction(
+                              () => ref
+                                  .read(stationAdminRepositoryProvider)
+                                  .deleteUser(user['id'] as int),
+                              successMessage:
+                                  context.l10n.text('staffDeletedMessage'),
+                            ),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            label: Text(context.l10n.text('deleteLabel')),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('staffProfiles'),
+          child: bundle.employeeProfiles.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  children: bundle.employeeProfiles.map((profile) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(profile['full_name']?.toString() ?? '-'),
+                      subtitle: Text(
+                        '${profile['staff_title'] ?? profile['staff_type'] ?? '-'} · ${context.l10n.text('employeeCode')}: ${profile['employee_code'] ?? '-'}',
+                      ),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          Text(_money(profile['monthly_salary'])),
+                          TextButton.icon(
+                            onPressed: () => _showEmployeeProfileDialog(
+                              stationId: stationId,
+                              users: bundle.users,
+                              existing: profile,
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: Text(context.l10n.text('editLabel')),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _performAction(
+                              () => ref
+                                  .read(stationAdminRepositoryProvider)
+                                  .deleteEmployeeProfile(profile['id'] as int),
+                              successMessage:
+                                  context.l10n.text('staffDeletedMessage'),
+                            ),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            label: Text(context.l10n.text('deleteLabel')),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForecourtSection(_StationAdminBundle bundle, int stationId) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionCard(
+          title: context.l10n.text('fuelTypes'),
+          action: FilledButton.tonalIcon(
+            onPressed: _showFuelTypeDialog,
+            icon: const Icon(Icons.add_circle_outline),
+            label: Text(context.l10n.text('add')),
+          ),
+          child: bundle.fuelTypes.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  children: bundle.fuelTypes.map((fuelType) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(fuelType['name']?.toString() ?? '-'),
+                      subtitle: Text(
+                        fuelType['description']?.toString() ??
+                            context.l10n.text('notAvailableLabel'),
+                      ),
+                      trailing: TextButton.icon(
+                        onPressed: () => _showFuelTypeDialog(existing: fuelType),
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: Text(context.l10n.text('editLabel')),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('tanks'),
+          action: FilledButton.tonalIcon(
+            onPressed: () => _showTankDialog(
+              stationId: stationId,
+              fuelTypes: bundle.fuelTypes,
+            ),
+            icon: const Icon(Icons.add_circle_outline),
+            label: Text(context.l10n.text('add')),
+          ),
+          child: bundle.tanks.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  children: bundle.tanks.map((tank) {
+                    final fuelType = bundle.fuelTypes.firstWhere(
+                      (item) => item['id'] == tank['fuel_type_id'],
+                      orElse: () => const <String, dynamic>{},
+                    );
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('${tank['name']} (${tank['code']})'),
+                      subtitle: Text(
+                        '${fuelType['name'] ?? '-'} · ${_money(tank['current_volume'])}/${_money(tank['capacity'])}',
+                      ),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _showTankDialog(
+                              stationId: stationId,
+                              fuelTypes: bundle.fuelTypes,
+                              existing: tank,
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: Text(context.l10n.text('editLabel')),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _performAction(
+                              () => ref
+                                  .read(stationAdminRepositoryProvider)
+                                  .deleteTank(tank['id'] as int),
+                              successMessage:
+                                  context.l10n.text('forecourtSavedMessage'),
+                            ),
+                            icon: const Icon(Icons.power_settings_new, size: 18),
+                            label: Text(context.l10n.text('deactivateLabel')),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('dispensersAndNozzles'),
+          action: Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () => _showDispenserDialog(stationId: stationId),
+                icon: const Icon(Icons.add_circle_outline),
+                label: Text(context.l10n.text('addDispenserLabel')),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _showNozzleDialog(
+                  dispensers: bundle.dispensers,
+                  tanks: bundle.tanks,
+                  fuelTypes: bundle.fuelTypes,
+                ),
+                icon: const Icon(Icons.add_circle_outline),
+                label: Text(context.l10n.text('addNozzle')),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: bundle.dispensers.map((dispenser) {
+              final dispenserNozzles = bundle.nozzles
+                  .where((nozzle) => nozzle['dispenser_id'] == dispenser['id'])
+                  .toList();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Card(
+                  elevation: 0,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${dispenser['name']} (${dispenser['code']})',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _showDispenserDialog(
+                                stationId: stationId,
+                                existing: dispenser,
+                              ),
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: Text(context.l10n.text('editLabel')),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _performAction(
+                                () => ref
+                                    .read(stationAdminRepositoryProvider)
+                                    .deleteDispenser(dispenser['id'] as int),
+                                successMessage:
+                                    context.l10n.text('forecourtSavedMessage'),
+                              ),
+                              icon: const Icon(
+                                Icons.power_settings_new,
+                                size: 18,
+                              ),
+                              label: Text(context.l10n.text('deactivateLabel')),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (dispenserNozzles.isEmpty)
+                          Text(context.l10n.text('noDataYet'))
+                        else
+                          ...dispenserNozzles.map((nozzle) {
+                            final tank = bundle.tanks.firstWhere(
+                              (item) => item['id'] == nozzle['tank_id'],
+                              orElse: () => const <String, dynamic>{},
+                            );
+                            final fuelType = bundle.fuelTypes.firstWhere(
+                              (item) => item['id'] == nozzle['fuel_type_id'],
+                              orElse: () => const <String, dynamic>{},
+                            );
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('${nozzle['name']} (${nozzle['code']})'),
+                              subtitle: Text(
+                                '${fuelType['name'] ?? '-'} · ${tank['name'] ?? '-'} · ${context.l10n.text('currentMeter')}: ${_money(nozzle['meter_reading'])}',
+                              ),
+                              trailing: Wrap(
+                                spacing: 8,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: () => _showNozzleDialog(
+                                      dispensers: bundle.dispensers,
+                                      tanks: bundle.tanks,
+                                      fuelTypes: bundle.fuelTypes,
+                                      existing: nozzle,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                    ),
+                                    label: Text(context.l10n.text('editLabel')),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => _performAction(
+                                      () => ref
+                                          .read(stationAdminRepositoryProvider)
+                                          .deleteNozzle(nozzle['id'] as int),
+                                      successMessage: context.l10n
+                                          .text('forecourtSavedMessage'),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.power_settings_new,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      context.l10n.text('deactivateLabel'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsSection(_StationAdminBundle bundle, int stationId) {
+    final template = bundle.documentTemplates.firstWhere(
+      (item) => item['document_type'] == _selectedTemplateType,
+      orElse: () => const <String, dynamic>{},
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionCard(
+          title: context.l10n.text('brandingSettingsLabel'),
+          action: FilledButton.tonalIcon(
+            onPressed: () => _showStationSettingsDialog(bundle.station),
+            icon: const Icon(Icons.edit_outlined),
+            label: Text(context.l10n.text('editLabel')),
+          ),
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: [
+              _InlineInfo(
+                label: context.l10n.text('displayName'),
+                value: bundle.station['display_name']?.toString() ??
+                    bundle.station['name']?.toString() ??
+                    '-',
+              ),
+              _InlineInfo(
+                label: context.l10n.text('legalName'),
+                value: bundle.station['legal_name_override']?.toString() ?? '-',
+              ),
+              _InlineInfo(
+                label: context.l10n.text('brand'),
+                value: bundle.station['brand_name']?.toString() ?? '-',
+              ),
+              _InlineInfo(
+                label: context.l10n.text('sameAsOrganizationName'),
+                value: bundle.station['use_organization_branding'] == true
+                    ? context.l10n.text('yesLabel')
+                    : context.l10n.text('noLabel'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('moduleToggles'),
+          child: bundle.stationModules.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  children: bundle.stationModules.map((setting) {
+                    return SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(setting['module_name']?.toString() ?? '-'),
+                      subtitle: Text(context.l10n.text('moduleToggleHint')),
+                      value: setting['is_enabled'] == true,
+                      onChanged: (value) => _performAction(
+                        () => ref
+                            .read(stationAdminRepositoryProvider)
+                            .updateStationModule(
+                              stationId,
+                              moduleName:
+                                  setting['module_name']?.toString() ?? '',
+                              isEnabled: value,
+                            ),
+                        successMessage:
+                            context.l10n.text('settingsSavedMessage'),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('invoiceSettingsLabel'),
+          action: FilledButton.tonalIcon(
+            onPressed: () => _showInvoiceProfileDialog(
+              stationId: stationId,
+              existing: bundle.invoiceProfile,
+            ),
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: Text(context.l10n.text('editLabel')),
+          ),
+          child: bundle.invoiceProfile.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: [
+                    _InlineInfo(
+                      label: context.l10n.text('businessNameLabel'),
+                      value: bundle.invoiceProfile['business_name']?.toString() ??
+                          '-',
+                    ),
+                    _InlineInfo(
+                      label: context.l10n.text('legalName'),
+                      value:
+                          bundle.invoiceProfile['legal_name']?.toString() ?? '-',
+                    ),
+                    _InlineInfo(
+                      label: context.l10n.text('registrationNumber'),
+                      value: bundle.invoiceProfile['registration_no']
+                              ?.toString() ??
+                          '-',
+                    ),
+                    _InlineInfo(
+                      label: context.l10n.text('taxNumber'),
+                      value: bundle.invoiceProfile['tax_registration_no']
+                              ?.toString() ??
+                          '-',
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('documentTemplatesLabel'),
+          action: Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () => _performAction(
+                  () => ref
+                      .read(stationAdminRepositoryProvider)
+                      .seedDocumentTemplates(stationId),
+                  successMessage: context.l10n.text('settingsSavedMessage'),
+                ),
+                icon: const Icon(Icons.auto_fix_high_outlined),
+                label: Text(context.l10n.text('seedDefaultsLabel')),
+              ),
+              if (_selectedTemplateType != null)
+                FilledButton.tonalIcon(
+                  onPressed: template.isEmpty
+                      ? null
+                      : () => _showDocumentTemplateDialog(
+                            stationId: stationId,
+                            existing: template,
+                          ),
+                  icon: const Icon(Icons.edit_note_outlined),
+                  label: Text(context.l10n.text('editLabel')),
+                ),
+            ],
+          ),
+          child: bundle.documentTemplates.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: bundle.documentTemplates.any(
+                        (item) => item['document_type'] == _selectedTemplateType,
+                      )
+                          ? _selectedTemplateType
+                          : bundle.documentTemplates.first['document_type']
+                              ?.toString(),
+                      items: bundle.documentTemplates
+                          .map(
+                            (item) => DropdownMenuItem<String>(
+                              value: item['document_type']?.toString(),
+                              child: Text(
+                                item['document_type']?.toString() ?? '-',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _selectedTemplateType = value);
+                      },
+                      decoration: InputDecoration(
+                        labelText: context.l10n.text('documentTypeLabel'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (template.isNotEmpty) ...[
+                      _InlineInfo(
+                        label: context.l10n.text('displayName'),
+                        value: template['name']?.toString() ?? '-',
+                      ),
+                      const SizedBox(height: 8),
+                      _InlineInfo(
+                        label: context.l10n.text('active'),
+                        value: template['is_active'] == true
+                            ? context.l10n.text('yesLabel')
+                            : context.l10n.text('noLabel'),
+                      ),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMeterSection(_StationAdminBundle bundle) {
+    final selectedNozzle = bundle.nozzles.firstWhere(
+      (item) => item['id'] == _selectedNozzleId,
+      orElse: () => const <String, dynamic>{},
+    );
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _selectedNozzleId == null
+          ? Future.value(const [])
+          : ref
+              .read(stationAdminRepositoryProvider)
+              .listNozzleAdjustments(_selectedNozzleId!),
+      builder: (context, snapshot) {
+        final adjustments = snapshot.data ?? const <Map<String, dynamic>>[];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionCard(
+              title: context.l10n.text('meterAdjustmentLabel'),
+              action: FilledButton.tonalIcon(
+                onPressed: _selectedNozzleId == null
+                    ? null
+                    : () => _showMeterAdjustmentDialog(
+                          nozzleId: _selectedNozzleId!,
+                          currentReading:
+                              (selectedNozzle['meter_reading'] as num?)?.toDouble() ??
+                                  0,
+                        ),
+                icon: const Icon(Icons.tune_outlined),
+                label: Text(context.l10n.text('recordMeterAdjustmentLabel')),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<int>(
+                    initialValue: bundle.nozzles.any(
+                      (item) => item['id'] == _selectedNozzleId,
+                    )
+                        ? _selectedNozzleId
+                        : null,
+                    items: bundle.nozzles
+                        .map(
+                          (nozzle) => DropdownMenuItem<int>(
+                            value: nozzle['id'] as int,
+                            child: Text(
+                              '${nozzle['name']} (${nozzle['code']})',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _selectedNozzleId = value);
+                    },
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('nozzleName'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (selectedNozzle.isNotEmpty)
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        _InlineInfo(
+                          label: context.l10n.text('currentMeter'),
+                          value: _money(selectedNozzle['meter_reading']),
+                        ),
+                        _InlineInfo(
+                          label: context.l10n.text('openingMeter'),
+                          value: _money(
+                            selectedNozzle['current_segment_start_reading'],
+                          ),
+                        ),
+                        _InlineInfo(
+                          label: context.l10n.text('active'),
+                          value: selectedNozzle['is_active'] == true
+                              ? context.l10n.text('yesLabel')
+                              : context.l10n.text('noLabel'),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _SectionCard(
+              title: context.l10n.text('recentAdjustmentsLabel'),
+              child: snapshot.connectionState != ConnectionState.done
+                  ? const LinearProgressIndicator()
+                  : adjustments.isEmpty
+                      ? Text(context.l10n.text('noDataYet'))
+                      : Column(
+                          children: adjustments.map((item) {
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading:
+                                  const Icon(Icons.history_toggle_off_outlined),
+                              title: Text(
+                                '${_money(item['old_reading'])} → ${_money(item['new_reading'])}',
+                              ),
+                              subtitle: Text(item['reason']?.toString() ?? '-'),
+                              trailing:
+                                  Text(_dateLabel(item['adjusted_at']?.toString())),
+                            );
+                          }).toList(),
+                        ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTankerSection(_StationAdminBundle bundle, int stationId) {
+    final summary = bundle.tankerSummary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionCard(
+          title: context.l10n.text('tankerWorkspace'),
+          action: FilledButton.tonalIcon(
+            onPressed: bundle.fuelTypes.isEmpty
+                ? null
+                : () => _showCreateTankerDialog(
+                      stationId: stationId,
+                      fuelTypes: bundle.fuelTypes,
+                    ),
+            icon: const Icon(Icons.local_shipping_outlined),
+            label: Text(context.l10n.text('createTankerLabel')),
+          ),
+          child: summary.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: [
+                    _MetricCard(
+                      title: context.l10n.text('tankerCountLabel'),
+                      value: '${summary['tanker_count'] ?? 0}',
+                      width: 180,
+                    ),
+                    _MetricCard(
+                      title: context.l10n.text('activeTankersLabel'),
+                      value: '${summary['active_tanker_count'] ?? 0}',
+                      width: 180,
+                    ),
+                    _MetricCard(
+                      title: context.l10n.text('inProgressTripsLabel'),
+                      value: '${summary['in_progress_trip_count'] ?? 0}',
+                      width: 180,
+                    ),
+                    _MetricCard(
+                      title: context.l10n.text('completedTripsLabel'),
+                      value: '${summary['completed_trip_count'] ?? 0}',
+                      width: 180,
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('tankerMasterDataLabel'),
+          child: bundle.tankers.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  children: bundle.tankers.map((tanker) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.local_shipping_outlined),
+                      title:
+                          Text('${tanker['name']} (${tanker['registration_no']})'),
+                      subtitle: Text(
+                        '${tanker['ownership_type']} · ${_money(tanker['capacity'])}',
+                      ),
+                      trailing: Text(tanker['status']?.toString() ?? '-'),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: context.l10n.text('recentTripsLabel'),
+          child: bundle.tankerTrips.isEmpty
+              ? Text(context.l10n.text('noDataYet'))
+              : Column(
+                  children: bundle.tankerTrips.take(10).map((trip) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('${trip['trip_type']} · ${trip['status']}'),
+                      subtitle: Text(
+                        '${context.l10n.text('destinationLabel')}: ${trip['destination_name'] ?? '-'}',
+                      ),
+                      trailing: Text(_money(trip['net_profit'])),
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showUserDialog({
+    required int stationId,
+    required List<Map<String, dynamic>> roles,
+    Map<String, dynamic>? existing,
+  }) async {
+    final staffSavedMessage = context.l10n.text('staffSavedMessage');
+    final fullNameController =
+        TextEditingController(text: existing?['full_name']?.toString() ?? '');
+    final usernameController =
+        TextEditingController(text: existing?['username']?.toString() ?? '');
+    final emailController =
+        TextEditingController(text: existing?['email']?.toString() ?? '');
+    final passwordController = TextEditingController();
+    final salaryController = TextEditingController(
+      text: existing == null
+          ? ''
+          : ((existing['monthly_salary'] as num?)?.toDouble() ?? 0)
+              .toStringAsFixed(0),
+    );
+    int? selectedRoleId = existing?['role_id'] as int? ??
+        (roles.isNotEmpty ? roles.first['id'] as int : null);
+    bool isActive = existing?['is_active'] != false;
+    bool payrollEnabled = existing?['payroll_enabled'] != false;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(
+            existing == null
+                ? context.l10n.text('createStaffUser')
+                : context.l10n.text('editStaffUser'),
+          ),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: fullNameController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('adminFullName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: usernameController,
+                    enabled: existing == null,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('adminUsername'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('contactEmail'),
+                    ),
+                  ),
+                  if (existing == null) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.text('adminPassword'),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: selectedRoleId,
+                    items: roles
+                        .map(
+                          (role) => DropdownMenuItem<int>(
+                            value: role['id'] as int,
+                            child: Text(role['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setLocalState(() => selectedRoleId = value),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('accessRoleLabel'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: salaryController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('currentSalary'),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: payrollEnabled,
+                    title: Text(context.l10n.text('payrollSummary')),
+                    onChanged: (value) =>
+                        setLocalState(() => payrollEnabled = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: Text(context.l10n.text('active')),
+                    onChanged: (value) =>
+                        setLocalState(() => isActive = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.text('saveLabel')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || selectedRoleId == null) return;
+
+    final salary = double.tryParse(salaryController.text.trim()) ?? 0;
+    await _performAction(() async {
+      if (existing == null) {
+        await ref.read(stationAdminRepositoryProvider).createUser({
+          'full_name': fullNameController.text.trim(),
+          'username': usernameController.text.trim(),
+          'email': emailController.text.trim().isEmpty
+              ? null
+              : emailController.text.trim(),
+          'password': passwordController.text.trim(),
+          'role_id': selectedRoleId,
+          'station_id': stationId,
+          'monthly_salary': salary,
+          'payroll_enabled': payrollEnabled,
+        });
+      } else {
+        await ref.read(stationAdminRepositoryProvider).updateUser(
+          existing['id'] as int,
+          {
+            'full_name': fullNameController.text.trim(),
+            'email': emailController.text.trim().isEmpty
+                ? null
+                : emailController.text.trim(),
+            'role_id': selectedRoleId,
+            'station_id': stationId,
+            'monthly_salary': salary,
+            'payroll_enabled': payrollEnabled,
+            'is_active': isActive,
+          },
+        );
+      }
+    }, successMessage: staffSavedMessage);
+  }
+
+  Future<void> _showEmployeeProfileDialog({
+    required int stationId,
+    required List<Map<String, dynamic>> users,
+    Map<String, dynamic>? existing,
+  }) async {
+    final staffSavedMessage = context.l10n.text('staffSavedMessage');
+    final fullNameController =
+        TextEditingController(text: existing?['full_name']?.toString() ?? '');
+    final staffTypeController = TextEditingController(
+      text: existing?['staff_type']?.toString() ?? 'Staff',
+    );
+    final staffTitleController =
+        TextEditingController(text: existing?['staff_title']?.toString() ?? '');
+    final codeController = TextEditingController(
+      text: existing?['employee_code']?.toString() ?? '',
+    );
+    final phoneController =
+        TextEditingController(text: existing?['phone']?.toString() ?? '');
+    final salaryController = TextEditingController(
+      text: existing == null
+          ? ''
+          : ((existing['monthly_salary'] as num?)?.toDouble() ?? 0)
+              .toStringAsFixed(0),
+    );
+    final notesController =
+        TextEditingController(text: existing?['notes']?.toString() ?? '');
+    int? linkedUserId = existing?['linked_user_id'] as int?;
+    bool isActive = existing?['is_active'] != false;
+    bool payrollEnabled = existing?['payroll_enabled'] != false;
+    bool canLogin = existing?['can_login'] == true;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(
+            existing == null
+                ? context.l10n.text('createStaffProfile')
+                : context.l10n.text('editStaffProfile'),
+          ),
+          content: SizedBox(
+            width: 540,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: fullNameController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('adminFullName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: users.any((item) => item['id'] == linkedUserId)
+                        ? linkedUserId
+                        : null,
+                    items: [
+                      DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text(context.l10n.text('noLinkedUserLabel')),
+                      ),
+                      ...users.map(
+                        (user) => DropdownMenuItem<int?>(
+                          value: user['id'] as int,
+                          child: Text(user['full_name']?.toString() ?? '-'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setLocalState(() => linkedUserId = value),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('linkedUserLabel'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: staffTypeController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('staffTypeLabel'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: staffTitleController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('staffTitle'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: codeController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('employeeCode'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('contactPhone'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: salaryController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('currentSalary'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('optionalNotes'),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: payrollEnabled,
+                    title: Text(context.l10n.text('payrollSummary')),
+                    onChanged: (value) =>
+                        setLocalState(() => payrollEnabled = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: canLogin,
+                    title: Text(context.l10n.text('canLoginLabel')),
+                    onChanged: (value) =>
+                        setLocalState(() => canLogin = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: Text(context.l10n.text('active')),
+                    onChanged: (value) =>
+                        setLocalState(() => isActive = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.text('saveLabel')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    final salary = double.tryParse(salaryController.text.trim()) ?? 0;
+    final payload = {
+      'station_id': stationId,
+      'linked_user_id': linkedUserId,
+      'full_name': fullNameController.text.trim(),
+      'staff_type': staffTypeController.text.trim(),
+      'staff_title': staffTitleController.text.trim().isEmpty
+          ? null
+          : staffTitleController.text.trim(),
+      'employee_code': codeController.text.trim().isEmpty
+          ? null
+          : codeController.text.trim(),
+      'phone': phoneController.text.trim().isEmpty
+          ? null
+          : phoneController.text.trim(),
+      'monthly_salary': salary,
+      'payroll_enabled': payrollEnabled,
+      'can_login': canLogin,
+      'is_active': isActive,
+      'notes': notesController.text.trim().isEmpty
+          ? null
+          : notesController.text.trim(),
+    };
+    await _performAction(() async {
+      if (existing == null) {
+        await ref.read(stationAdminRepositoryProvider).createEmployeeProfile(
+              payload,
+            );
+      } else {
+        await ref.read(stationAdminRepositoryProvider).updateEmployeeProfile(
+              existing['id'] as int,
+              payload,
+            );
+      }
+    }, successMessage: staffSavedMessage);
+  }
+
+  Future<void> _showFuelTypeDialog({Map<String, dynamic>? existing}) async {
+    final forecourtSavedMessage = context.l10n.text('forecourtSavedMessage');
+    final nameController =
+        TextEditingController(text: existing?['name']?.toString() ?? '');
+    final descriptionController = TextEditingController(
+      text: existing?['description']?.toString() ?? '',
+    );
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          existing == null
+              ? context.l10n.text('addFuelTypeLabel')
+              : context.l10n.text('editFuelTypeLabel'),
+        ),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('fuelTypeName'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descriptionController,
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('description'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.text('cancelLabel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.l10n.text('saveLabel')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      if (existing == null) {
+        await ref.read(stationAdminRepositoryProvider).createFuelType({
+          'name': nameController.text.trim(),
+          'description': descriptionController.text.trim().isEmpty
+              ? null
+              : descriptionController.text.trim(),
+        });
+      } else {
+        await ref.read(stationAdminRepositoryProvider).updateFuelType(
+              existing['id'] as int,
+              {
+                'name': nameController.text.trim(),
+                'description': descriptionController.text.trim().isEmpty
+                    ? null
+                    : descriptionController.text.trim(),
+              },
+            );
+      }
+    }, successMessage: forecourtSavedMessage);
+  }
+
+  Future<void> _showTankDialog({
+    required int stationId,
+    required List<Map<String, dynamic>> fuelTypes,
+    Map<String, dynamic>? existing,
+  }) async {
+    final forecourtSavedMessage = context.l10n.text('forecourtSavedMessage');
+    final nameController =
+        TextEditingController(text: existing?['name']?.toString() ?? '');
+    final codeController =
+        TextEditingController(text: existing?['code']?.toString() ?? '');
+    final capacityController = TextEditingController(
+      text: existing == null
+          ? ''
+          : ((existing['capacity'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+    );
+    final currentController = TextEditingController(
+      text: existing == null
+          ? ''
+          : ((existing['current_volume'] as num?)?.toDouble() ?? 0)
+              .toStringAsFixed(0),
+    );
+    final thresholdController = TextEditingController(
+      text: existing == null
+          ? '1000'
+          : ((existing['low_stock_threshold'] as num?)?.toDouble() ?? 1000)
+              .toStringAsFixed(0),
+    );
+    int? fuelTypeId = existing?['fuel_type_id'] as int? ??
+        (fuelTypes.isNotEmpty ? fuelTypes.first['id'] as int : null);
+    bool isActive = existing?['is_active'] != false;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(
+            existing == null
+                ? context.l10n.text('addTankLabel')
+                : context.l10n.text('editTankLabel'),
+          ),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('tankName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: codeController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('code'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: fuelTypeId,
+                    items: fuelTypes
+                        .map(
+                          (item) => DropdownMenuItem<int>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setLocalState(() => fuelTypeId = value),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('fuelType'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: capacityController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('capacity'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: currentController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('remainingFuelLabel'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: thresholdController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('lowStockThreshold'),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: Text(context.l10n.text('active')),
+                    onChanged: (value) =>
+                        setLocalState(() => isActive = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.text('saveLabel')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || fuelTypeId == null) return;
+    await _performAction(() async {
+      if (existing == null) {
+        await ref.read(stationAdminRepositoryProvider).createTank({
+          'name': nameController.text.trim().isEmpty
+              ? null
+              : nameController.text.trim(),
+          'code': codeController.text.trim().isEmpty
+              ? null
+              : codeController.text.trim(),
+          'capacity': double.tryParse(capacityController.text.trim()) ?? 0,
+          'current_volume': double.tryParse(currentController.text.trim()) ?? 0,
+          'low_stock_threshold':
+              double.tryParse(thresholdController.text.trim()) ?? 1000,
+          'station_id': stationId,
+          'fuel_type_id': fuelTypeId,
+          'is_active': isActive,
+        });
+      } else {
+        await ref.read(stationAdminRepositoryProvider).updateTank(
+              existing['id'] as int,
+              {
+                'name': nameController.text.trim().isEmpty
+                    ? null
+                    : nameController.text.trim(),
+                'capacity':
+                    double.tryParse(capacityController.text.trim()) ?? 0,
+                'current_volume':
+                    double.tryParse(currentController.text.trim()) ?? 0,
+                'low_stock_threshold':
+                    double.tryParse(thresholdController.text.trim()) ?? 1000,
+                'is_active': isActive,
+              },
+            );
+      }
+    }, successMessage: forecourtSavedMessage);
+  }
+
+  Future<void> _showDispenserDialog({
+    required int stationId,
+    Map<String, dynamic>? existing,
+  }) async {
+    final forecourtSavedMessage = context.l10n.text('forecourtSavedMessage');
+    final nameController =
+        TextEditingController(text: existing?['name']?.toString() ?? '');
+    final codeController =
+        TextEditingController(text: existing?['code']?.toString() ?? '');
+    final locationController =
+        TextEditingController(text: existing?['location']?.toString() ?? '');
+    bool isActive = existing?['is_active'] != false;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(
+            existing == null
+                ? context.l10n.text('addDispenserLabel')
+                : context.l10n.text('editDispenserLabel'),
+          ),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.text('dispenserName'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: codeController,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.text('code'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: locationController,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.text('description'),
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: isActive,
+                  title: Text(context.l10n.text('active')),
+                  onChanged: (value) =>
+                      setLocalState(() => isActive = value),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.text('saveLabel')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      if (existing == null) {
+        await ref.read(stationAdminRepositoryProvider).createDispenser({
+          'name': nameController.text.trim().isEmpty
+              ? null
+              : nameController.text.trim(),
+          'code': codeController.text.trim().isEmpty
+              ? null
+              : codeController.text.trim(),
+          'location': locationController.text.trim().isEmpty
+              ? null
+              : locationController.text.trim(),
+          'station_id': stationId,
+          'is_active': isActive,
+        });
+      } else {
+        await ref.read(stationAdminRepositoryProvider).updateDispenser(
+              existing['id'] as int,
+              {
+                'name': nameController.text.trim().isEmpty
+                    ? null
+                    : nameController.text.trim(),
+                'location': locationController.text.trim().isEmpty
+                    ? null
+                    : locationController.text.trim(),
+                'is_active': isActive,
+              },
+            );
+      }
+    }, successMessage: forecourtSavedMessage);
+  }
+
+  Future<void> _showNozzleDialog({
+    required List<Map<String, dynamic>> dispensers,
+    required List<Map<String, dynamic>> tanks,
+    required List<Map<String, dynamic>> fuelTypes,
+    Map<String, dynamic>? existing,
+  }) async {
+    final forecourtSavedMessage = context.l10n.text('forecourtSavedMessage');
+    final nameController =
+        TextEditingController(text: existing?['name']?.toString() ?? '');
+    final codeController =
+        TextEditingController(text: existing?['code']?.toString() ?? '');
+    final meterController = TextEditingController(
+      text: existing == null
+          ? '0'
+          : ((existing['meter_reading'] as num?)?.toDouble() ?? 0)
+              .toStringAsFixed(0),
+    );
+    int? dispenserId = existing?['dispenser_id'] as int? ??
+        (dispensers.isNotEmpty ? dispensers.first['id'] as int : null);
+    int? tankId = existing?['tank_id'] as int? ??
+        (tanks.isNotEmpty ? tanks.first['id'] as int : null);
+    int? fuelTypeId = existing?['fuel_type_id'] as int? ??
+        (fuelTypes.isNotEmpty ? fuelTypes.first['id'] as int : null);
+    bool isActive = existing?['is_active'] != false;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(
+            existing == null
+                ? context.l10n.text('addNozzle')
+                : context.l10n.text('editNozzleLabel'),
+          ),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('nozzleName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: codeController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('code'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: dispenserId,
+                    items: dispensers
+                        .map(
+                          (item) => DropdownMenuItem<int>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setLocalState(() => dispenserId = value),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('dispenserName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: tankId,
+                    items: tanks
+                        .map(
+                          (item) => DropdownMenuItem<int>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setLocalState(() => tankId = value),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('tank'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: fuelTypeId,
+                    items: fuelTypes
+                        .map(
+                          (item) => DropdownMenuItem<int>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setLocalState(() => fuelTypeId = value),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('fuelType'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: meterController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: existing == null
+                          ? context.l10n.text('startingMeter')
+                          : context.l10n.text('currentMeter'),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: Text(context.l10n.text('active')),
+                    onChanged: (value) =>
+                        setLocalState(() => isActive = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.text('saveLabel')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true ||
+        dispenserId == null ||
+        tankId == null ||
+        fuelTypeId == null) {
+      return;
+    }
+    await _performAction(() async {
+      if (existing == null) {
+        await ref.read(stationAdminRepositoryProvider).createNozzle({
+          'name': nameController.text.trim().isEmpty
+              ? null
+              : nameController.text.trim(),
+          'code': codeController.text.trim().isEmpty
+              ? null
+              : codeController.text.trim(),
+          'meter_reading': double.tryParse(meterController.text.trim()) ?? 0,
+          'dispenser_id': dispenserId,
+          'tank_id': tankId,
+          'fuel_type_id': fuelTypeId,
+          'is_active': isActive,
+        });
+      } else {
+        await ref.read(stationAdminRepositoryProvider).updateNozzle(
+              existing['id'] as int,
+              {
+                'name': nameController.text.trim().isEmpty
+                    ? null
+                    : nameController.text.trim(),
+                'tank_id': tankId,
+                'fuel_type_id': fuelTypeId,
+                'is_active': isActive,
+              },
+            );
+      }
+    }, successMessage: forecourtSavedMessage);
+  }
+
+  Future<void> _showStationSettingsDialog(Map<String, dynamic> existing) async {
+    final settingsSavedMessage = context.l10n.text('settingsSavedMessage');
+    final displayNameController = TextEditingController(
+      text: existing['display_name']?.toString() ?? '',
+    );
+    final legalNameController = TextEditingController(
+      text: existing['legal_name_override']?.toString() ?? '',
+    );
+    final brandNameController = TextEditingController(
+      text: existing['brand_name']?.toString() ?? '',
+    );
+    final brandCodeController = TextEditingController(
+      text: existing['brand_code']?.toString() ?? '',
+    );
+    final logoUrlController = TextEditingController(
+      text: existing['logo_url']?.toString() ?? '',
+    );
+    bool useOrganizationBranding = existing['use_organization_branding'] == true;
+    bool allowMeterAdjustments = existing['allow_meter_adjustments'] != false;
+    bool hasPos = existing['has_pos'] == true;
+    bool hasTankers = existing['has_tankers'] == true;
+    bool hasHardware = existing['has_hardware'] == true;
+    bool hasShops = existing['has_shops'] == true;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(context.l10n.text('brandingSettingsLabel')),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: displayNameController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('displayName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: legalNameController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('legalName'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: brandNameController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('brand'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: brandCodeController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('code'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: logoUrlController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('logoUrlLabel'),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: useOrganizationBranding,
+                    title: Text(context.l10n.text('inheritBrandingToStations')),
+                    onChanged: (value) =>
+                        setLocalState(() => useOrganizationBranding = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: allowMeterAdjustments,
+                    title:
+                        Text(context.l10n.text('allowMeterAdjustmentsLabel')),
+                    onChanged: (value) =>
+                        setLocalState(() => allowMeterAdjustments = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: hasPos,
+                    title: Text(context.l10n.text('hasPosLabel')),
+                    onChanged: (value) => setLocalState(() => hasPos = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: hasTankers,
+                    title: Text(context.l10n.text('hasTankersLabel')),
+                    onChanged: (value) =>
+                        setLocalState(() => hasTankers = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: hasHardware,
+                    title: Text(context.l10n.text('hasHardwareLabel')),
+                    onChanged: (value) =>
+                        setLocalState(() => hasHardware = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: hasShops,
+                    title: Text(context.l10n.text('hasShopsLabel')),
+                    onChanged: (value) =>
+                        setLocalState(() => hasShops = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.text('saveLabel')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).updateStation(
+            existing['id'] as int,
+            {
+              'display_name': displayNameController.text.trim().isEmpty
+                  ? null
+                  : displayNameController.text.trim(),
+              'legal_name_override': legalNameController.text.trim().isEmpty
+                  ? null
+                  : legalNameController.text.trim(),
+              'brand_name': brandNameController.text.trim().isEmpty
+                  ? null
+                  : brandNameController.text.trim(),
+              'brand_code': brandCodeController.text.trim().isEmpty
+                  ? null
+                  : brandCodeController.text.trim(),
+              'logo_url': logoUrlController.text.trim().isEmpty
+                  ? null
+                  : logoUrlController.text.trim(),
+              'use_organization_branding': useOrganizationBranding,
+              'allow_meter_adjustments': allowMeterAdjustments,
+              'has_pos': hasPos,
+              'has_tankers': hasTankers,
+              'has_hardware': hasHardware,
+              'has_shops': hasShops,
+            },
+          );
+    }, successMessage: settingsSavedMessage);
+  }
+
+  Future<void> _showInvoiceProfileDialog({
+    required int stationId,
+    required Map<String, dynamic> existing,
+  }) async {
+    final settingsSavedMessage = context.l10n.text('settingsSavedMessage');
+    final businessNameController = TextEditingController(
+      text: existing['business_name']?.toString() ?? '',
+    );
+    final legalNameController = TextEditingController(
+      text: existing['legal_name']?.toString() ?? '',
+    );
+    final registrationController = TextEditingController(
+      text: existing['registration_no']?.toString() ?? '',
+    );
+    final taxController = TextEditingController(
+      text: existing['tax_registration_no']?.toString() ?? '',
+    );
+    final emailController = TextEditingController(
+      text: existing['contact_email']?.toString() ?? '',
+    );
+    final phoneController = TextEditingController(
+      text: existing['contact_phone']?.toString() ?? '',
+    );
+    final footerController = TextEditingController(
+      text: existing['footer_text']?.toString() ?? '',
+    );
+    final prefixController = TextEditingController(
+      text: existing['invoice_prefix']?.toString() ?? '',
+    );
+    final notesController = TextEditingController(
+      text: existing['sale_invoice_notes']?.toString() ?? '',
+    );
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.text('invoiceSettingsLabel')),
+        content: SizedBox(
+          width: 580,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: businessNameController, decoration: InputDecoration(labelText: context.l10n.text('businessNameLabel'))),
+                const SizedBox(height: 12),
+                TextField(controller: legalNameController, decoration: InputDecoration(labelText: context.l10n.text('legalName'))),
+                const SizedBox(height: 12),
+                TextField(controller: registrationController, decoration: InputDecoration(labelText: context.l10n.text('registrationNumber'))),
+                const SizedBox(height: 12),
+                TextField(controller: taxController, decoration: InputDecoration(labelText: context.l10n.text('taxNumber'))),
+                const SizedBox(height: 12),
+                TextField(controller: emailController, decoration: InputDecoration(labelText: context.l10n.text('contactEmail'))),
+                const SizedBox(height: 12),
+                TextField(controller: phoneController, decoration: InputDecoration(labelText: context.l10n.text('contactPhone'))),
+                const SizedBox(height: 12),
+                TextField(controller: prefixController, decoration: InputDecoration(labelText: context.l10n.text('invoicePrefixLabel'))),
+                const SizedBox(height: 12),
+                TextField(controller: footerController, minLines: 2, maxLines: 3, decoration: InputDecoration(labelText: context.l10n.text('footerTextLabel'))),
+                const SizedBox(height: 12),
+                TextField(controller: notesController, minLines: 2, maxLines: 3, decoration: InputDecoration(labelText: context.l10n.text('invoiceNotesLabel'))),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(context.l10n.text('cancelLabel'))),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(context.l10n.text('saveLabel'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).updateInvoiceProfile(
+            stationId,
+            {
+              'business_name': businessNameController.text.trim(),
+              'legal_name': legalNameController.text.trim().isEmpty ? null : legalNameController.text.trim(),
+              'registration_no': registrationController.text.trim().isEmpty ? null : registrationController.text.trim(),
+              'tax_registration_no': taxController.text.trim().isEmpty ? null : taxController.text.trim(),
+              'contact_email': emailController.text.trim().isEmpty ? null : emailController.text.trim(),
+              'contact_phone': phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+              'footer_text': footerController.text.trim().isEmpty ? null : footerController.text.trim(),
+              'invoice_prefix': prefixController.text.trim().isEmpty ? null : prefixController.text.trim(),
+              'sale_invoice_notes': notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+            },
+          );
+    }, successMessage: settingsSavedMessage);
+  }
+
+  Future<void> _showDocumentTemplateDialog({
+    required int stationId,
+    required Map<String, dynamic> existing,
+  }) async {
+    final settingsSavedMessage = context.l10n.text('settingsSavedMessage');
+    final nameController = TextEditingController(text: existing['name']?.toString() ?? '');
+    final headerController = TextEditingController(text: existing['header_html']?.toString() ?? '');
+    final bodyController = TextEditingController(text: existing['body_html']?.toString() ?? '');
+    final footerController = TextEditingController(text: existing['footer_html']?.toString() ?? '');
+    bool isActive = existing['is_active'] != false;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(context.l10n.text('documentTemplatesLabel')),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nameController, decoration: InputDecoration(labelText: context.l10n.text('displayName'))),
+                  const SizedBox(height: 12),
+                  TextField(controller: headerController, minLines: 2, maxLines: 4, decoration: InputDecoration(labelText: context.l10n.text('headerHtmlLabel'))),
+                  const SizedBox(height: 12),
+                  TextField(controller: bodyController, minLines: 4, maxLines: 8, decoration: InputDecoration(labelText: context.l10n.text('bodyHtmlLabel'))),
+                  const SizedBox(height: 12),
+                  TextField(controller: footerController, minLines: 2, maxLines: 4, decoration: InputDecoration(labelText: context.l10n.text('footerHtmlLabel'))),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    title: Text(context.l10n.text('active')),
+                    onChanged: (value) => setLocalState(() => isActive = value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(context.l10n.text('cancelLabel'))),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(context.l10n.text('saveLabel'))),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).upsertDocumentTemplate(
+            stationId,
+            existing['document_type']?.toString() ?? 'invoice',
+            {
+              'name': nameController.text.trim(),
+              'header_html': headerController.text.trim().isEmpty ? null : headerController.text.trim(),
+              'body_html': bodyController.text.trim().isEmpty ? null : bodyController.text.trim(),
+              'footer_html': footerController.text.trim().isEmpty ? null : footerController.text.trim(),
+              'is_active': isActive,
+            },
+          );
+    }, successMessage: settingsSavedMessage);
+  }
+
+  Future<void> _showMeterAdjustmentDialog({
+    required int nozzleId,
+    required double currentReading,
+  }) async {
+    final meterAdjustmentSavedMessage =
+        context.l10n.text('meterAdjustmentSavedMessage');
+    final newReadingController =
+        TextEditingController(text: currentReading.toStringAsFixed(0));
+    final reasonController = TextEditingController();
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.text('recordMeterAdjustmentLabel')),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: newReadingController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: context.l10n.text('currentMeter'))),
+              const SizedBox(height: 12),
+              TextField(controller: reasonController, minLines: 2, maxLines: 3, decoration: InputDecoration(labelText: context.l10n.text('reasonLabel'))),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(context.l10n.text('cancelLabel'))),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(context.l10n.text('saveLabel'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).adjustNozzleMeter(
+            nozzleId,
+            newReading: double.tryParse(newReadingController.text.trim()) ?? 0,
+            reason: reasonController.text.trim(),
+          );
+    }, successMessage: meterAdjustmentSavedMessage);
+  }
+
+  Future<void> _showCreateTankerDialog({
+    required int stationId,
+    required List<Map<String, dynamic>> fuelTypes,
+  }) async {
+    final settingsSavedMessage = context.l10n.text('settingsSavedMessage');
+    final registrationController = TextEditingController();
+    final nameController = TextEditingController();
+    final capacityController = TextEditingController();
+    final ownerNameController = TextEditingController();
+    int? fuelTypeId =
+        fuelTypes.isNotEmpty ? fuelTypes.first['id'] as int : null;
+    String ownershipType = 'owned';
+    final compartmentCodeControllers = <TextEditingController>[
+      TextEditingController(text: 'C1'),
+    ];
+    final compartmentNameControllers = <TextEditingController>[
+      TextEditingController(text: 'Compartment 1'),
+    ];
+    final compartmentCapacityControllers = <TextEditingController>[
+      TextEditingController(),
+    ];
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(context.l10n.text('createTankerLabel')),
+          content: SizedBox(
+            width: 680,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: registrationController, decoration: InputDecoration(labelText: context.l10n.text('registrationNumber'))),
+                  const SizedBox(height: 12),
+                  TextField(controller: nameController, decoration: InputDecoration(labelText: context.l10n.text('displayName'))),
+                  const SizedBox(height: 12),
+                  TextField(controller: capacityController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: context.l10n.text('capacity'))),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: ownershipType,
+                    items: const [
+                      DropdownMenuItem(value: 'owned', child: Text('owned')),
+                      DropdownMenuItem(value: 'hired', child: Text('hired')),
+                      DropdownMenuItem(value: 'external', child: Text('external')),
+                    ],
+                    onChanged: (value) => setLocalState(() => ownershipType = value ?? 'owned'),
+                    decoration: InputDecoration(labelText: context.l10n.text('ownershipTypeLabel')),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(controller: ownerNameController, decoration: InputDecoration(labelText: context.l10n.text('ownerNameLabel'))),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: fuelTypeId,
+                    items: fuelTypes.map((item) => DropdownMenuItem<int>(value: item['id'] as int, child: Text(item['name']?.toString() ?? '-'))).toList(),
+                    onChanged: (value) => setLocalState(() => fuelTypeId = value),
+                    decoration: InputDecoration(labelText: context.l10n.text('fuelType')),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      context.l10n.text('compartmentsLabel'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (var i = 0; i < compartmentCodeControllers.length; i++) ...[
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: compartmentCodeControllers[i], decoration: InputDecoration(labelText: '${context.l10n.text('code')} ${i + 1}'))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextField(controller: compartmentNameControllers[i], decoration: InputDecoration(labelText: '${context.l10n.text('displayName')} ${i + 1}'))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextField(controller: compartmentCapacityControllers[i], keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: '${context.l10n.text('capacity')} ${i + 1}'))),
+                        IconButton(
+                          onPressed: compartmentCodeControllers.length == 1
+                              ? null
+                              : () {
+                                  setLocalState(() {
+                                    compartmentCodeControllers.removeAt(i);
+                                    compartmentNameControllers.removeAt(i);
+                                    compartmentCapacityControllers.removeAt(i);
+                                  });
+                                },
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        setLocalState(() {
+                          final next = compartmentCodeControllers.length + 1;
+                          compartmentCodeControllers.add(TextEditingController(text: 'C$next'));
+                          compartmentNameControllers.add(TextEditingController(text: 'Compartment $next'));
+                          compartmentCapacityControllers.add(TextEditingController());
+                        });
+                      },
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: Text(context.l10n.text('addCompartmentLabel')),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(context.l10n.text('cancelLabel'))),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(context.l10n.text('saveLabel'))),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || fuelTypeId == null) return;
+
+    final compartments = <Map<String, dynamic>>[];
+    for (var i = 0; i < compartmentCodeControllers.length; i++) {
+      compartments.add({
+        'code': compartmentCodeControllers[i].text.trim(),
+        'name': compartmentNameControllers[i].text.trim(),
+        'capacity':
+            double.tryParse(compartmentCapacityControllers[i].text.trim()) ?? 0,
+        'position': i + 1,
+        'is_active': true,
+      });
+    }
+
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).createTanker({
+        'registration_no': registrationController.text.trim(),
+        'name': nameController.text.trim(),
+        'capacity': double.tryParse(capacityController.text.trim()) ?? 0,
+        'ownership_type': ownershipType,
+        'owner_name': ownerNameController.text.trim().isEmpty
+            ? null
+            : ownerNameController.text.trim(),
+        'status': 'active',
+        'station_id': stationId,
+        'fuel_type_id': fuelTypeId,
+        'compartments': compartments,
+      });
+    }, successMessage: settingsSavedMessage);
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.title, required this.child, this.action});
+
+  final String title;
+  final Widget child;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedAction = action;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                if (resolvedAction != null) ...[
+                  resolvedAction,
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
+    required this.title,
+    required this.value,
+    this.subtitle,
+    this.width = 220,
+  });
+
+  final String title;
+  final String value;
+  final String? subtitle;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 16),
+              Text(value, style: Theme.of(context).textTheme.headlineMedium),
+              if (subtitle != null) ...[
+                const SizedBox(height: 8),
+                Text(subtitle!),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineInfo extends StatelessWidget {
+  const _InlineInfo({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 220,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 4),
+          Text(value),
+        ],
+      ),
+    );
+  }
+}
+
+class _MessageBanner extends StatelessWidget {
+  const _MessageBanner({required this.message, required this.color});
+
+  final String message;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(message, style: TextStyle(color: color)),
+    );
+  }
+}
+
+class _StationAdminBundle {
+  const _StationAdminBundle({
+    required this.dashboard,
+    required this.station,
+    required this.stationModules,
+    required this.roles,
+    required this.users,
+    required this.employeeProfiles,
+    required this.fuelTypes,
+    required this.tanks,
+    required this.dispensers,
+    required this.nozzles,
+    required this.invoiceProfile,
+    required this.documentTemplates,
+    required this.tankerSummary,
+    required this.tankers,
+    required this.tankerTrips,
+  });
+
+  final Map<String, dynamic> dashboard;
+  final Map<String, dynamic> station;
+  final List<Map<String, dynamic>> stationModules;
+  final List<Map<String, dynamic>> roles;
+  final List<Map<String, dynamic>> users;
+  final List<Map<String, dynamic>> employeeProfiles;
+  final List<Map<String, dynamic>> fuelTypes;
+  final List<Map<String, dynamic>> tanks;
+  final List<Map<String, dynamic>> dispensers;
+  final List<Map<String, dynamic>> nozzles;
+  final Map<String, dynamic> invoiceProfile;
+  final List<Map<String, dynamic>> documentTemplates;
+  final Map<String, dynamic> tankerSummary;
+  final List<Map<String, dynamic>> tankers;
+  final List<Map<String, dynamic>> tankerTrips;
+}
+
+class _DateRange {
+  const _DateRange(this.start, this.end);
+
+  final DateTime start;
+  final DateTime end;
+}
