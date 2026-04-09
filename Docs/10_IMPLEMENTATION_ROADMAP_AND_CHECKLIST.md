@@ -484,6 +484,9 @@ Checklist:
 - complete localization pass for released modules
 - test exports and print views
 - review audit-sensitive actions
+- test admin mid-shift nozzle meter adjustment flow:
+  manager opening meter -> admin adjustment event -> manager close reconciliation -> next-manager handover
+- verify adjustment-aware liters reconciliation across reset segments, including credit validation after adjustment
 - verify PostgreSQL-safe behavior
 - verify provider-ready notification architecture
 - prepare EC2 Ubuntu deployment path

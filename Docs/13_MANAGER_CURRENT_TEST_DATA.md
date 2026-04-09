@@ -225,3 +225,12 @@ Expected:
 ## Important Note
 
 This file is the current local test baseline. If you enter extra records beyond the steps above, the expected values will change accordingly.
+
+Pending later-role test:
+
+- once the admin/station-admin meter-adjustment flow is available in the app, run a dedicated scenario for:
+  shift opening meter -> mid-shift admin nozzle reset/adjustment -> manager close -> next-manager opening handover
+- expected behavior:
+  - pre-adjustment liters and post-adjustment liters reconcile into one valid shift total
+  - close-check does not raise a false abnormal lower-meter issue
+  - next manager opens from the final closing snapshot after adjustment, not the old pre-reset meter
