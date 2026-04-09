@@ -25,6 +25,15 @@ class OnboardingRepository {
         .toList();
   }
 
+  Future<OrganizationDetail> getOrganizationDetail(int organizationId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/organizations/$organizationId',
+    );
+    return OrganizationDetail.fromJson(
+      response.data ?? <String, dynamic>{},
+    );
+  }
+
   Future<OrganizationOnboardingSummary> getOnboardingSummary(
     int organizationId,
   ) async {

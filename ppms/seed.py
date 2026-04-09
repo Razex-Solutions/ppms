@@ -3,7 +3,7 @@ Run once to create the initial platform and tenant users and required setup.
 Usage: python seed.py
 """
 from pathlib import Path
-from datetime import time
+from datetime import date, time, timedelta
 
 from alembic import command
 from alembic.config import Config
@@ -27,7 +27,10 @@ from app.models.user import User
 from app.models.fuel_type import FuelType
 from app.models.tank import Tank
 from app.models.dispenser import Dispenser
+from app.models.employee_profile import EmployeeProfile
 from app.models.nozzle import Nozzle
+from app.models.payroll_line import PayrollLine
+from app.models.payroll_run import PayrollRun
 from app.core.permissions import ROLE_CAPABILITY_SUMMARY
 from app.services.document_template_seed import seed_default_document_templates
 
@@ -648,6 +651,174 @@ for demo_user in demo_users:
         existing_user.is_platform_user = demo_user["is_platform_user"]
         existing_user.is_active = True
         db.commit()
+
+
+demo_profile_blueprints = [
+    {
+        "username": "stationadmin",
+        "staff_type": "station_admin",
+        "staff_title": "Station Admin",
+        "employee_code": "EMP-SA-001",
+        "monthly_salary": 140000.0,
+    },
+    {
+        "username": "manager",
+        "staff_type": "manager",
+        "staff_title": "Shift Manager",
+        "employee_code": "EMP-MG-001",
+        "monthly_salary": 90000.0,
+    },
+    {
+        "username": "operator",
+        "staff_type": "operator",
+        "staff_title": "Pump Operator",
+        "employee_code": "EMP-OP-001",
+        "monthly_salary": 52000.0,
+    },
+    {
+        "username": "accountant",
+        "staff_type": "accountant",
+        "staff_title": "Accountant",
+        "employee_code": "EMP-AC-001",
+        "monthly_salary": 80000.0,
+    },
+]
+
+for blueprint in demo_profile_blueprints:
+    user = db.query(User).filter(User.username == blueprint["username"]).first()
+    if user is None:
+        continue
+    profile = db.query(EmployeeProfile).filter(EmployeeProfile.linked_user_id == user.id).first()
+    if profile is None:
+        profile = EmployeeProfile(
+            organization_id=organization.id,
+            station_id=user.station_id or station.id,
+            linked_user_id=user.id,
+            full_name=user.full_name,
+            staff_type=blueprint["staff_type"],
+            staff_title=blueprint["staff_title"],
+            employee_code=blueprint["employee_code"],
+            phone=user.phone,
+            is_active=True,
+            payroll_enabled=True,
+            monthly_salary=blueprint["monthly_salary"],
+            can_login=True,
+        )
+        db.add(profile)
+    else:
+        profile.organization_id = organization.id
+        profile.station_id = user.station_id or station.id
+        profile.full_name = user.full_name
+        profile.staff_type = blueprint["staff_type"]
+        profile.staff_title = blueprint["staff_title"]
+        profile.employee_code = blueprint["employee_code"]
+        profile.phone = user.phone
+        profile.is_active = True
+        profile.payroll_enabled = True
+        profile.monthly_salary = blueprint["monthly_salary"]
+        profile.can_login = True
+    user.monthly_salary = blueprint["monthly_salary"]
+    user.payroll_enabled = True
+    db.commit()
+
+today = date.today()
+current_month_start = today.replace(day=1)
+previous_month_end = current_month_start - timedelta(days=1)
+previous_month_start = previous_month_end.replace(day=1)
+
+demo_payroll_run = (
+    db.query(PayrollRun)
+    .filter(
+        PayrollRun.station_id == station.id,
+        PayrollRun.period_start == previous_month_start,
+        PayrollRun.period_end == previous_month_end,
+    )
+    .first()
+)
+if demo_payroll_run is None:
+    accountant_user = db.query(User).filter(User.username == "accountant").first()
+    demo_payroll_run = PayrollRun(
+        station_id=station.id,
+        period_start=previous_month_start,
+        period_end=previous_month_end,
+        status="finalized",
+        total_staff=0,
+        total_gross_amount=0.0,
+        total_deductions=0.0,
+        total_net_amount=0.0,
+        notes="Demo payroll run for operator self-service checks",
+        generated_by_user_id=accountant_user.id if accountant_user is not None else 1,
+        finalized_by_user_id=accountant_user.id if accountant_user is not None else 1,
+    )
+    db.add(demo_payroll_run)
+    db.commit()
+    db.refresh(demo_payroll_run)
+
+payroll_line_blueprints = {
+    "stationadmin": {"additions": 8000.0, "attendance_deductions": 0.0, "other_deductions": 0.0},
+    "manager": {"additions": 6000.0, "attendance_deductions": 1500.0, "other_deductions": 500.0},
+    "operator": {"additions": 2500.0, "attendance_deductions": 500.0, "other_deductions": 0.0},
+    "accountant": {"additions": 4000.0, "attendance_deductions": 0.0, "other_deductions": 1000.0},
+}
+
+gross_total = 0.0
+deductions_total = 0.0
+net_total = 0.0
+staff_count = 0
+for username, figures in payroll_line_blueprints.items():
+    user = db.query(User).filter(User.username == username).first()
+    profile = db.query(EmployeeProfile).filter(EmployeeProfile.linked_user_id == user.id).first() if user is not None else None
+    if user is None or profile is None:
+        continue
+
+    monthly_salary = float(profile.monthly_salary)
+    additions = float(figures["additions"])
+    attendance_deductions = float(figures["attendance_deductions"])
+    adjustment_deductions = float(figures["other_deductions"])
+    total_deductions = attendance_deductions + adjustment_deductions
+    gross_amount = monthly_salary + additions
+    net_amount = gross_amount - total_deductions
+
+    line = (
+        db.query(PayrollLine)
+        .filter(
+            PayrollLine.payroll_run_id == demo_payroll_run.id,
+            PayrollLine.user_id == user.id,
+        )
+        .first()
+    )
+    if line is None:
+        line = PayrollLine(
+            payroll_run_id=demo_payroll_run.id,
+            user_id=user.id,
+            employee_profile_id=profile.id,
+        )
+        db.add(line)
+
+    line.employee_profile_id = profile.id
+    line.present_days = 26
+    line.leave_days = 2
+    line.absent_days = 1 if username == "manager" else 0
+    line.payable_days = 29 if username == "manager" else 30
+    line.monthly_salary = monthly_salary
+    line.gross_amount = gross_amount
+    line.attendance_deductions = attendance_deductions
+    line.adjustment_additions = additions
+    line.adjustment_deductions = adjustment_deductions
+    line.deductions = total_deductions
+    line.net_amount = net_amount
+
+    gross_total += gross_amount
+    deductions_total += total_deductions
+    net_total += net_amount
+    staff_count += 1
+
+demo_payroll_run.status = "finalized"
+demo_payroll_run.total_staff = staff_count
+demo_payroll_run.total_gross_amount = gross_total
+demo_payroll_run.total_deductions = deductions_total
+demo_payroll_run.total_net_amount = net_total
+db.commit()
 
 db.close()
 print("Seed complete.")

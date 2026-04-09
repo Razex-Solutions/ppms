@@ -5,10 +5,11 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import ROUTER_REGISTRY
-from app.core.config import APP_ENV, ENABLED_MODULES, DELIVERY_WORKER_ENABLED, DELIVERY_WORKER_INTERVAL_SECONDS, DATABASE_URL, BACKUP_DIRECTORY
+from app.core.config import APP_ENV, ENABLED_MODULES, DELIVERY_WORKER_ENABLED, DELIVERY_WORKER_INTERVAL_SECONDS, DATABASE_URL, BACKUP_DIRECTORY, CORS_ALLOW_ORIGINS, CORS_ALLOW_ORIGIN_REGEX
 from app.core.database import engine
 from app.core.dependencies import get_current_user
 from app.core.logging import get_logger, setup_logging
@@ -60,6 +61,16 @@ def create_app(enabled_modules: str | None = None) -> FastAPI:
         title="Petrol Pump Management System API",
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ALLOW_ORIGINS or ["*"],
+        allow_origin_regex=CORS_ALLOW_ORIGIN_REGEX,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
     )
 
     protected = {"dependencies": [Depends(get_current_user)]}

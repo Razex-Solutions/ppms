@@ -60,3 +60,15 @@ BACKUP_DIRECTORY = _resolve_backup_directory(os.getenv("BACKUP_DIRECTORY"))
 BACKUP_RETENTION_COUNT = int(os.getenv("BACKUP_RETENTION_COUNT", "10"))
 ONLINE_HOOKS_MODE = os.getenv("ONLINE_HOOKS_MODE", "mock").lower()
 HARDWARE_VENDOR_MODE = os.getenv("HARDWARE_VENDOR_MODE", "mock").lower()
+CORS_ALLOW_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:5000,http://localhost:5000,http://127.0.0.1:8012,http://localhost:8012",
+    ).split(",")
+    if origin.strip()
+]
+CORS_ALLOW_ORIGIN_REGEX = os.getenv(
+    "CORS_ALLOW_ORIGIN_REGEX",
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+)

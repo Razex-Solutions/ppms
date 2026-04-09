@@ -60,3 +60,29 @@ class EmployeeProfileResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SelfEmployeeProfileResponse(BaseModel):
+    user_id: int
+    username: str
+    full_name: str
+    role_name: str
+    scope_level: str
+    email: str | None = None
+    phone: str | None = None
+    whatsapp_number: str | None = None
+    organization_id: int | None = None
+    organization_name: str | None = None
+    station_id: int | None = None
+    station_name: str | None = None
+    has_employee_profile: bool
+    linked_employee_profile_id: int | None = None
+    staff_type: str | None = None
+    staff_title: str | None = None
+    employee_code: str | None = None
+    national_id: str | None = None
+    address: str | None = None
+    is_active: bool
+    payroll_enabled: bool
+    monthly_salary: float
+    can_login: bool

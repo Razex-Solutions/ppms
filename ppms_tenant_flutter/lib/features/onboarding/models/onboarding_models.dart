@@ -53,6 +53,59 @@ class OrganizationListItem {
   }
 }
 
+class OrganizationDetail {
+  const OrganizationDetail({
+    required this.id,
+    required this.name,
+    required this.code,
+    required this.onboardingStatus,
+    required this.isActive,
+    this.legalName,
+    this.brandCatalogId,
+    this.brandName,
+    this.contactEmail,
+    this.contactPhone,
+    this.registrationNumber,
+    this.taxRegistrationNumber,
+    this.stationTargetCount,
+    this.inheritBrandingToStations = true,
+  });
+
+  final int id;
+  final String name;
+  final String code;
+  final String onboardingStatus;
+  final bool isActive;
+  final String? legalName;
+  final int? brandCatalogId;
+  final String? brandName;
+  final String? contactEmail;
+  final String? contactPhone;
+  final String? registrationNumber;
+  final String? taxRegistrationNumber;
+  final int? stationTargetCount;
+  final bool inheritBrandingToStations;
+
+  factory OrganizationDetail.fromJson(Map<String, dynamic> json) {
+    return OrganizationDetail(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      code: json['code'] as String,
+      onboardingStatus: json['onboarding_status'] as String,
+      isActive: json['is_active'] == true,
+      legalName: json['legal_name'] as String?,
+      brandCatalogId: json['brand_catalog_id'] as int?,
+      brandName: json['brand_name'] as String?,
+      contactEmail: json['contact_email'] as String?,
+      contactPhone: json['contact_phone'] as String?,
+      registrationNumber: json['registration_number'] as String?,
+      taxRegistrationNumber: json['tax_registration_number'] as String?,
+      stationTargetCount: json['station_target_count'] as int?,
+      inheritBrandingToStations: json['inherit_branding_to_stations'] == true,
+    );
+  }
+}
+
 class OnboardingStep {
   const OnboardingStep({
     required this.stepKey,

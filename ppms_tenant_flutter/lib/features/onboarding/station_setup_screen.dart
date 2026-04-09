@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/localization/app_localizations.dart';
 import 'models/onboarding_models.dart';
 import 'onboarding_repository.dart';
 
@@ -19,6 +20,10 @@ class StationSetupScreen extends ConsumerStatefulWidget {
 class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
   bool _initialized = false;
   final _displayNameController = TextEditingController();
+  final _fuelTypeCountController = TextEditingController(text: '2');
+  final _tankCountController = TextEditingController(text: '2');
+  final _dispenserCountController = TextEditingController(text: '2');
+  final _nozzlesPerDispenserController = TextEditingController(text: '2');
   String _shiftMode = 'three_8h';
   bool _hasPos = false;
   bool _hasTankers = false;
@@ -33,6 +38,10 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
   @override
   void dispose() {
     _displayNameController.dispose();
+    _fuelTypeCountController.dispose();
+    _tankCountController.dispose();
+    _dispenserCountController.dispose();
+    _nozzlesPerDispenserController.dispose();
     for (final fuelType in _fuelTypes) {
       fuelType.dispose();
     }
@@ -57,7 +66,7 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
       }
       if (next.isSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Station setup saved.')),
+          SnackBar(content: Text(context.l10n.text('stationSetupSaved'))),
         );
         ref.read(stationSetupActionProvider.notifier).clearMessage();
       } else if (next.errorMessage != null &&
@@ -75,11 +84,81 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
           padding: const EdgeInsets.all(24),
           children: [
             Text(
-              'Station setup wizard',
+              context.l10n.text('stationSetupTitle'),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text('${foundation.stationName} (${foundation.stationCode})'),
+            const SizedBox(height: 20),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.text('quickPlanner'),
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(context.l10n.text('quickPlannerHint')),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _fuelTypeCountController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.l10n.text('fuelTypeCount'),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _tankCountController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.l10n.text('tankCount'),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _dispenserCountController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.l10n.text('dispenserCount'),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: TextField(
+                            controller: _nozzlesPerDispenserController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.l10n.text('nozzlesPerDispenser'),
+                            ),
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _generateDefaults,
+                          icon: const Icon(Icons.auto_fix_high_outlined),
+                          label: Text(context.l10n.text('generateDefaults')),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
             Wrap(
               spacing: 16,
@@ -89,23 +168,41 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
                   width: 280,
                   child: TextField(
                     controller: _displayNameController,
-                    decoration: const InputDecoration(labelText: 'Display name'),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('displayName'),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: 240,
                   child: DropdownButtonFormField<String>(
                     initialValue: _shiftMode,
-                    decoration: const InputDecoration(labelText: 'Shift mode'),
-                    items: const [
-                      DropdownMenuItem(value: 'single_24h', child: Text('24 hour')),
-                      DropdownMenuItem(value: 'two_12h', child: Text('2 x 12 hour')),
-                      DropdownMenuItem(value: 'three_8h', child: Text('3 x 8 hour')),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('shiftMode'),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'single_24h',
+                        child: Text(context.l10n.text('hour24')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'two_12h',
+                        child: Text(context.l10n.text('twoBy12')),
+                      ),
+                      DropdownMenuItem(
+                        value: 'three_8h',
+                        child: Text(context.l10n.text('threeBy8')),
+                      ),
                     ],
                     onChanged: (value) => setState(() => _shiftMode = value ?? _shiftMode),
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.l10n.text('startingMeterHint'),
+              style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -126,7 +223,7 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
             const SizedBox(height: 24),
             _sectionHeader(
               context,
-              title: 'Fuel types',
+              title: context.l10n.text('fuelTypes'),
               onAdd: () => setState(() => _fuelTypes.add(_FuelTypeDraft())),
             ),
             for (var index = 0; index < _fuelTypes.length; index++)
@@ -142,7 +239,7 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
             const SizedBox(height: 20),
             _sectionHeader(
               context,
-              title: 'Tanks',
+              title: context.l10n.text('tanks'),
               onAdd: () => setState(() => _tanks.add(_TankDraft())),
             ),
             for (var index = 0; index < _tanks.length; index++)
@@ -159,7 +256,7 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
             const SizedBox(height: 20),
             _sectionHeader(
               context,
-              title: 'Dispensers and nozzles',
+              title: context.l10n.text('dispensersAndNozzles'),
               onAdd: () => setState(() => _dispensers.add(_DispenserDraft())),
             ),
             for (var index = 0; index < _dispensers.length; index++)
@@ -185,7 +282,7 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.task_alt_outlined),
-              label: const Text('Save station setup'),
+              label: Text(context.l10n.text('saveStationSetup')),
             ),
           ],
         );
@@ -212,7 +309,7 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
         OutlinedButton.icon(
           onPressed: onAdd,
           icon: const Icon(Icons.add),
-          label: const Text('Add'),
+          label: Text(context.l10n.text('add')),
         ),
       ],
     );
@@ -224,6 +321,18 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
     }
     _initialized = true;
     _displayNameController.text = foundation.stationName;
+    _fuelTypeCountController.text =
+        (foundation.fuelTypes.isEmpty ? 2 : foundation.fuelTypes.length).toString();
+    _tankCountController.text =
+        (foundation.tanks.isEmpty ? 2 : foundation.tanks.length).toString();
+    _dispenserCountController.text =
+        (foundation.dispensers.isEmpty ? 2 : foundation.dispensers.length).toString();
+    final derivedNozzleCount = foundation.dispensers.isEmpty
+        ? 2
+        : foundation.dispensers
+            .map((item) => item.nozzles.length)
+            .reduce((value, element) => value > element ? value : element);
+    _nozzlesPerDispenserController.text = derivedNozzleCount.toString();
 
     if (foundation.fuelTypes.isNotEmpty) {
       _fuelTypes.addAll(
@@ -252,6 +361,10 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
             capacity: item.capacity.toStringAsFixed(0),
             threshold: item.lowStockThreshold.toStringAsFixed(0),
             selectedFuelTypeId: item.fuelTypeId,
+            selectedFuelTypeName: _fuelTypeNameById(
+              foundation.fuelTypes,
+              item.fuelTypeId,
+            ),
             isActive: item.isActive,
           ),
         ),
@@ -277,7 +390,15 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
                   name: nozzle.name,
                   code: nozzle.code,
                   selectedFuelTypeId: nozzle.fuelTypeId,
+                  selectedFuelTypeName: _fuelTypeNameById(
+                    foundation.fuelTypes,
+                    nozzle.fuelTypeId,
+                  ),
                   selectedTankId: nozzle.tankId,
+                  selectedTankCode: _tankCodeById(
+                    foundation.tanks,
+                    nozzle.tankId,
+                  ),
                   meterReading: nozzle.meterReading.toStringAsFixed(0),
                   isActive: nozzle.isActive,
                 ),
@@ -292,6 +413,107 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
     } else {
       _dispensers.add(_DispenserDraft());
     }
+  }
+
+  void _generateDefaults() {
+    final fuelTypeCount = int.tryParse(_fuelTypeCountController.text) ?? 2;
+    final tankCount = int.tryParse(_tankCountController.text) ?? 2;
+    final dispenserCount = int.tryParse(_dispenserCountController.text) ?? 2;
+    final nozzleCount = int.tryParse(_nozzlesPerDispenserController.text) ?? 2;
+
+    for (final fuelType in _fuelTypes) {
+      fuelType.dispose();
+    }
+    for (final tank in _tanks) {
+      tank.dispose();
+    }
+    for (final dispenser in _dispensers) {
+      dispenser.dispose();
+    }
+    _fuelTypes.clear();
+    _tanks.clear();
+    _dispensers.clear();
+
+    const defaults = ['Petrol', 'Diesel', 'High Octane', 'AdBlue', 'Kerosene'];
+    for (var index = 0; index < fuelTypeCount; index++) {
+      _fuelTypes.add(
+        _FuelTypeDraft(name: index < defaults.length ? defaults[index] : 'Fuel ${index + 1}'),
+      );
+    }
+    for (var index = 0; index < tankCount; index++) {
+      _tanks.add(
+        _TankDraft(
+          name: 'Tank ${index + 1}',
+          code: 'T${index + 1}',
+          capacity: '0',
+          selectedFuelTypeId: _resolveFuelTypeIdForIndex(index),
+          selectedFuelTypeName: _resolveFuelTypeNameForIndex(index),
+        ),
+      );
+    }
+    for (var dispenserIndex = 0; dispenserIndex < dispenserCount; dispenserIndex++) {
+      final draft = _DispenserDraft(
+        name: 'Dispenser ${dispenserIndex + 1}',
+        code: 'D${dispenserIndex + 1}',
+      );
+      draft.nozzles.clear();
+      for (var nozzleIndex = 0; nozzleIndex < nozzleCount; nozzleIndex++) {
+        final mappingIndex = dispenserIndex * nozzleCount + nozzleIndex;
+        draft.nozzles.add(
+          _NozzleDraft(
+            name: 'Nozzle ${nozzleIndex + 1}',
+            code: 'D${dispenserIndex + 1}-N${nozzleIndex + 1}',
+            selectedFuelTypeId: _resolveFuelTypeIdForIndex(mappingIndex),
+            selectedFuelTypeName: _resolveFuelTypeNameForIndex(mappingIndex),
+            selectedTankId: _resolveTankIdForIndex(mappingIndex),
+            selectedTankCode: _resolveTankCodeForIndex(mappingIndex),
+            meterReading: '0',
+          ),
+        );
+      }
+      _dispensers.add(draft);
+    }
+    setState(() {});
+  }
+
+  int? _resolveFuelTypeIdForIndex(int index) {
+    if (_fuelTypes.isEmpty) return null;
+    final draft = _fuelTypes[index % _fuelTypes.length];
+    return draft.id;
+  }
+
+  int? _resolveTankIdForIndex(int index) {
+    if (_tanks.isEmpty) return null;
+    final draft = _tanks[index % _tanks.length];
+    return draft.id;
+  }
+
+  String? _resolveFuelTypeNameForIndex(int index) {
+    if (_fuelTypes.isEmpty) return null;
+    return _fuelTypes[index % _fuelTypes.length].nameController.text.trim();
+  }
+
+  String? _resolveTankCodeForIndex(int index) {
+    if (_tanks.isEmpty) return null;
+    return _tanks[index % _tanks.length].codeController.text.trim();
+  }
+
+  String? _fuelTypeNameById(List<StationFuelTypeItem> fuelTypes, int fuelTypeId) {
+    for (final fuel in fuelTypes) {
+      if (fuel.id == fuelTypeId) {
+        return fuel.name;
+      }
+    }
+    return null;
+  }
+
+  String? _tankCodeById(List<StationTankItem> tanks, int tankId) {
+    for (final tank in tanks) {
+      if (tank.id == tankId) {
+        return tank.code;
+      }
+    }
+    return null;
   }
 
   Future<void> _save(StationSetupFoundation foundation) async {
@@ -325,6 +547,9 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
                   'name': item.nameController.text.trim(),
                   'code': item.codeController.text.trim(),
                   'fuel_type_id': item.selectedFuelTypeId,
+                  if (item.selectedFuelTypeId == null &&
+                      item.selectedFuelTypeName != null)
+                    'fuel_type_name': item.selectedFuelTypeName,
                   'capacity': double.tryParse(item.capacityController.text) ?? 0,
                   'low_stock_threshold':
                       double.tryParse(item.thresholdController.text) ?? 1000,
@@ -346,7 +571,13 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
                           'name': nozzle.nameController.text.trim(),
                           'code': nozzle.codeController.text.trim(),
                           'tank_id': nozzle.selectedTankId,
+                          if (nozzle.selectedTankId == null &&
+                              nozzle.selectedTankCode != null)
+                            'tank_code': nozzle.selectedTankCode,
                           'fuel_type_id': nozzle.selectedFuelTypeId,
+                          if (nozzle.selectedFuelTypeId == null &&
+                              nozzle.selectedFuelTypeName != null)
+                            'fuel_type_name': nozzle.selectedFuelTypeName,
                           'meter_reading':
                               double.tryParse(nozzle.meterController.text) ?? 0,
                           'is_active': nozzle.isActive,
@@ -386,6 +617,7 @@ class _TankDraft {
     String capacity = '',
     String threshold = '1000',
     this.selectedFuelTypeId,
+    this.selectedFuelTypeName,
     this.isActive = true,
   })  : nameController = TextEditingController(text: name),
         codeController = TextEditingController(text: code),
@@ -398,6 +630,7 @@ class _TankDraft {
   final TextEditingController capacityController;
   final TextEditingController thresholdController;
   int? selectedFuelTypeId;
+  String? selectedFuelTypeName;
   bool isActive;
 
   void dispose() {
@@ -415,7 +648,9 @@ class _NozzleDraft {
     String code = '',
     String meterReading = '0',
     this.selectedFuelTypeId,
+    this.selectedFuelTypeName,
     this.selectedTankId,
+    this.selectedTankCode,
     this.isActive = true,
   })  : nameController = TextEditingController(text: name),
         codeController = TextEditingController(text: code),
@@ -426,7 +661,9 @@ class _NozzleDraft {
   final TextEditingController codeController;
   final TextEditingController meterController;
   int? selectedFuelTypeId;
+  String? selectedFuelTypeName;
   int? selectedTankId;
+  String? selectedTankCode;
   bool isActive;
 
   void dispose() {
@@ -477,14 +714,18 @@ class _FuelTypeCard extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: draft.nameController,
-                decoration: const InputDecoration(labelText: 'Fuel type name'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('fuelTypeName'),
+                ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: TextField(
                 controller: draft.descriptionController,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('description'),
+                ),
               ),
             ),
             if (onRemove != null) ...[
@@ -523,21 +764,25 @@ class _TankCard extends StatelessWidget {
               width: 200,
               child: TextField(
                 controller: draft.nameController,
-                decoration: const InputDecoration(labelText: 'Tank name'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('tankName'),
+                ),
               ),
             ),
             SizedBox(
               width: 160,
               child: TextField(
                 controller: draft.codeController,
-                decoration: const InputDecoration(labelText: 'Code'),
+                decoration: InputDecoration(labelText: context.l10n.text('code')),
               ),
             ),
             SizedBox(
               width: 180,
               child: DropdownButtonFormField<int>(
                 initialValue: draft.selectedFuelTypeId,
-                decoration: const InputDecoration(labelText: 'Fuel type'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('fuelType'),
+                ),
                 items: [
                   for (final fuel in fuelTypes)
                     DropdownMenuItem(
@@ -547,7 +792,14 @@ class _TankCard extends StatelessWidget {
                           : fuel.nameController.text),
                     ),
                 ],
-                onChanged: (value) => draft.selectedFuelTypeId = value,
+                onChanged: (value) {
+                  draft.selectedFuelTypeId = value;
+                  draft.selectedFuelTypeName = fuelTypes
+                      .where((fuel) => fuel.id == value)
+                      .map((fuel) => fuel.nameController.text)
+                      .cast<String?>()
+                      .firstWhere((_) => true, orElse: () => null);
+                },
               ),
             ),
             SizedBox(
@@ -555,7 +807,9 @@ class _TankCard extends StatelessWidget {
               child: TextField(
                 controller: draft.capacityController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Capacity'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('capacity'),
+                ),
               ),
             ),
             SizedBox(
@@ -563,11 +817,13 @@ class _TankCard extends StatelessWidget {
               child: TextField(
                 controller: draft.thresholdController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Low stock threshold'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.text('lowStockThreshold'),
+                ),
               ),
             ),
             FilterChip(
-              label: const Text('Active'),
+              label: Text(context.l10n.text('active')),
               selected: draft.isActive,
               onSelected: (value) => draft.isActive = value,
             ),
@@ -612,18 +868,20 @@ class _DispenserCard extends StatelessWidget {
                   width: 220,
                   child: TextField(
                     controller: draft.nameController,
-                    decoration: const InputDecoration(labelText: 'Dispenser name'),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.text('dispenserName'),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: 180,
                   child: TextField(
                     controller: draft.codeController,
-                    decoration: const InputDecoration(labelText: 'Code'),
+                    decoration: InputDecoration(labelText: context.l10n.text('code')),
                   ),
                 ),
                 FilterChip(
-                  label: const Text('Active'),
+                  label: Text(context.l10n.text('active')),
                   selected: draft.isActive,
                   onSelected: (value) {
                     draft.isActive = value;
@@ -636,7 +894,7 @@ class _DispenserCard extends StatelessWidget {
                     onChanged();
                   },
                   icon: const Icon(Icons.add),
-                  label: const Text('Add nozzle'),
+                  label: Text(context.l10n.text('addNozzle')),
                 ),
                 if (onRemove != null)
                   IconButton(
@@ -701,21 +959,25 @@ class _NozzleCard extends StatelessWidget {
             width: 180,
             child: TextField(
               controller: draft.nameController,
-              decoration: const InputDecoration(labelText: 'Nozzle name'),
+              decoration: InputDecoration(
+                labelText: context.l10n.text('nozzleName'),
+              ),
             ),
           ),
           SizedBox(
             width: 140,
             child: TextField(
               controller: draft.codeController,
-              decoration: const InputDecoration(labelText: 'Code'),
+              decoration: InputDecoration(labelText: context.l10n.text('code')),
             ),
           ),
           SizedBox(
             width: 180,
             child: DropdownButtonFormField<int>(
               initialValue: draft.selectedFuelTypeId,
-              decoration: const InputDecoration(labelText: 'Fuel type'),
+              decoration: InputDecoration(
+                labelText: context.l10n.text('fuelType'),
+              ),
               items: [
                 for (final fuel in fuelTypes)
                   DropdownMenuItem(
@@ -727,6 +989,11 @@ class _NozzleCard extends StatelessWidget {
               ],
               onChanged: (value) {
                 draft.selectedFuelTypeId = value;
+                draft.selectedFuelTypeName = fuelTypes
+                    .where((fuel) => fuel.id == value)
+                    .map((fuel) => fuel.nameController.text)
+                    .cast<String?>()
+                    .firstWhere((_) => true, orElse: () => null);
                 onChanged();
               },
             ),
@@ -735,7 +1002,7 @@ class _NozzleCard extends StatelessWidget {
             width: 180,
             child: DropdownButtonFormField<int>(
               initialValue: draft.selectedTankId,
-              decoration: const InputDecoration(labelText: 'Tank'),
+              decoration: InputDecoration(labelText: context.l10n.text('tank')),
               items: [
                 for (final tank in tanks)
                   DropdownMenuItem(
@@ -747,6 +1014,11 @@ class _NozzleCard extends StatelessWidget {
               ],
               onChanged: (value) {
                 draft.selectedTankId = value;
+                draft.selectedTankCode = tanks
+                    .where((tank) => tank.id == value)
+                    .map((tank) => tank.codeController.text)
+                    .cast<String?>()
+                    .firstWhere((_) => true, orElse: () => null);
                 onChanged();
               },
             ),
@@ -756,11 +1028,13 @@ class _NozzleCard extends StatelessWidget {
             child: TextField(
               controller: draft.meterController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Start meter'),
+              decoration: InputDecoration(
+                labelText: context.l10n.text('startingMeter'),
+              ),
             ),
           ),
           FilterChip(
-            label: const Text('Active'),
+            label: Text(context.l10n.text('active')),
             selected: draft.isActive,
             onSelected: (value) {
               draft.isActive = value;

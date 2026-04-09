@@ -13,8 +13,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _usernameController = TextEditingController(text: 'manager');
-  final _passwordController = TextEditingController(text: 'password123');
+  final _usernameController = TextEditingController(text: 'masteradmin');
+  final _passwordController = TextEditingController(text: 'master123');
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -143,12 +143,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 16),
-                          const _SeedAccountTile('masteradmin'),
-                          const _SeedAccountTile('headoffice'),
-                          const _SeedAccountTile('stationadmin'),
-                          const _SeedAccountTile('manager'),
-                          const _SeedAccountTile('operator'),
-                          const _SeedAccountTile('accountant'),
+                          const _SeedAccountTile('masteradmin', 'master123'),
+                          const _SeedAccountTile('headoffice', 'office123'),
+                          const _SeedAccountTile('stationadmin', 'station123'),
+                          const _SeedAccountTile('manager', 'manager123'),
+                          const _SeedAccountTile('operator', 'operator123'),
+                          const _SeedAccountTile('accountant', 'accountant123'),
                           const SizedBox(height: 16),
                           Text(
                             '${context.l10n.text('apiBaseUrl')}: ${AppEnvironment.apiBaseUrl}',
@@ -168,9 +168,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 class _SeedAccountTile extends StatelessWidget {
-  const _SeedAccountTile(this.username);
+  const _SeedAccountTile(this.username, this.password);
 
   final String username;
+  final String password;
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +182,7 @@ class _SeedAccountTile extends StatelessWidget {
           const Icon(Icons.person_outline_rounded, size: 18),
           const SizedBox(width: 8),
           Expanded(child: Text(username)),
-          const Text('password123'),
+          Text(password),
         ],
       ),
     );

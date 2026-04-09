@@ -52,3 +52,24 @@ class PayrollRunResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PayrollSelfServicePeriodSummary(BaseModel):
+    payroll_run_id: int
+    period_start: date
+    period_end: date
+    status: str
+    monthly_salary: float
+    gross_amount: float
+    attendance_deductions: float
+    adjustment_additions: float
+    adjustment_deductions: float
+    deductions: float
+    net_amount: float
+
+
+class PayrollSelfServiceSummaryResponse(BaseModel):
+    enabled: bool
+    current_monthly_salary: float
+    latest_run: PayrollSelfServicePeriodSummary | None = None
+    history: list[PayrollSelfServicePeriodSummary]

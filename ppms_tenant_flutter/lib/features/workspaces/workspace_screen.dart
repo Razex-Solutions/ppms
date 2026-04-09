@@ -5,6 +5,7 @@ import '../../app/localization/app_localizations.dart';
 import '../../app/session/models/app_role.dart';
 import '../../app/session/session_controller.dart';
 import '../onboarding/master_admin_onboarding_screen.dart';
+import '../operator/operator_home_screen.dart';
 import '../../widgets/info_card.dart';
 
 class WorkspaceScreen extends ConsumerWidget {
@@ -25,6 +26,11 @@ class WorkspaceScreen extends ConsumerWidget {
     if ((requestedType == 'master-admin' || requestedType == null) &&
         session.role == AppRole.masterAdmin) {
       return const MasterAdminOnboardingScreen();
+    }
+
+    if ((requestedType == 'operator' || requestedType == null) &&
+        session.role == AppRole.operator) {
+      return const OperatorHomeScreen();
     }
 
     final titleKey = _resolveTitleKey(session.role, requestedType);

@@ -15,6 +15,9 @@ from app.schemas.attendance import (
     AttendanceCheckOutRequest,
     AttendanceRecordCreate,
     AttendanceRecordResponse,
+    AttendanceSelfCheckInRequest,
+    AttendanceSelfCheckOutRequest,
+    AttendanceSelfServiceSummaryResponse,
     AttendanceRecordUpdate,
 )
 from app.services.attendance import (
@@ -24,9 +27,23 @@ from app.services.attendance import (
     ensure_attendance_access,
     update_attendance_record,
 )
+from app.core.time import utc_now
 
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
+
+def _get_current_user_open_attendance(db: Session, current_user: User) -> AttendanceRecord | None:
+    return (
+        db.query(AttendanceRecord)
+        .filter(
+            AttendanceRecord.user_id == current_user.id,
+            AttendanceRecord.station_id == current_user.station_id,
+            AttendanceRecord.check_out_at.is_(None),
+        )
+        .order_by(AttendanceRecord.attendance_date.desc(), AttendanceRecord.id.desc())
+        .first()
+    )
 
 
 @router.post("/check-in", response_model=AttendanceRecordResponse)
@@ -37,6 +54,42 @@ def post_check_in(
 ):
     require_permission(current_user, "attendance", "check_in", detail="You do not have permission to check in")
     return check_in(db, current_user=current_user, station_id=data.station_id, notes=data.notes)
+
+
+@router.get("/me", response_model=AttendanceSelfServiceSummaryResponse)
+def get_my_attendance_summary(
+    limit: int = Query(14, ge=1, le=60),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    today = utc_now().date()
+    recent_records = (
+        db.query(AttendanceRecord)
+        .filter(AttendanceRecord.user_id == current_user.id)
+        .order_by(AttendanceRecord.attendance_date.desc(), AttendanceRecord.id.desc())
+        .limit(limit)
+        .all()
+    )
+    today_record = next((record for record in recent_records if record.attendance_date == today), None)
+    return AttendanceSelfServiceSummaryResponse(
+        enabled=bool(current_user.station_id),
+        station_id=current_user.station_id,
+        station_name=current_user.station.name if current_user.station is not None else None,
+        today_record=today_record,
+        recent_records=recent_records,
+    )
+
+
+@router.post("/me/check-in", response_model=AttendanceRecordResponse)
+def post_my_check_in(
+    data: AttendanceSelfCheckInRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "attendance", "check_in", detail="You do not have permission to check in")
+    if current_user.station_id is None:
+        raise HTTPException(status_code=400, detail="Your account is not assigned to a station")
+    return check_in(db, current_user=current_user, station_id=current_user.station_id, notes=data.notes)
 
 
 @router.post("/{attendance_id}/check-out", response_model=AttendanceRecordResponse)
@@ -50,6 +103,21 @@ def post_check_out(
     if not record:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     require_permission(current_user, "attendance", "check_out", detail="You do not have permission to check out")
+    return check_out(db, record=record, current_user=current_user, notes=data.notes)
+
+
+@router.post("/me/check-out", response_model=AttendanceRecordResponse)
+def post_my_check_out(
+    data: AttendanceSelfCheckOutRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_permission(current_user, "attendance", "check_out", detail="You do not have permission to check out")
+    if current_user.station_id is None:
+        raise HTTPException(status_code=400, detail="Your account is not assigned to a station")
+    record = _get_current_user_open_attendance(db, current_user)
+    if record is None:
+        raise HTTPException(status_code=404, detail="No open attendance record found for today")
     return check_out(db, record=record, current_user=current_user, notes=data.notes)
 
 

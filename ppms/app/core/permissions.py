@@ -74,8 +74,8 @@ ROLE_CAPABILITY_SUMMARY: dict[str, dict[str, str]] = {
     },
     "Operator": {
         "scope": "Station-wide",
-        "governance": "Day-to-day execution without governance authority",
-        "operations": "Sales, shifts, purchases, and frontline workflows",
+        "governance": "Self-service access without operational or governance authority",
+        "operations": "Own profile, attendance, payroll visibility, and personal notifications only",
     },
     "Accountant": {
         "scope": "Station-wide",
@@ -126,7 +126,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "read": {"HeadOffice"},
     },
     "station_modules": {
-        "read": {"HeadOffice", "StationAdmin", "Manager", "Operator", "Accountant"},
+        "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
         "update": {"HeadOffice", "StationAdmin"},
     },
     "invoice_profiles": {
@@ -151,7 +151,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "delete": {"HeadOffice", "StationAdmin"},
     },
     "fuel_pricing": {
-        "read": {"HeadOffice", "StationAdmin", "Manager", "Operator", "Accountant"},
+        "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
         "update": {"HeadOffice", "StationAdmin", "Manager"},
     },
     "tanks": {
@@ -172,14 +172,14 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "read_meter_history": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
     },
     "tankers": {
-        "read": {"HeadOffice", "StationAdmin", "Manager", "Operator", "Accountant"},
+        "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
         "create": {"StationAdmin", "Manager"},
         "update": {"StationAdmin", "Manager"},
         "delete": {"StationAdmin", "Manager"},
-        "trip_create": {"StationAdmin", "Manager", "Operator"},
-        "delivery_create": {"StationAdmin", "Manager", "Operator"},
-        "expense_create": {"StationAdmin", "Manager", "Operator", "Accountant"},
-        "complete": {"StationAdmin", "Manager", "Operator"},
+        "trip_create": {"StationAdmin", "Manager"},
+        "delivery_create": {"StationAdmin", "Manager"},
+        "expense_create": {"StationAdmin", "Manager", "Accountant"},
+        "complete": {"StationAdmin", "Manager"},
     },
     "customers": {
         "create": {"StationAdmin", "Manager", "Accountant"},
@@ -195,36 +195,36 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "delete": {"StationAdmin", "Manager"},
     },
     "fuel_sales": {
-        "create": {"StationAdmin", "Manager", "Operator"},
-        "reverse": {"StationAdmin", "Manager", "Operator"},
+        "create": {"StationAdmin", "Manager"},
+        "reverse": {"StationAdmin", "Manager"},
         "approve_reverse": {"HeadOffice", "StationAdmin"},
         "reject_reverse": {"HeadOffice", "StationAdmin"},
     },
     "purchases": {
-        "create": {"StationAdmin", "Manager", "Operator"},
+        "create": {"StationAdmin", "Manager"},
         "approve": {"HeadOffice", "StationAdmin"},
         "reject": {"HeadOffice", "StationAdmin"},
-        "reverse": {"StationAdmin", "Manager", "Operator"},
+        "reverse": {"StationAdmin", "Manager"},
         "approve_reverse": {"HeadOffice", "StationAdmin"},
         "reject_reverse": {"HeadOffice", "StationAdmin"},
     },
     "internal_fuel_usage": {
-        "create": {"StationAdmin", "Manager", "Operator"},
-        "read": {"HeadOffice", "StationAdmin", "Manager", "Operator", "Accountant"},
+        "create": {"StationAdmin", "Manager"},
+        "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
     },
     "customer_payments": {
-        "create": {"StationAdmin", "Manager", "Operator", "Accountant"},
+        "create": {"StationAdmin", "Manager", "Accountant"},
         "update": {"HeadOffice", "StationAdmin", "Accountant"},
         "delete": {"HeadOffice", "StationAdmin", "Accountant"},
-        "reverse": {"StationAdmin", "Manager", "Operator", "Accountant"},
+        "reverse": {"StationAdmin", "Manager", "Accountant"},
         "approve_reverse": {"HeadOffice", "StationAdmin"},
         "reject_reverse": {"HeadOffice", "StationAdmin"},
     },
     "supplier_payments": {
-        "create": {"StationAdmin", "Manager", "Operator", "Accountant"},
+        "create": {"StationAdmin", "Manager", "Accountant"},
         "update": {"HeadOffice", "StationAdmin", "Accountant"},
         "delete": {"HeadOffice", "StationAdmin", "Accountant"},
-        "reverse": {"StationAdmin", "Manager", "Operator", "Accountant"},
+        "reverse": {"StationAdmin", "Manager", "Accountant"},
         "approve_reverse": {"HeadOffice", "StationAdmin"},
         "reject_reverse": {"HeadOffice", "StationAdmin"},
     },
@@ -232,10 +232,10 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
     },
     "shifts": {
-        "read": {"HeadOffice", "StationAdmin", "Manager", "Operator", "Accountant"},
-        "open": {"StationAdmin", "Manager", "Operator"},
-        "close": {"StationAdmin", "Manager", "Operator"},
-        "submit_cash": {"StationAdmin", "Manager", "Operator"},
+        "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
+        "open": {"StationAdmin", "Manager"},
+        "close": {"StationAdmin", "Manager"},
+        "submit_cash": {"StationAdmin", "Manager"},
     },
     "attendance": {
         "check_in": {"StationAdmin", "Manager", "Operator", "Accountant"},
@@ -250,7 +250,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
     },
     "tank_dips": {
-        "create": {"StationAdmin", "Manager", "Operator"},
+        "create": {"StationAdmin", "Manager"},
     },
     "pos_products": {
         "create": {"StationAdmin", "Manager"},
@@ -258,8 +258,8 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "delete": {"StationAdmin", "Manager"},
     },
     "pos_sales": {
-        "create": {"StationAdmin", "Manager", "Operator"},
-        "reverse": {"StationAdmin", "Manager", "Operator"},
+        "create": {"StationAdmin", "Manager"},
+        "reverse": {"StationAdmin", "Manager"},
     },
     "audit_logs": {
         "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
@@ -281,7 +281,7 @@ PERMISSION_MATRIX: dict[str, dict[str, set[str]]] = {
         "reject": {"HeadOffice", "StationAdmin"},
     },
     "hardware": {
-        "read": {"HeadOffice", "StationAdmin", "Manager", "Operator", "Accountant"},
+        "read": {"HeadOffice", "StationAdmin", "Manager", "Accountant"},
         "create": {"StationAdmin", "Manager"},
         "update": {"StationAdmin", "Manager"},
         "delete": {"StationAdmin", "Manager"},

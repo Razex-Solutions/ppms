@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../app/session/session_controller.dart';
+import '../operator/operator_repository.dart';
 import '../../widgets/info_card.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -11,6 +12,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionControllerProvider).session;
+    final selfProfileAsync = ref.watch(selfProfileProvider);
     if (session == null) {
       return const SizedBox.shrink();
     }
@@ -36,6 +38,38 @@ class ProfileScreen extends ConsumerWidget {
                 Chip(label: Text('${context.l10n.text('station')}: ${session.stationId}')),
             ],
           ),
+        ),
+        const SizedBox(height: 16),
+        selfProfileAsync.when(
+          data: (profile) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.l10n.text('employeeDetails'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  if (profile.staffTitle != null)
+                    Text('${context.l10n.text('staffTitle')}: ${profile.staffTitle}'),
+                  if (profile.employeeCode != null)
+                    Text('${context.l10n.text('employeeCode')}: ${profile.employeeCode}'),
+                  if (profile.stationName != null)
+                    Text('${context.l10n.text('station')}: ${profile.stationName}'),
+                  if (profile.organizationName != null)
+                    Text('${context.l10n.text('organization')}: ${profile.organizationName}'),
+                  if (profile.email != null)
+                    Text('${context.l10n.text('contactEmail')}: ${profile.email}'),
+                  if (profile.phone != null)
+                    Text('${context.l10n.text('contactPhone')}: ${profile.phone}'),
+                ],
+              ),
+            ),
+          ),
+          loading: () => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
         ),
         const SizedBox(height: 16),
         Card(

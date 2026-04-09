@@ -8,7 +8,15 @@ class AttendanceCheckInRequest(BaseModel):
     notes: str | None = None
 
 
+class AttendanceSelfCheckInRequest(BaseModel):
+    notes: str | None = None
+
+
 class AttendanceCheckOutRequest(BaseModel):
+    notes: str | None = None
+
+
+class AttendanceSelfCheckOutRequest(BaseModel):
     notes: str | None = None
 
 
@@ -45,3 +53,11 @@ class AttendanceRecordResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AttendanceSelfServiceSummaryResponse(BaseModel):
+    enabled: bool
+    station_id: int | None = None
+    station_name: str | None = None
+    today_record: AttendanceRecordResponse | None = None
+    recent_records: list[AttendanceRecordResponse]
