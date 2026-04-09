@@ -123,6 +123,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
           fromDate: workspace.activeShift == null
               ? null
               : DateFormat('yyyy-MM-dd').format(workspace.activeShift!.startTime),
+          shiftStartIso: workspace.activeShift?.startTime.toIso8601String(),
         );
         final dashboardAsync = ref.watch(managerDashboardProvider(dashboardRequest));
         return ListView(

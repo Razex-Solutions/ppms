@@ -149,6 +149,9 @@ class ManagerRepository {
   Future<ManagerDashboardData> loadDashboard(
     ManagerDashboardRequest request,
   ) async {
+    final shiftStart = request.shiftStartIso == null
+        ? null
+        : DateTime.parse(request.shiftStartIso!).toUtc();
     final responses = await Future.wait([
       _dio.get<List<dynamic>>(
         '/fuel-sales/',
@@ -221,8 +224,43 @@ class ManagerRepository {
       _dio.get<Map<String, dynamic>>('/notifications/summary'),
     ]);
 
+    bool isInShiftWindow(DateTime createdAt) {
+      if (shiftStart == null) return true;
+      return !createdAt.toUtc().isBefore(shiftStart);
+    }
+
     final allPosSales = _listData(responses[1].data)
         .map((item) => PosSaleEntry.fromJson(item as Map<String, dynamic>))
+        .where((item) => isInShiftWindow(item.createdAt))
+        .toList();
+
+    final purchases = _listData(responses[2].data)
+        .map((item) => PurchaseEntry.fromJson(item as Map<String, dynamic>))
+        .where((item) => isInShiftWindow(item.createdAt))
+        .toList();
+
+    final expenses = _listData(responses[3].data)
+        .map((item) => ExpenseEntry.fromJson(item as Map<String, dynamic>))
+        .where((item) => isInShiftWindow(item.createdAt))
+        .toList();
+
+    final recoveries = _listData(responses[4].data)
+        .map(
+          (item) => CustomerRecoveryEntry.fromJson(item as Map<String, dynamic>),
+        )
+        .where((item) => isInShiftWindow(item.createdAt))
+        .toList();
+
+    final internalFuelUsages = _listData(responses[6].data)
+        .map(
+          (item) => InternalFuelUsageEntry.fromJson(item as Map<String, dynamic>),
+        )
+        .where((item) => isInShiftWindow(item.createdAt))
+        .toList();
+
+    final recentDips = _listData(responses[7].data)
+        .map((item) => TankDipEntry.fromJson(item as Map<String, dynamic>))
+        .where((item) => isInShiftWindow(item.createdAt))
         .toList();
 
     return ManagerDashboardData(
@@ -232,33 +270,17 @@ class ManagerRepository {
       lubricantSales: allPosSales
           .where((sale) => sale.module == 'other')
           .toList(),
-      purchases: _listData(responses[2].data)
-          .map((item) => PurchaseEntry.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      expenses: _listData(responses[3].data)
-          .map((item) => ExpenseEntry.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      recoveries: _listData(responses[4].data)
-          .map(
-            (item) =>
-                CustomerRecoveryEntry.fromJson(item as Map<String, dynamic>),
-          )
-          .toList(),
+      purchases: purchases,
+      expenses: expenses,
+      recoveries: recoveries,
       creditIssues: _listData(responses[5].data)
           .map(
             (item) =>
                 CustomerCreditIssueEntry.fromJson(item as Map<String, dynamic>),
           )
           .toList(),
-      internalFuelUsages: _listData(responses[6].data)
-          .map(
-            (item) =>
-                InternalFuelUsageEntry.fromJson(item as Map<String, dynamic>),
-          )
-          .toList(),
-      recentDips: _listData(responses[7].data)
-          .map((item) => TankDipEntry.fromJson(item as Map<String, dynamic>))
-          .toList(),
+      internalFuelUsages: internalFuelUsages,
+      recentDips: recentDips,
       customers: _listData(responses[8].data)
           .map((item) => CustomerSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
