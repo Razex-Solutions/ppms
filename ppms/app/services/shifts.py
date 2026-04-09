@@ -540,6 +540,17 @@ def record_shift_closing_snapshots(
     nozzle_readings: list[ShiftCloseNozzleReading],
 ) -> None:
     closing_by_nozzle_id = {item.nozzle_id: float(item.closing_meter) for item in nozzle_readings}
+    nozzles = (
+        db.query(Nozzle)
+        .join(Dispenser, Dispenser.id == Nozzle.dispenser_id)
+        .filter(
+            Dispenser.station_id == shift.station_id,
+            Dispenser.is_active.is_(True),
+            Nozzle.is_active.is_(True),
+        )
+        .all()
+    )
+    nozzle_by_id = {nozzle.id: nozzle for nozzle in nozzles}
     existing = (
         db.query(NozzleReading)
         .filter(
@@ -550,6 +561,9 @@ def record_shift_closing_snapshots(
     )
     existing_by_nozzle_id = {reading.nozzle_id: reading for reading in existing}
     for nozzle_id, closing_meter in closing_by_nozzle_id.items():
+        nozzle = nozzle_by_id.get(nozzle_id)
+        if nozzle is not None:
+            nozzle.meter_reading = closing_meter
         existing_reading = existing_by_nozzle_id.get(nozzle_id)
         if existing_reading is not None:
             existing_reading.reading = closing_meter
@@ -570,6 +584,7 @@ def build_station_opening_nozzle_groups(
     station_id: int,
     *,
     shift: Shift | None = None,
+    snapshot_type: str = "shift_opening",
 ) -> list[CurrentShiftDispenserGroupResponse]:
     dispensers = (
         db.query(Dispenser)
@@ -605,7 +620,7 @@ def build_station_opening_nozzle_groups(
             .all()
         )
     }
-    opening_snapshot_map = _get_shift_snapshot_map(db, shift, "shift_opening") if shift is not None else {}
+    opening_snapshot_map = _get_shift_snapshot_map(db, shift, snapshot_type) if shift is not None else {}
 
     grouped: dict[int, list[CurrentShiftNozzleOpeningResponse]] = {}
     for nozzle in nozzles:
@@ -868,6 +883,7 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
 
     matched_template = _find_matching_shift_template(db, station_id)
     opening_cash_preview = derive_shift_opening_cash(db, station_id)
+    latest_closed_shift = get_latest_station_closed_shift(db, station_id)
 
     if matched_template is None:
         return CurrentShiftWorkspaceResponse(
@@ -881,7 +897,12 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
             active_shift=None,
             matched_template=None,
             opening_cash_preview=opening_cash_preview,
-            opening_nozzle_groups=build_station_opening_nozzle_groups(db, station_id),
+            opening_nozzle_groups=build_station_opening_nozzle_groups(
+                db,
+                station_id,
+                shift=latest_closed_shift,
+                snapshot_type="shift_closing",
+            ),
             requires_manual_open=True,
         )
 
@@ -896,6 +917,11 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
         active_shift=None,
         matched_template=_serialize_shift_template(matched_template),
         opening_cash_preview=opening_cash_preview,
-        opening_nozzle_groups=build_station_opening_nozzle_groups(db, station_id),
+        opening_nozzle_groups=build_station_opening_nozzle_groups(
+            db,
+            station_id,
+            shift=latest_closed_shift,
+            snapshot_type="shift_closing",
+        ),
         requires_manual_open=True,
     )
