@@ -1,17 +1,49 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/loading_screen.dart';
+import '../../features/auth/login_screen.dart';
 import '../shell/app_shell.dart';
 import '../../features/common/forbidden_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/onboarding/station_setup_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/workspaces/workspace_screen.dart';
+import '../session/session_controller.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final sessionState = ref.watch(sessionControllerProvider);
+
   return GoRouter(
     initialLocation: '/',
+    redirect: (context, state) {
+      final path = state.uri.path;
+      final isLoading = path == '/loading';
+      final isLogin = path == '/login';
+
+      if (sessionState.isInitializing) {
+        return isLoading ? null : '/loading';
+      }
+
+      if (!sessionState.isAuthenticated) {
+        return isLogin ? null : '/login';
+      }
+
+      if (isLoading || isLogin) {
+        return '/';
+      }
+
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: '/loading',
+        builder: (context, state) => const LoadingScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
       GoRoute(
         path: '/forbidden',
         builder: (context, state) => const ForbiddenScreen(),
