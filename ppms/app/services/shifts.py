@@ -84,6 +84,96 @@ def _get_shift_window_end(shift: Shift):
     return shift.end_time or utc_now()
 
 
+def _get_shift_opening_snapshot_map(db: Session, shift: Shift) -> dict[int, float]:
+    return _get_shift_snapshot_map(db, shift, "shift_opening")
+
+
+def _get_shift_nozzle_adjustments(
+    db: Session,
+    *,
+    shift: Shift,
+    nozzle_id: int,
+) -> list[MeterAdjustmentEvent]:
+    return (
+        db.query(MeterAdjustmentEvent)
+        .filter(
+            MeterAdjustmentEvent.nozzle_id == nozzle_id,
+            MeterAdjustmentEvent.adjusted_at >= shift.start_time,
+            MeterAdjustmentEvent.adjusted_at <= _get_shift_window_end(shift),
+        )
+        .order_by(MeterAdjustmentEvent.adjusted_at.asc(), MeterAdjustmentEvent.id.asc())
+        .all()
+    )
+
+
+def calculate_shift_nozzle_reconciled_liters(
+    db: Session,
+    *,
+    shift: Shift,
+    nozzle: Nozzle,
+    closing_meter: float,
+    opening_snapshot_map: dict[int, float] | None = None,
+) -> dict[str, object]:
+    opening_snapshot_map = opening_snapshot_map or _get_shift_opening_snapshot_map(db, shift)
+    opening_meter = float(opening_snapshot_map.get(nozzle.id, nozzle.meter_reading or 0.0))
+    adjustments = _get_shift_nozzle_adjustments(db, shift=shift, nozzle_id=nozzle.id)
+
+    segment_start = opening_meter
+    total_liters = 0.0
+    segments: list[dict[str, float | int | str]] = []
+    invalid_reason: str | None = None
+
+    for adjustment in adjustments:
+        segment_end = float(adjustment.old_reading)
+        if segment_end < segment_start:
+            invalid_reason = (
+                f"Adjustment path is invalid for nozzle {nozzle.name}: "
+                f"segment end {segment_end} is lower than segment start {segment_start}."
+            )
+            break
+        segment_liters = round(segment_end - segment_start, 2)
+        total_liters = round(total_liters + segment_liters, 2)
+        segments.append(
+            {
+                "type": "pre_adjustment",
+                "adjustment_event_id": adjustment.id,
+                "start_meter": segment_start,
+                "end_meter": segment_end,
+                "liters": segment_liters,
+            }
+        )
+        segment_start = float(adjustment.new_reading)
+
+    if invalid_reason is None:
+        if float(closing_meter) < segment_start:
+            invalid_reason = (
+                f"Closing meter {float(closing_meter)} is lower than the last valid segment start "
+                f"{segment_start} for nozzle {nozzle.name}."
+            )
+        else:
+            final_segment_liters = round(float(closing_meter) - segment_start, 2)
+            total_liters = round(total_liters + final_segment_liters, 2)
+            segments.append(
+                {
+                    "type": "post_adjustment" if adjustments else "continuous",
+                    "adjustment_event_id": adjustments[-1].id if adjustments else 0,
+                    "start_meter": segment_start,
+                    "end_meter": float(closing_meter),
+                    "liters": final_segment_liters,
+                }
+            )
+
+    return {
+        "opening_meter": opening_meter,
+        "total_liters": round(total_liters, 2),
+        "has_adjustment": bool(adjustments),
+        "adjustment_count": len(adjustments),
+        "segments": segments,
+        "invalid_reason": invalid_reason,
+        "last_segment_start": segment_start,
+    }
+
+
 def _get_shift_rate_change_alerts(
     db: Session,
     *,
@@ -807,6 +897,7 @@ def validate_shift_close(
 ) -> ShiftCloseValidationResponse:
     issues: list[ShiftCloseValidationIssueResponse] = []
     nozzle_readings_by_id = {item.nozzle_id: item for item in nozzle_readings}
+    opening_snapshot_map = _get_shift_opening_snapshot_map(db, shift)
 
     station_nozzles = (
         db.query(Nozzle)
@@ -835,25 +926,23 @@ def validate_shift_close(
             )
             continue
 
-        if provided.closing_meter < float(nozzle.meter_reading or 0.0):
-            adjusted_after_shift_start = (
-                db.query(MeterAdjustmentEvent)
-                .filter(
-                    MeterAdjustmentEvent.nozzle_id == nozzle.id,
-                    MeterAdjustmentEvent.adjusted_at >= shift.start_time,
-                )
-                .order_by(MeterAdjustmentEvent.adjusted_at.desc(), MeterAdjustmentEvent.id.desc())
-                .first()
-            )
-            if adjusted_after_shift_start is None or provided.closing_meter < float(nozzle.meter_reading or 0.0):
-                issues.append(
-                    ShiftCloseValidationIssueResponse(
-                        code="abnormal_lower_meter",
-                        title="Abnormal lower meter reading",
-                        detail=f"Closing meter for nozzle {nozzle.name} is lower than the current meter without a valid adjustment path.",
-                        blocking=True,
-                        nozzle_id=nozzle.id,
-                        tank_id=nozzle.tank_id,
+        reconciled = calculate_shift_nozzle_reconciled_liters(
+            db,
+            shift=shift,
+            nozzle=nozzle,
+            closing_meter=float(provided.closing_meter),
+            opening_snapshot_map=opening_snapshot_map,
+        )
+        invalid_reason = reconciled["invalid_reason"]
+        if invalid_reason is not None:
+            issues.append(
+                ShiftCloseValidationIssueResponse(
+                    code="abnormal_lower_meter",
+                    title="Abnormal lower meter reading",
+                    detail=invalid_reason,
+                    blocking=True,
+                    nozzle_id=nozzle.id,
+                    tank_id=nozzle.tank_id,
                 )
             )
 
@@ -893,7 +982,14 @@ def validate_shift_close(
         provided = nozzle_readings_by_id.get(nozzle.id)
         if provided is None:
             continue
-        sold_quantity = round(float(provided.closing_meter) - float(nozzle.meter_reading or 0.0), 2)
+        reconciled = calculate_shift_nozzle_reconciled_liters(
+            db,
+            shift=shift,
+            nozzle=nozzle,
+            closing_meter=float(provided.closing_meter),
+            opening_snapshot_map=opening_snapshot_map,
+        )
+        sold_quantity = round(float(reconciled["total_liters"]), 2)
         credit_quantity = round(credit_quantity_by_nozzle.get(nozzle.id, 0.0), 2)
         if credit_quantity > sold_quantity:
             issues.append(
