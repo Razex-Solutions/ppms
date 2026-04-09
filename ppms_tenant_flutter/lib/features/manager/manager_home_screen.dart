@@ -24,7 +24,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   int? _dipTankId;
 
   final _receiveQuantityController = TextEditingController();
-  final _receiveRateController = TextEditingController();
   final _receiveReferenceController = TextEditingController();
   final _receiveNotesController = TextEditingController();
   final _receiveDipBeforeController = TextEditingController();
@@ -73,7 +72,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     _dipReadingController.dispose();
     _dipNotesController.dispose();
     _receiveQuantityController.dispose();
-    _receiveRateController.dispose();
     _receiveReferenceController.dispose();
     _receiveNotesController.dispose();
     _receiveDipBeforeController.dispose();
@@ -203,10 +201,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
         }
       }
     }
-    if (workspace.activeShift != null && _actualCashController.text.trim().isEmpty) {
-      _actualCashController.text =
-          workspace.activeShift!.expectedCash.toStringAsFixed(0);
-    }
   }
 
   void _syncSupportDefaults(ManagerSupportData support) {
@@ -308,7 +302,11 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     final cashAsync = ref.watch(shiftCashProvider(activeShift.id));
     final submissionsAsync = ref.watch(cashSubmissionsProvider(activeShift.id));
     return cashAsync.when(
-      data: (cash) => Card(
+      data: (cash) {
+        if (_actualCashController.text.trim().isEmpty) {
+          _actualCashController.text = cash.cashInHand.toStringAsFixed(0);
+        }
+        return Card(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -319,10 +317,28 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 10),
-              _kv(context.l10n.text('openingCash'), cash.openingCash.toStringAsFixed(0)),
+              _kv(
+                context.l10n.text('openingCashCarryForward'),
+                cash.openingCash.toStringAsFixed(0),
+              ),
               _kv(context.l10n.text('expectedCash'), cash.expectedCash.toStringAsFixed(0)),
-              _kv(context.l10n.text('cashSubmitted'), cash.cashSubmitted.toStringAsFixed(0)),
-              _kv(context.l10n.text('cashInHand'), cash.cashInHand.toStringAsFixed(0)),
+              _kv(
+                context.l10n.text('cashSubmittedSoFar'),
+                cash.cashSubmitted.toStringAsFixed(0),
+              ),
+              _kv(
+                context.l10n.text('remainingCashInHand'),
+                cash.cashInHand.toStringAsFixed(0),
+              ),
+              _kv(
+                context.l10n.text('nextShiftCarryForward'),
+                (cash.closingCash ?? cash.cashInHand).toStringAsFixed(0),
+              ),
+              if (cash.difference != null)
+                _kv(
+                  context.l10n.text('cashVarianceLabel'),
+                  cash.difference!.toStringAsFixed(0),
+                ),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -382,7 +398,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             ],
           ),
         ),
-      ),
+      );
+      },
       loading: () => const _LoadingCard(),
       error: (error, _) => _ErrorCard(message: '$error'),
     );
@@ -453,7 +470,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                       controller: _actualCashController,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
-                        labelText: context.l10n.text('actualCashCollected'),
+                        labelText: context.l10n.text('closingCashLeftInHand'),
+                        helperText: context.l10n.text('closingCashLeftInHandHint'),
                       ),
                     ),
                   ),
@@ -893,24 +911,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             onChanged: (value) => setState(() => _receiveFuelTypeId = value),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _receiveQuantityController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: context.l10n.text('quantity')),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _receiveRateController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: context.l10n.text('ratePerLiter')),
-                ),
-              ),
-            ],
+          TextField(
+            controller: _receiveQuantityController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: context.l10n.text('quantity')),
           ),
           const SizedBox(height: 12),
           Row(
@@ -951,12 +955,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                   ? null
                   : () {
                       final quantity = double.tryParse(_receiveQuantityController.text) ?? 0;
-                      final rate = double.tryParse(_receiveRateController.text) ?? 0;
                       if ((_receiveSupplierId ?? 0) <= 0 ||
                           (_receiveTankId ?? 0) <= 0 ||
                           (_receiveFuelTypeId ?? 0) <= 0 ||
-                          quantity <= 0 ||
-                          rate <= 0) {
+                          quantity <= 0) {
                         return;
                       }
                       ref.read(managerActionProvider.notifier).createReceiving(
@@ -966,7 +968,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                             tankId: _receiveTankId!,
                             fuelTypeId: _receiveFuelTypeId!,
                             quantity: quantity,
-                            ratePerLiter: rate,
                             referenceNo: _emptyToNull(_receiveReferenceController.text),
                             notes: _emptyToNull(_receiveNotesController.text),
                             dipBeforeMm:
@@ -975,7 +976,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                                 double.tryParse(_receiveDipAfterController.text),
                           );
                       _receiveQuantityController.clear();
-                      _receiveRateController.clear();
                       _receiveReferenceController.clear();
                       _receiveNotesController.clear();
                       _receiveDipBeforeController.clear();

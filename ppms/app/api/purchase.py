@@ -9,10 +9,11 @@ from app.core.permissions import require_permission
 from app.models.purchase import Purchase
 from app.models.station import Station
 from app.models.tank import Tank
-from app.schemas.purchase import PurchaseApprovalRequest, PurchaseCreate, PurchaseResponse, ReversalRequest
+from app.schemas.purchase import ManagerReceivingCreate, PurchaseApprovalRequest, PurchaseCreate, PurchaseResponse, ReversalRequest
 from app.services.purchases import approve_purchase as approve_purchase_service
 from app.services.purchases import approve_purchase_reversal as approve_purchase_reversal_service
 from app.services.purchases import create_purchase as create_purchase_service
+from app.services.purchases import create_manager_receiving as create_manager_receiving_service
 from app.services.purchases import ensure_purchase_access, reverse_purchase as reverse_purchase_service
 from app.services.purchases import reject_purchase as reject_purchase_service
 from app.services.purchases import reject_purchase_reversal as reject_purchase_reversal_service
@@ -29,6 +30,16 @@ def create_purchase(
 ):
     require_permission(current_user, "purchases", "create", detail="You do not have permission to create purchases")
     return create_purchase_service(db, data, current_user)
+
+
+@router.post("/manager-receiving", response_model=PurchaseResponse)
+def create_manager_receiving(
+    data: ManagerReceivingCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    require_permission(current_user, "purchases", "create", detail="You do not have permission to create purchases")
+    return create_manager_receiving_service(db, data, current_user)
 
 
 @router.get("/", response_model=list[PurchaseResponse])

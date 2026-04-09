@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.core.database import SessionLocal
+from app.core.time import utc_now
 from app.models.brand_catalog import BrandCatalog
 from app.models.organization import Organization
 from app.models.organization_module_setting import OrganizationModuleSetting
@@ -33,6 +34,7 @@ from app.models.nozzle import Nozzle
 from app.models.pos_product import POSProduct
 from app.models.payroll_line import PayrollLine
 from app.models.payroll_run import PayrollRun
+from app.models.purchase import Purchase
 from app.models.supplier import Supplier
 from app.core.permissions import ROLE_CAPABILITY_SUMMARY
 from app.services.document_template_seed import seed_default_document_templates
@@ -200,6 +202,50 @@ def upsert_supplier(*, code: str, name: str, payable_balance: float) -> Supplier
     db.commit()
     db.refresh(supplier)
     return supplier
+
+
+def upsert_purchase_seed(
+    *,
+    reference_no: str,
+    supplier_id: int,
+    tank_id: int,
+    fuel_type_id: int,
+    quantity: float,
+    rate_per_liter: float,
+    submitted_by_user_id: int | None = None,
+    approved_by_user_id: int | None = None,
+) -> Purchase:
+    purchase = db.query(Purchase).filter(Purchase.reference_no == reference_no).first()
+    if purchase is None:
+        purchase = Purchase(
+            reference_no=reference_no,
+            supplier_id=supplier_id,
+            tank_id=tank_id,
+            fuel_type_id=fuel_type_id,
+            quantity=quantity,
+            rate_per_liter=rate_per_liter,
+            total_amount=round(quantity * rate_per_liter, 2),
+        )
+        db.add(purchase)
+
+    purchase.supplier_id = supplier_id
+    purchase.tank_id = tank_id
+    purchase.fuel_type_id = fuel_type_id
+    purchase.quantity = quantity
+    purchase.rate_per_liter = rate_per_liter
+    purchase.total_amount = round(quantity * rate_per_liter, 2)
+    purchase.status = "approved"
+    purchase.submitted_by_user_id = submitted_by_user_id
+    purchase.approved_by_user_id = approved_by_user_id
+    purchase.approved_at = utc_now()
+    purchase.rejected_at = None
+    purchase.rejection_reason = None
+    purchase.is_reversed = False
+    purchase.reversal_request_status = None
+    purchase.notes = "Seeded approved purchase for manager receiving flow."
+    db.commit()
+    db.refresh(purchase)
+    return purchase
 
 
 def upsert_pos_product(
@@ -543,8 +589,8 @@ upsert_customer(
     credit_limit=350000,
     outstanding_balance=95000,
 )
-upsert_supplier(code="SUP-PSO", name="PSO Supply", payable_balance=220000)
-upsert_supplier(code="SUP-SHELL", name="Shell Bulk", payable_balance=150000)
+supplier_pso = upsert_supplier(code="SUP-PSO", name="PSO Supply", payable_balance=220000)
+supplier_shell = upsert_supplier(code="SUP-SHELL", name="Shell Bulk", payable_balance=150000)
 upsert_pos_product(
     station_id=station.id,
     code="LUB-20W50-1L",
@@ -779,6 +825,31 @@ for demo_user in demo_users:
         existing_user.is_platform_user = demo_user["is_platform_user"]
         existing_user.is_active = True
         db.commit()
+
+
+station_admin_user = db.query(User).filter(User.username == "stationadmin").first()
+manager_user = db.query(User).filter(User.username == "manager").first()
+
+upsert_purchase_seed(
+    reference_no="SEED-PSO-PETROL",
+    supplier_id=supplier_pso.id,
+    tank_id=tank_petrol.id,
+    fuel_type_id=petrol.id,
+    quantity=8000.0,
+    rate_per_liter=272.5,
+    submitted_by_user_id=manager_user.id if manager_user else None,
+    approved_by_user_id=station_admin_user.id if station_admin_user else None,
+)
+upsert_purchase_seed(
+    reference_no="SEED-SHELL-DIESEL",
+    supplier_id=supplier_shell.id,
+    tank_id=tank_diesel.id,
+    fuel_type_id=diesel.id,
+    quantity=9000.0,
+    rate_per_liter=285.0,
+    submitted_by_user_id=manager_user.id if manager_user else None,
+    approved_by_user_id=station_admin_user.id if station_admin_user else None,
+)
 
 
 demo_profile_blueprints = [

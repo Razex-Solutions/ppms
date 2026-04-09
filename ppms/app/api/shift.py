@@ -20,6 +20,9 @@ router = APIRouter(prefix="/shifts", tags=["Shifts"])
 
 
 def _serialize_shift_cash(shift_cash) -> dict[str, object | None]:
+    cash_in_hand = round((shift_cash.expected_cash or 0.0) - (shift_cash.cash_submitted or 0.0), 2)
+    if shift_cash.closing_cash is not None:
+        cash_in_hand = round(shift_cash.closing_cash or 0.0, 2)
     return {
         "id": shift_cash.id,
         "station_id": shift_cash.station_id,
@@ -31,7 +34,7 @@ def _serialize_shift_cash(shift_cash) -> dict[str, object | None]:
         "cash_submitted": shift_cash.cash_submitted,
         "closing_cash": shift_cash.closing_cash,
         "difference": shift_cash.difference,
-        "cash_in_hand": round((shift_cash.expected_cash or 0.0) - (shift_cash.cash_submitted or 0.0), 2),
+        "cash_in_hand": cash_in_hand,
         "notes": shift_cash.notes,
         "created_at": shift_cash.created_at,
         "submission_count": len(shift_cash.submissions),

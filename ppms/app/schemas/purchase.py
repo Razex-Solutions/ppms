@@ -13,6 +13,15 @@ class PurchaseCreate(BaseModel):
     notes: str | None = None
 
 
+class ManagerReceivingCreate(BaseModel):
+    supplier_id: int
+    tank_id: int
+    fuel_type_id: int
+    quantity: float
+    reference_no: str | None = None
+    notes: str | None = None
+
+
 class ReversalRequest(BaseModel):
     reason: str | None = None
 

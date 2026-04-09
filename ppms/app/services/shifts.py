@@ -53,6 +53,8 @@ def derive_shift_opening_cash(db: Session, station_id: int) -> float:
         return 0.0
 
     shift_cash = ensure_shift_cash(db, latest_closed_shift)
+    if shift_cash.closing_cash is not None:
+        return max(round(shift_cash.closing_cash, 2), 0.0)
     cash_in_hand = round((shift_cash.expected_cash or 0.0) - (shift_cash.cash_submitted or 0.0), 2)
     if cash_in_hand < 0:
         return 0.0
@@ -165,16 +167,17 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
     shift.total_sales_credit = total_credit
     shift.expected_cash = shift.initial_cash + total_cash
     shift.actual_cash_collected = data.actual_cash_collected
-    shift.difference = shift.actual_cash_collected - shift.expected_cash
     shift.status = "closed"
     shift.end_time = utc_now()
     shift.notes = data.notes if data.notes else shift.notes
     shift_cash.cash_sales = total_cash
     shift_cash.expected_cash = shift.expected_cash
-    shift_cash.closing_cash = data.actual_cash_collected
     submission_total = sum(submission.amount for submission in shift_cash.submissions)
-    shift_cash.cash_submitted = submission_total if submission_total > 0 else data.actual_cash_collected
-    shift_cash.difference = shift.actual_cash_collected - shift.expected_cash
+    shift_cash.cash_submitted = submission_total
+    shift_cash.closing_cash = data.actual_cash_collected
+    accountable_cash = round((shift_cash.cash_submitted or 0.0) + (shift_cash.closing_cash or 0.0), 2)
+    shift_cash.difference = round(accountable_cash - shift.expected_cash, 2)
+    shift.difference = shift_cash.difference
     shift_cash.notes = data.notes if data.notes else shift_cash.notes
     log_audit_event(
         db,
@@ -186,7 +189,8 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
         station_id=shift.station_id,
         details={
             "expected_cash": shift.expected_cash,
-            "actual_cash_collected": shift.actual_cash_collected,
+            "closing_cash": shift.actual_cash_collected,
+            "cash_submitted": shift_cash.cash_submitted,
             "difference": shift.difference,
         },
     )
@@ -222,7 +226,10 @@ def sync_shift_cash(db: Session, shift: Shift) -> ShiftCash:
     shift_cash.cash_submitted = submission_total
     if shift.status == "closed" and shift.actual_cash_collected is not None:
         shift_cash.closing_cash = shift.actual_cash_collected
-        shift_cash.difference = round(shift.actual_cash_collected - shift.expected_cash, 2)
+        shift_cash.difference = round(
+            (shift_cash.cash_submitted or 0.0) + (shift_cash.closing_cash or 0.0) - shift.expected_cash,
+            2,
+        )
         shift.difference = shift_cash.difference
     else:
         shift_cash.difference = round(shift.expected_cash - submission_total, 2)

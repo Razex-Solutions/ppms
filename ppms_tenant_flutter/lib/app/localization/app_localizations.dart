@@ -176,6 +176,11 @@ class AppLocalizations {
       'cashInHand': 'Cash in hand',
       'expectedCash': 'Expected cash',
       'cashSubmitted': 'Cash submitted',
+      'openingCashCarryForward': 'Opening cash carried forward',
+      'cashSubmittedSoFar': 'Cash submitted so far',
+      'remainingCashInHand': 'Remaining cash in hand',
+      'nextShiftCarryForward': 'Next shift carry-forward',
+      'cashVarianceLabel': 'Cash variance',
       'submitCash': 'Submit cash',
       'submissionAmount': 'Submission amount',
       'recentCashSubmissions': 'Recent cash submissions',
@@ -188,6 +193,9 @@ class AppLocalizations {
       'warnings': 'Warnings',
       'blockingIssues': 'Blocking issues',
       'actualCashCollected': 'Actual cash counted',
+      'closingCashLeftInHand': 'Closing cash left in hand',
+      'closingCashLeftInHandHint':
+          'Enter the change cash that will remain with the shift and carry forward to the next shift.',
       'managerNoShift':
           'No active shift is open yet. Use the prepared current shift for this station.',
       'shiftStartedAt': 'Started at',
@@ -421,6 +429,11 @@ class AppLocalizations {
       'cashInHand': 'کیش اِن ہینڈ',
       'expectedCash': 'متوقع کیش',
       'cashSubmitted': 'جمع شدہ کیش',
+      'openingCashCarryForward': 'پچھلی شفٹ سے لائی گئی اوپننگ کیش',
+      'cashSubmittedSoFar': 'اب تک جمع کروائی گئی کیش',
+      'remainingCashInHand': 'باقی کیش اِن ہینڈ',
+      'nextShiftCarryForward': 'اگلی شفٹ کے لیے کیش',
+      'cashVarianceLabel': 'کیش ویریئنس',
       'submitCash': 'کیش جمع کریں',
       'submissionAmount': 'جمع شدہ رقم',
       'recentCashSubmissions': 'حالیہ کیش جمع کرائیاں',
@@ -433,6 +446,9 @@ class AppLocalizations {
       'warnings': 'وارننگز',
       'blockingIssues': 'رکاوٹ والے مسائل',
       'actualCashCollected': 'اصل گنی گئی کیش',
+      'closingCashLeftInHand': 'اختتام پر ہاتھ میں بچی کیش',
+      'closingCashLeftInHandHint':
+          'وہ چینج کیش درج کریں جو شفٹ کے پاس رہے گی اور اگلی شفٹ میں منتقل ہوگی۔',
       'managerNoShift':
           'ابھی کوئی فعال شفٹ کھلی نہیں۔ اس اسٹیشن کی تیار شدہ موجودہ شفٹ استعمال کریں۔',
       'operatorActionSuccess': 'عمل مکمل ہو گیا',

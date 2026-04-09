@@ -9,7 +9,7 @@ from app.models.supplier import Supplier
 from app.models.tank import Tank
 from app.models.tanker import Tanker
 from app.models.user import User
-from app.schemas.purchase import PurchaseCreate
+from app.schemas.purchase import ManagerReceivingCreate, PurchaseCreate
 from app.services.audit import log_audit_event
 from app.services.notifications import notify_approval_requested, notify_decision
 
@@ -115,6 +115,61 @@ def create_purchase(db: Session, data: PurchaseCreate, current_user: User) -> Pu
     db.commit()
     db.refresh(purchase)
     return purchase
+
+
+def create_manager_receiving(
+    db: Session,
+    data: ManagerReceivingCreate,
+    current_user: User,
+) -> Purchase:
+    tank = db.query(Tank).filter(Tank.id == data.tank_id).first()
+    if not tank:
+        raise HTTPException(status_code=404, detail="Tank not found")
+
+    rate_query = (
+        db.query(Purchase)
+        .join(Tank, Tank.id == Purchase.tank_id)
+        .filter(
+            Purchase.supplier_id == data.supplier_id,
+            Purchase.fuel_type_id == data.fuel_type_id,
+            Purchase.status == "approved",
+            Purchase.is_reversed.is_(False),
+            Tank.station_id == tank.station_id,
+        )
+        .order_by(Purchase.created_at.desc(), Purchase.id.desc())
+    )
+    latest_purchase = rate_query.first()
+    if latest_purchase is None:
+        latest_purchase = (
+            db.query(Purchase)
+            .filter(
+                Purchase.supplier_id == data.supplier_id,
+                Purchase.fuel_type_id == data.fuel_type_id,
+                Purchase.status == "approved",
+                Purchase.is_reversed.is_(False),
+            )
+            .order_by(Purchase.created_at.desc(), Purchase.id.desc())
+            .first()
+        )
+    if latest_purchase is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No receiving rate is configured for this supplier and fuel type yet. Ask admin to set it first.",
+        )
+
+    return create_purchase(
+        db,
+        PurchaseCreate(
+            supplier_id=data.supplier_id,
+            tank_id=data.tank_id,
+            fuel_type_id=data.fuel_type_id,
+            quantity=data.quantity,
+            rate_per_liter=latest_purchase.rate_per_liter,
+            reference_no=data.reference_no,
+            notes=data.notes,
+        ),
+        current_user,
+    )
 
 
 def approve_purchase(db: Session, purchase: Purchase, current_user: User, reason: str | None = None) -> Purchase:

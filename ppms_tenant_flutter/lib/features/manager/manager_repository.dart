@@ -266,18 +266,16 @@ class ManagerRepository {
     required int tankId,
     required int fuelTypeId,
     required double quantity,
-    required double ratePerLiter,
     String? referenceNo,
     String? notes,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
-      '/purchases/',
+      '/purchases/manager-receiving',
       data: {
         'supplier_id': supplierId,
         'tank_id': tankId,
         'fuel_type_id': fuelTypeId,
         'quantity': quantity,
-        'rate_per_liter': ratePerLiter,
         'reference_no': referenceNo,
         'notes': notes,
       },
@@ -577,7 +575,6 @@ class ManagerActionController extends Notifier<ManagerActionState> {
     required int tankId,
     required int fuelTypeId,
     required double quantity,
-    required double ratePerLiter,
     String? referenceNo,
     String? notes,
     double? dipBeforeMm,
@@ -598,7 +595,6 @@ class ManagerActionController extends Notifier<ManagerActionState> {
         tankId: tankId,
         fuelTypeId: fuelTypeId,
         quantity: quantity,
-        ratePerLiter: ratePerLiter,
         referenceNo: referenceNo,
         notes: notes,
       );
