@@ -1,6 +1,6 @@
 # Manager Current Test Data
 
-This file reflects the current local database state prepared for manager testing on `2026-04-09`.
+This file reflects the current local database state prepared for manager testing on `2026-04-10`.
 
 ## Logins
 
@@ -70,6 +70,7 @@ Enter:
 Expected:
 
 - Pump A outstanding changes from `180000` to `185450`
+- the system derives this as `20 liters x 272.5 = 5450`
 - `Credit given` card/metric increases by `5450`
 - credit entry shows petrol / nozzle `HQ-D1-N1`
 - accountable cash stays unchanged during the open shift
@@ -141,17 +142,20 @@ Enter these closing meters:
 
 Enter closing cash left in hand:
 
-- `27221`
+- `26771`
 
 Expected:
 
-- shift closes successfully if no blocking dip/meter issue remains
+- close check should pass with no blocking credit/meter issue from the credit-given entry
+- `50,000 submitted + 26,771 closing cash = 76,771`
+- final close accountability should reflect the credit-given reduction at close, not during the open shift
+- shift closes successfully if no other blocking dip/meter issue remains
 - next manager sees prepared/opening nozzle values carried forward exactly as:
   - `125120`
   - `98110`
   - `110640`
   - `87725`
-- next manager opening cash preview becomes `27221`
+- next manager opening cash preview becomes `26771`
 
 ## Handover Check
 
@@ -164,7 +168,7 @@ Expected:
 
 - `manager` should no longer see `occupied`
 - `manager` should see the next prepared shift
-- opening cash preview should be `27221`
+- opening cash preview should be `26771`
 - opening nozzle readings should match the Step 7 closing values exactly
 
 ## Important Note
