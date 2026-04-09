@@ -32,7 +32,8 @@ class ManagerCreditAdjustmentRequest(BaseModel):
 
 
 class ManagerCreditIssueRequest(BaseModel):
-    amount: float
+    nozzle_id: int
+    quantity: float
     shift_id: int | None = None
     notes: str | None = None
 

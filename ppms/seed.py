@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.core.database import SessionLocal
+from app.core.config import DATABASE_URL
 from app.core.time import utc_now
 from app.models.brand_catalog import BrandCatalog
 from app.models.organization import Organization
@@ -30,6 +31,7 @@ from app.models.tank import Tank
 from app.models.dispenser import Dispenser
 from app.models.customer import Customer
 from app.models.employee_profile import EmployeeProfile
+from app.models.fuel_price_history import FuelPriceHistory
 from app.models.nozzle import Nozzle
 from app.models.pos_product import POSProduct
 from app.models.payroll_line import PayrollLine
@@ -44,6 +46,7 @@ def run_migrations() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     config = Config(str(repo_root / "alembic.ini"))
     config.set_main_option("script_location", str(repo_root / "alembic"))
+    config.set_main_option("sqlalchemy.url", DATABASE_URL)
     command.upgrade(config, "head")
 
 
@@ -246,6 +249,42 @@ def upsert_purchase_seed(
     db.commit()
     db.refresh(purchase)
     return purchase
+
+
+def upsert_fuel_price_seed(
+    *,
+    station_id: int,
+    fuel_type_id: int,
+    price: float,
+    reason: str,
+    created_by_user_id: int | None = None,
+) -> FuelPriceHistory:
+    entry = (
+        db.query(FuelPriceHistory)
+        .filter(
+            FuelPriceHistory.station_id == station_id,
+            FuelPriceHistory.fuel_type_id == fuel_type_id,
+            FuelPriceHistory.reason == reason,
+        )
+        .order_by(FuelPriceHistory.id.desc())
+        .first()
+    )
+    if not entry:
+        entry = FuelPriceHistory(
+            station_id=station_id,
+            fuel_type_id=fuel_type_id,
+            price=price,
+            reason=reason,
+            created_by_user_id=created_by_user_id or 1,
+        )
+        db.add(entry)
+    else:
+        entry.price = price
+        entry.reason = reason
+        entry.created_by_user_id = created_by_user_id or entry.created_by_user_id or 1
+    db.commit()
+    db.refresh(entry)
+    return entry
 
 
 def upsert_pos_product(
@@ -860,6 +899,20 @@ upsert_purchase_seed(
     rate_per_liter=285.0,
     submitted_by_user_id=manager_user.id if manager_user else None,
     approved_by_user_id=station_admin_user.id if station_admin_user else None,
+)
+upsert_fuel_price_seed(
+    station_id=station.id,
+    fuel_type_id=petrol.id,
+    price=272.5,
+    reason="seed_station_price_petrol",
+    created_by_user_id=station_admin_user.id if station_admin_user else None,
+)
+upsert_fuel_price_seed(
+    station_id=station.id,
+    fuel_type_id=diesel.id,
+    price=285.0,
+    reason="seed_station_price_diesel",
+    created_by_user_id=station_admin_user.id if station_admin_user else None,
 )
 
 

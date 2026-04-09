@@ -421,9 +421,16 @@ Support direction:
 ### 9.3 Customer Credit
 
 - manager can recover credit payments
-- manager can increase credit exposure
+- manager can give customer credit operationally, but not by free amount-only entry
 - system notifies admins
 - accountability comes through alerts and variance reporting, not default approvals
+- manager credit-given entry must be linked to the actual forecourt sale context:
+  - selected nozzle
+  - resulting fuel type / tank mapping
+  - quantity in liters
+  - active station rate
+- this credit entry is the payment type for a real sale, not a separate stock adjustment
+- stock deduction and nozzle movement must stay on the normal nozzle-sale path
 
 ### 9.4 Receiving
 

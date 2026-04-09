@@ -12,7 +12,7 @@ This file reflects the current local database state prepared for manager testing
 - Station: `HQ`
 - Station ID: `3`
 - Open shift owner: `manager2`
-- Open shift ID: `3`
+- Open shift ID: `1`
 - Opening cash for current shift: `81221`
 - Current accountable cash at shift start: `81221`
 - Current cash submitted: `0`
@@ -42,8 +42,8 @@ These are the current local manager demo opening values.
 | --- | --- | ---: | ---: |
 | Smoke Customer | `F-SMOKE-CUST` | `9000` | `700` |
 | Tanker Customer | `TANKER-CUST` | `0` | `0` |
-| Pump A | `CUST-PUMP-A` | `500000` | `90000` |
-| Pump B | `CUST-PUMP-B` | `450000` | `5000` |
+| Pump A | `CUST-PUMP-A` | `500000` | `180000` |
+| Pump B | `CUST-PUMP-B` | `350000` | `95000` |
 
 ## Recommended Step-By-Step Manager Test
 
@@ -63,15 +63,17 @@ Expected:
 Enter:
 
 - customer = `Pump A`
-- credit amount = `5000`
+- nozzle = `HQ-D1-N1`
+- credit quantity = `20`
 - notes = `manager test credit`
 
 Expected:
 
-- Pump A outstanding changes from `90000` to `95000`
-- `Credit given` card/metric increases by `5000`
-- accountable cash changes from `81221` to `76221`
-- cash in hand changes from `81221` to `76221`
+- Pump A outstanding changes from `180000` to `185450`
+- `Credit given` card/metric increases by `5450`
+- credit entry shows petrol / nozzle `HQ-D1-N1`
+- accountable cash stays unchanged during the open shift
+- cash in hand stays unchanged during the open shift
 
 ### Step 3: Record credit recovery
 
@@ -83,10 +85,10 @@ Enter:
 
 Expected:
 
-- Pump B outstanding changes from `5000` to `3000`
+- Pump B outstanding changes from `95000` to `93000`
 - `Credit recovery` increases by `2000`
-- accountable cash changes from `76221` to `78221`
-- cash in hand changes from `76221` to `78221`
+- accountable cash changes from `81221` to `83221`
+- cash in hand changes from `81221` to `83221`
 
 ### Step 4: Record expense
 
@@ -99,8 +101,8 @@ Enter:
 Expected:
 
 - `Expenses` increases by `1000`
-- accountable cash changes from `78221` to `77221`
-- cash in hand changes from `78221` to `77221`
+- accountable cash changes from `83221` to `82221`
+- cash in hand changes from `83221` to `82221`
 
 ### Step 5: Submit cash
 
@@ -111,7 +113,7 @@ Enter:
 Expected:
 
 - cash submitted changes from `0` to `50000`
-- remaining cash in hand changes from `77221` to `27221`
+- remaining cash in hand changes from `82221` to `32221`
 - opening cash stays `81221`
 
 ### Step 6: Record dip

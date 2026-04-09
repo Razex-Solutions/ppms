@@ -229,6 +229,9 @@ class AppLocalizations {
       'creditGivenAction': 'Credit given',
       'creditGivenCard': 'Credit given',
       'creditGivenAmount': 'Credit amount',
+      'creditGivenQuantity': 'Credit quantity (liters)',
+      'creditGivenHint':
+          'Record credit against the nozzle that supplied the fuel. The rate is derived from the active station fuel price.',
       'giveCreditNow': 'Give credit',
       'recoverNow': 'Recover now',
       'increaseCreditAction': 'Increase credit',

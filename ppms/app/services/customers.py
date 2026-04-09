@@ -5,6 +5,8 @@ from app.core.access import get_user_organization_id, is_head_office_user, is_ma
 from app.core.time import utc_now
 from app.models.customer import Customer
 from app.models.customer_credit_issue import CustomerCreditIssue
+from app.models.fuel_price_history import FuelPriceHistory
+from app.models.nozzle import Nozzle
 from app.models.role import Role
 from app.models.shift import Shift
 from app.models.station import Station
@@ -213,8 +215,8 @@ def manager_record_credit_issue(
     current_user: User,
 ) -> CustomerCreditIssue:
     _ensure_customer_scope(customer, current_user)
-    if data.amount <= 0:
-        raise HTTPException(status_code=400, detail="Credit amount must be greater than 0")
+    if data.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Credit quantity must be greater than 0")
 
     shift_id = None
     if data.shift_id is not None:
@@ -225,11 +227,36 @@ def manager_record_credit_issue(
             raise HTTPException(status_code=400, detail="Shift does not belong to this customer station")
         shift_id = shift.id
 
+    nozzle = db.query(Nozzle).filter(Nozzle.id == data.nozzle_id).first()
+    if nozzle is None:
+        raise HTTPException(status_code=404, detail="Nozzle not found")
+    if nozzle.dispenser is None or nozzle.dispenser.station_id != customer.station_id:
+        raise HTTPException(status_code=400, detail="Nozzle does not belong to this customer station")
+
+    latest_price = (
+        db.query(FuelPriceHistory)
+        .filter(
+            FuelPriceHistory.station_id == customer.station_id,
+            FuelPriceHistory.fuel_type_id == nozzle.fuel_type_id,
+        )
+        .order_by(FuelPriceHistory.effective_at.desc(), FuelPriceHistory.id.desc())
+        .first()
+    )
+    if latest_price is None:
+        raise HTTPException(status_code=400, detail="No active fuel price is configured for this nozzle fuel type")
+
+    total_amount = round(float(data.quantity) * float(latest_price.price), 2)
+
     credit_issue = CustomerCreditIssue(
         customer_id=customer.id,
         station_id=customer.station_id,
         shift_id=shift_id,
-        amount=round(data.amount, 2),
+        nozzle_id=nozzle.id,
+        tank_id=nozzle.tank_id,
+        fuel_type_id=nozzle.fuel_type_id,
+        quantity=round(float(data.quantity), 2),
+        rate_per_liter=round(float(latest_price.price), 2),
+        amount=total_amount,
         notes=data.notes,
         created_by_user_id=current_user.id,
     )
@@ -237,7 +264,7 @@ def manager_record_credit_issue(
     db.flush()
 
     before_balance = customer.outstanding_balance or 0.0
-    customer.outstanding_balance = round(before_balance + data.amount, 2)
+    customer.outstanding_balance = round(before_balance + total_amount, 2)
 
     log_audit_event(
         db,
@@ -249,7 +276,12 @@ def manager_record_credit_issue(
         station_id=customer.station_id,
         details={
             "customer_id": customer.id,
+            "nozzle_id": nozzle.id,
+            "tank_id": nozzle.tank_id,
+            "fuel_type_id": nozzle.fuel_type_id,
             "before_outstanding_balance": before_balance,
+            "quantity": credit_issue.quantity,
+            "rate_per_liter": credit_issue.rate_per_liter,
             "credit_issued": credit_issue.amount,
             "after_outstanding_balance": customer.outstanding_balance,
             "notes": data.notes,

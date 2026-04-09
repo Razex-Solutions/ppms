@@ -332,14 +332,16 @@ class ManagerRepository {
 
   Future<CustomerCreditIssueEntry> createCustomerCreditIssue({
     required int customerId,
-    required double amount,
+    required int nozzleId,
+    required double quantity,
     int? shiftId,
     String? notes,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/customers/$customerId/manager-credit-issue',
       data: {
-        'amount': amount,
+        'nozzle_id': nozzleId,
+        'quantity': quantity,
         'shift_id': shiftId,
         'notes': notes,
       },
@@ -672,14 +674,16 @@ class ManagerActionController extends Notifier<ManagerActionState> {
     required int stationId,
     int? shiftId,
     required int customerId,
-    required double amount,
+    required int nozzleId,
+    required double quantity,
     String? notes,
   }) async {
     state = const ManagerActionState(isBusy: true);
     try {
       await ref.read(managerRepositoryProvider).createCustomerCreditIssue(
             customerId: customerId,
-            amount: amount,
+            nozzleId: nozzleId,
+            quantity: quantity,
             shiftId: shiftId,
             notes: notes,
           );

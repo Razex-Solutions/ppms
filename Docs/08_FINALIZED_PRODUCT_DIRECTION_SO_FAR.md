@@ -98,6 +98,10 @@ Important finance/accountability rule for manager shifts:
 - manager does not formally increase customer credit limit
 - credit limit is an admin-controlled value
 - manager can continue operational credit behavior, but the system should alert admins when customer exposure crosses the configured limit
+- manager credit entry must be tied to the real sale path, not entered as a blind amount only
+- customer credit should capture nozzle, fuel type, tank path, quantity/liters, and the applied active rate
+- customer outstanding must increase from that fuel-linked credit sale
+- stock and meter movement should still come from the normal nozzle sale path so petrol and diesel never get mixed incorrectly
 - shift cash accountability should be checked as:
   - opening cash
   - plus fuel cash sales

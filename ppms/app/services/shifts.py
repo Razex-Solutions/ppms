@@ -721,6 +721,41 @@ def validate_shift_close(
                     )
                 )
 
+    shift_credit_issues = (
+        db.query(CustomerCreditIssue)
+        .filter(CustomerCreditIssue.shift_id == shift.id)
+        .all()
+    )
+    credit_quantity_by_nozzle: dict[int, float] = {}
+    for issue in shift_credit_issues:
+        if issue.nozzle_id is None or issue.quantity is None:
+            continue
+        credit_quantity_by_nozzle[issue.nozzle_id] = round(
+            credit_quantity_by_nozzle.get(issue.nozzle_id, 0.0) + float(issue.quantity or 0.0),
+            2,
+        )
+
+    for nozzle in station_nozzles:
+        provided = nozzle_readings_by_id.get(nozzle.id)
+        if provided is None:
+            continue
+        sold_quantity = round(float(provided.closing_meter) - float(nozzle.meter_reading or 0.0), 2)
+        credit_quantity = round(credit_quantity_by_nozzle.get(nozzle.id, 0.0), 2)
+        if credit_quantity > sold_quantity:
+            issues.append(
+                ShiftCloseValidationIssueResponse(
+                    code="credit_exceeds_nozzle_sales",
+                    title="Credit exceeds nozzle sales",
+                    detail=(
+                        f"Credit recorded for nozzle {nozzle.name} is {credit_quantity} liters "
+                        f"but the closing meter only supports {sold_quantity} liters."
+                    ),
+                    blocking=True,
+                    nozzle_id=nozzle.id,
+                    tank_id=nozzle.tank_id,
+                )
+            )
+
     shift_end_reference = shift.end_time or utc_now()
     active_tank_ids: set[int] = set()
     tank_usage: dict[int, float] = {}

@@ -37,6 +37,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   final _recoveryNotesController = TextEditingController();
   final _creditIssueAmountController = TextEditingController();
   final _creditIssueNotesController = TextEditingController();
+  int? _creditIssueNozzleId;
   int? _recoveryCustomerId;
 
   final _expenseAmountController = TextEditingController();
@@ -1048,6 +1049,17 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
         selectedCustomer = customer;
       }
     }
+    final workspaceNozzles = [
+      for (final group in workspace.openingNozzleGroups) ...group.nozzles,
+    ];
+    _creditIssueNozzleId ??=
+        workspaceNozzles.isNotEmpty ? workspaceNozzles.first.nozzleId : null;
+    ManagerNozzleOpening? selectedCreditNozzle;
+    for (final nozzle in workspaceNozzles) {
+      if (nozzle.nozzleId == _creditIssueNozzleId) {
+        selectedCreditNozzle = nozzle;
+      }
+    }
     return _actionCard(
       context,
       title: context.l10n.text('customerCreditAction'),
@@ -1078,11 +1090,36 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 8),
+          DropdownButtonFormField<int>(
+            initialValue: _creditIssueNozzleId,
+            decoration: InputDecoration(labelText: context.l10n.text('nozzleName')),
+            items: [
+              for (final nozzle in workspaceNozzles)
+                DropdownMenuItem(
+                  value: nozzle.nozzleId,
+                  child: Text(
+                    '${nozzle.nozzleCode} • ${nozzle.fuelTypeName ?? ''} • ${nozzle.tankName ?? ''}',
+                  ),
+                ),
+            ],
+            onChanged: (value) => setState(() => _creditIssueNozzleId = value),
+          ),
+          if (selectedCreditNozzle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${context.l10n.text('fuelType')}: ${selectedCreditNozzle.fuelTypeName ?? '-'} • ${context.l10n.text('tank')}: ${selectedCreditNozzle.tankName ?? '-'}',
+            ),
+          ],
+          const SizedBox(height: 12),
           TextField(
             controller: _creditIssueAmountController,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(labelText: context.l10n.text('creditGivenAmount')),
+            decoration: InputDecoration(labelText: context.l10n.text('creditGivenQuantity')),
           ),
+          if (selectedCreditNozzle != null && selectedCreditNozzle.fuelTypeId > 0) ...[
+            const SizedBox(height: 8),
+            Text(context.l10n.text('creditGivenHint')),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: _creditIssueNotesController,
@@ -1095,13 +1132,14 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               onPressed: actionState.isBusy
                   ? null
                   : () {
-                      final amount = double.tryParse(_creditIssueAmountController.text) ?? 0;
-                      if ((_recoveryCustomerId ?? 0) <= 0 || amount <= 0) return;
+                      final quantity = double.tryParse(_creditIssueAmountController.text) ?? 0;
+                      if ((_recoveryCustomerId ?? 0) <= 0 || (_creditIssueNozzleId ?? 0) <= 0 || quantity <= 0) return;
                       ref.read(managerActionProvider.notifier).giveCustomerCredit(
                             stationId: workspace.stationId,
                             shiftId: activeShiftId,
                             customerId: _recoveryCustomerId!,
-                            amount: amount,
+                            nozzleId: _creditIssueNozzleId!,
+                            quantity: quantity,
                             notes: _emptyToNull(_creditIssueNotesController.text),
                           );
                       _creditIssueAmountController.clear();

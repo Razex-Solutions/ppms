@@ -709,6 +709,11 @@ class CustomerCreditIssueEntry {
     required this.createdByUserId,
     required this.createdAt,
     this.shiftId,
+    this.nozzleId,
+    this.tankId,
+    this.fuelTypeId,
+    this.quantity,
+    this.ratePerLiter,
     this.notes,
   });
 
@@ -716,6 +721,11 @@ class CustomerCreditIssueEntry {
   final int customerId;
   final int stationId;
   final int? shiftId;
+  final int? nozzleId;
+  final int? tankId;
+  final int? fuelTypeId;
+  final double? quantity;
+  final double? ratePerLiter;
   final double amount;
   final int createdByUserId;
   final DateTime createdAt;
@@ -727,6 +737,11 @@ class CustomerCreditIssueEntry {
       customerId: json['customer_id'] as int,
       stationId: json['station_id'] as int,
       shiftId: json['shift_id'] as int?,
+      nozzleId: json['nozzle_id'] as int?,
+      tankId: json['tank_id'] as int?,
+      fuelTypeId: json['fuel_type_id'] as int?,
+      quantity: (json['quantity'] as num?)?.toDouble(),
+      ratePerLiter: (json['rate_per_liter'] as num?)?.toDouble(),
       amount: (json['amount'] as num).toDouble(),
       createdByUserId: json['created_by_user_id'] as int,
       createdAt: DateTime.parse(json['created_at'] as String),
