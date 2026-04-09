@@ -26,6 +26,11 @@ class CreditOverrideRequest(BaseModel):
     reason: str | None = None
 
 
+class ManagerCreditAdjustmentRequest(BaseModel):
+    amount: float
+    reason: str | None = None
+
+
 class CustomerResponse(BaseModel):
     id: int
     name: str

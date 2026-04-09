@@ -592,14 +592,18 @@ class _StationSetupScreenState extends ConsumerState<StationSetupScreen> {
 }
 
 class _FuelTypeDraft {
+  static int _nextLocalKey = -1;
+
   _FuelTypeDraft({
     this.id,
     String name = '',
     String description = '',
-  })  : nameController = TextEditingController(text: name),
+  })  : localKey = _nextLocalKey--,
+        nameController = TextEditingController(text: name),
         descriptionController = TextEditingController(text: description);
 
   final int? id;
+  final int localKey;
   final TextEditingController nameController;
   final TextEditingController descriptionController;
 
@@ -610,6 +614,8 @@ class _FuelTypeDraft {
 }
 
 class _TankDraft {
+  static int _nextLocalKey = -1;
+
   _TankDraft({
     this.id,
     String name = '',
@@ -619,12 +625,14 @@ class _TankDraft {
     this.selectedFuelTypeId,
     this.selectedFuelTypeName,
     this.isActive = true,
-  })  : nameController = TextEditingController(text: name),
+  })  : localKey = _nextLocalKey--,
+        nameController = TextEditingController(text: name),
         codeController = TextEditingController(text: code),
         capacityController = TextEditingController(text: capacity),
         thresholdController = TextEditingController(text: threshold);
 
   final int? id;
+  final int localKey;
   final TextEditingController nameController;
   final TextEditingController codeController;
   final TextEditingController capacityController;
@@ -750,6 +758,24 @@ class _TankCard extends StatelessWidget {
   final List<_FuelTypeDraft> fuelTypes;
   final VoidCallback? onRemove;
 
+  int? _resolveFuelValue() {
+    if (draft.selectedFuelTypeId != null) {
+      for (final fuel in fuelTypes) {
+        if (fuel.id == draft.selectedFuelTypeId) {
+          return fuel.id ?? fuel.localKey;
+        }
+      }
+    }
+    if (draft.selectedFuelTypeName != null) {
+      for (final fuel in fuelTypes) {
+        if (fuel.nameController.text.trim() == draft.selectedFuelTypeName) {
+          return fuel.id ?? fuel.localKey;
+        }
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -779,26 +805,26 @@ class _TankCard extends StatelessWidget {
             SizedBox(
               width: 180,
               child: DropdownButtonFormField<int>(
-                initialValue: draft.selectedFuelTypeId,
+                initialValue: _resolveFuelValue(),
                 decoration: InputDecoration(
                   labelText: context.l10n.text('fuelType'),
                 ),
                 items: [
                   for (final fuel in fuelTypes)
                     DropdownMenuItem(
-                      value: fuel.id,
+                      value: fuel.id ?? fuel.localKey,
                       child: Text(fuel.nameController.text.isEmpty
                           ? 'Unnamed fuel'
                           : fuel.nameController.text),
                     ),
                 ],
                 onChanged: (value) {
-                  draft.selectedFuelTypeId = value;
-                  draft.selectedFuelTypeName = fuelTypes
-                      .where((fuel) => fuel.id == value)
-                      .map((fuel) => fuel.nameController.text)
-                      .cast<String?>()
-                      .firstWhere((_) => true, orElse: () => null);
+                  final selected = fuelTypes.where(
+                    (fuel) => (fuel.id ?? fuel.localKey) == value,
+                  );
+                  final fuel = selected.isEmpty ? null : selected.first;
+                  draft.selectedFuelTypeId = fuel?.id;
+                  draft.selectedFuelTypeName = fuel?.nameController.text.trim();
                 },
               ),
             ),
@@ -943,6 +969,42 @@ class _NozzleCard extends StatelessWidget {
   final VoidCallback onChanged;
   final VoidCallback? onRemove;
 
+  int? _resolveFuelValue() {
+    if (draft.selectedFuelTypeId != null) {
+      for (final fuel in fuelTypes) {
+        if (fuel.id == draft.selectedFuelTypeId) {
+          return fuel.id ?? fuel.localKey;
+        }
+      }
+    }
+    if (draft.selectedFuelTypeName != null) {
+      for (final fuel in fuelTypes) {
+        if (fuel.nameController.text.trim() == draft.selectedFuelTypeName) {
+          return fuel.id ?? fuel.localKey;
+        }
+      }
+    }
+    return null;
+  }
+
+  int? _resolveTankValue() {
+    if (draft.selectedTankId != null) {
+      for (final tank in tanks) {
+        if (tank.id == draft.selectedTankId) {
+          return tank.id ?? tank.localKey;
+        }
+      }
+    }
+    if (draft.selectedTankCode != null) {
+      for (final tank in tanks) {
+        if (tank.codeController.text.trim() == draft.selectedTankCode) {
+          return tank.id ?? tank.localKey;
+        }
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -974,26 +1036,26 @@ class _NozzleCard extends StatelessWidget {
           SizedBox(
             width: 180,
             child: DropdownButtonFormField<int>(
-              initialValue: draft.selectedFuelTypeId,
+              initialValue: _resolveFuelValue(),
               decoration: InputDecoration(
                 labelText: context.l10n.text('fuelType'),
               ),
               items: [
                 for (final fuel in fuelTypes)
                   DropdownMenuItem(
-                    value: fuel.id,
+                    value: fuel.id ?? fuel.localKey,
                     child: Text(fuel.nameController.text.isEmpty
                         ? 'Unnamed fuel'
                         : fuel.nameController.text),
                   ),
               ],
               onChanged: (value) {
-                draft.selectedFuelTypeId = value;
-                draft.selectedFuelTypeName = fuelTypes
-                    .where((fuel) => fuel.id == value)
-                    .map((fuel) => fuel.nameController.text)
-                    .cast<String?>()
-                    .firstWhere((_) => true, orElse: () => null);
+                final selected = fuelTypes.where(
+                  (fuel) => (fuel.id ?? fuel.localKey) == value,
+                );
+                final fuel = selected.isEmpty ? null : selected.first;
+                draft.selectedFuelTypeId = fuel?.id;
+                draft.selectedFuelTypeName = fuel?.nameController.text.trim();
                 onChanged();
               },
             ),
@@ -1001,24 +1063,24 @@ class _NozzleCard extends StatelessWidget {
           SizedBox(
             width: 180,
             child: DropdownButtonFormField<int>(
-              initialValue: draft.selectedTankId,
+              initialValue: _resolveTankValue(),
               decoration: InputDecoration(labelText: context.l10n.text('tank')),
               items: [
                 for (final tank in tanks)
                   DropdownMenuItem(
-                    value: tank.id,
+                    value: tank.id ?? tank.localKey,
                     child: Text(tank.nameController.text.isEmpty
                         ? 'Unnamed tank'
                         : tank.nameController.text),
                   ),
               ],
               onChanged: (value) {
-                draft.selectedTankId = value;
-                draft.selectedTankCode = tanks
-                    .where((tank) => tank.id == value)
-                    .map((tank) => tank.codeController.text)
-                    .cast<String?>()
-                    .firstWhere((_) => true, orElse: () => null);
+                final selected = tanks.where(
+                  (tank) => (tank.id ?? tank.localKey) == value,
+                );
+                final tank = selected.isEmpty ? null : selected.first;
+                draft.selectedTankId = tank?.id;
+                draft.selectedTankCode = tank?.codeController.text.trim();
                 onChanged();
               },
             ),

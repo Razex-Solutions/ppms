@@ -4,10 +4,12 @@ from sqlalchemy.orm import Session
 from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.time import utc_now
 from app.models.customer import Customer
+from app.models.role import Role
 from app.models.station import Station
 from app.models.user import User
-from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerUpdate
+from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerUpdate, ManagerCreditAdjustmentRequest
 from app.services.audit import log_audit_event
+from app.services.notifications import notify_users
 
 
 def _ensure_customer_scope(customer: Customer, current_user: User) -> None:
@@ -126,6 +128,76 @@ def reject_credit_override(customer: Customer, data: CreditOverrideRequest, db: 
         entity_id=customer.id,
         station_id=customer.station_id,
         details={"amount": customer.credit_override_requested_amount, "reason": data.reason},
+    )
+    db.commit()
+    db.refresh(customer)
+    return customer
+
+
+def manager_adjust_credit_limit(
+    customer: Customer,
+    data: ManagerCreditAdjustmentRequest,
+    db: Session,
+    current_user: User,
+) -> Customer:
+    _ensure_customer_scope(customer, current_user)
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Adjustment amount must be greater than 0")
+
+    before_limit = customer.credit_limit or 0.0
+    customer.credit_limit = round(before_limit + data.amount, 2)
+    customer.credit_override_status = "notified"
+    customer.credit_override_amount = round(data.amount, 2)
+    customer.credit_override_requested_amount = round(data.amount, 2)
+    customer.credit_override_requested_at = utc_now()
+    customer.credit_override_requested_by = current_user.id
+    customer.credit_override_reason = data.reason
+    customer.credit_override_reviewed_at = None
+    customer.credit_override_reviewed_by = None
+    customer.credit_override_rejection_reason = None
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="customers",
+        action="customers.manager_adjust_credit_limit",
+        entity_type="customer",
+        entity_id=customer.id,
+        station_id=customer.station_id,
+        details={
+            "before_credit_limit": before_limit,
+            "increase_amount": data.amount,
+            "after_credit_limit": customer.credit_limit,
+            "reason": data.reason,
+        },
+    )
+
+    recipients = (
+        db.query(User)
+        .join(Role, User.role_id == Role.id)
+        .filter(
+            User.is_active.is_(True),
+            (
+                ((Role.name == "StationAdmin") & (User.station_id == customer.station_id)) |
+                ((Role.name == "HeadOffice") & (User.organization_id == customer.station.organization_id)) |
+                (Role.name == "MasterAdmin")
+            ),
+        )
+        .all()
+    )
+    notify_users(
+        db,
+        recipients=recipients,
+        actor_user=current_user,
+        station_id=customer.station_id,
+        organization_id=customer.station.organization_id if customer.station else None,
+        event_type="customer.credit_limit_increased",
+        title="Customer credit increased",
+        message=(
+            f"{current_user.full_name} increased credit for {customer.name} by {data.amount:.2f}. "
+            f"New limit: {customer.credit_limit:.2f}."
+        ),
+        entity_type="customer",
+        entity_id=customer.id,
     )
     db.commit()
     db.refresh(customer)

@@ -9,9 +9,10 @@ from app.models.customer import Customer
 from app.models.customer_payment import CustomerPayment
 from app.models.fuel_sale import FuelSale
 from app.models.user import User
-from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerResponse, CustomerUpdate
+from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerResponse, CustomerUpdate, ManagerCreditAdjustmentRequest
 from app.services.customers import approve_credit_override as approve_credit_override_service
 from app.services.customers import create_customer as create_customer_service
+from app.services.customers import manager_adjust_credit_limit as manager_adjust_credit_limit_service
 from app.services.customers import reject_credit_override as reject_credit_override_service
 from app.services.customers import request_credit_override as request_credit_override_service
 from app.services.customers import update_customer as update_customer_service
@@ -113,6 +114,21 @@ def request_credit_override(
     require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
     require_permission(current_user, "customers", "request_credit_override", detail="You do not have permission to request credit overrides")
     return request_credit_override_service(customer, data, db, current_user)
+
+
+@router.post("/{customer_id}/manager-credit-adjustment", response_model=CustomerResponse)
+def manager_adjust_credit_limit(
+    customer_id: int,
+    data: ManagerCreditAdjustmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
+    require_permission(current_user, "customers", "update", detail="You do not have permission to adjust customer credit")
+    return manager_adjust_credit_limit_service(customer, data, db, current_user)
 
 
 @router.post("/{customer_id}/approve-credit-override", response_model=CustomerResponse)

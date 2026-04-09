@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../app/session/models/app_role.dart';
 import '../../app/session/session_controller.dart';
+import '../manager/manager_home_screen.dart';
 import '../onboarding/master_admin_onboarding_screen.dart';
 import '../operator/operator_home_screen.dart';
 import '../../widgets/info_card.dart';
@@ -31,6 +32,11 @@ class WorkspaceScreen extends ConsumerWidget {
     if ((requestedType == 'operator' || requestedType == null) &&
         session.role == AppRole.operator) {
       return const OperatorHomeScreen();
+    }
+
+    if ((requestedType == 'manager' || requestedType == null) &&
+        session.role == AppRole.manager) {
+      return const ManagerHomeScreen();
     }
 
     final titleKey = _resolveTitleKey(session.role, requestedType);

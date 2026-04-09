@@ -27,10 +27,13 @@ from app.models.user import User
 from app.models.fuel_type import FuelType
 from app.models.tank import Tank
 from app.models.dispenser import Dispenser
+from app.models.customer import Customer
 from app.models.employee_profile import EmployeeProfile
 from app.models.nozzle import Nozzle
+from app.models.pos_product import POSProduct
 from app.models.payroll_line import PayrollLine
 from app.models.payroll_run import PayrollRun
+from app.models.supplier import Supplier
 from app.core.permissions import ROLE_CAPABILITY_SUMMARY
 from app.services.document_template_seed import seed_default_document_templates
 
@@ -148,6 +151,96 @@ def upsert_nozzle(
     db.commit()
     db.refresh(nozzle)
     return nozzle
+
+
+def upsert_customer(
+    *,
+    station_id: int,
+    code: str,
+    name: str,
+    credit_limit: float,
+    outstanding_balance: float,
+) -> Customer:
+    customer = db.query(Customer).filter(Customer.code == code).first()
+    if not customer:
+        customer = Customer(
+            station_id=station_id,
+            code=code,
+            name=name,
+            customer_type="pump",
+            credit_limit=credit_limit,
+            outstanding_balance=outstanding_balance,
+        )
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+        return customer
+
+    customer.station_id = station_id
+    customer.name = name
+    customer.customer_type = "pump"
+    customer.credit_limit = credit_limit
+    customer.outstanding_balance = outstanding_balance
+    db.commit()
+    db.refresh(customer)
+    return customer
+
+
+def upsert_supplier(*, code: str, name: str, payable_balance: float) -> Supplier:
+    supplier = db.query(Supplier).filter(Supplier.code == code).first()
+    if not supplier:
+        supplier = Supplier(code=code, name=name, payable_balance=payable_balance)
+        db.add(supplier)
+        db.commit()
+        db.refresh(supplier)
+        return supplier
+
+    supplier.name = name
+    supplier.payable_balance = payable_balance
+    db.commit()
+    db.refresh(supplier)
+    return supplier
+
+
+def upsert_pos_product(
+    *,
+    station_id: int,
+    code: str,
+    name: str,
+    category: str,
+    module: str,
+    price: float,
+    stock_quantity: float,
+) -> POSProduct:
+    product = db.query(POSProduct).filter(POSProduct.code == code).first()
+    if not product:
+        product = POSProduct(
+            station_id=station_id,
+            code=code,
+            name=name,
+            category=category,
+            module=module,
+            price=price,
+            stock_quantity=stock_quantity,
+            track_inventory=True,
+            is_active=True,
+        )
+        db.add(product)
+        db.commit()
+        db.refresh(product)
+        return product
+
+    product.station_id = station_id
+    product.name = name
+    product.category = category
+    product.module = module
+    product.price = price
+    product.stock_quantity = stock_quantity
+    product.track_inventory = True
+    product.is_active = True
+    db.commit()
+    db.refresh(product)
+    return product
 
 
 def upsert_shift_template(
@@ -435,6 +528,41 @@ upsert_shift_template(station_id=station.id, name="Evening", start=time(14, 0), 
 upsert_shift_template(station_id=station.id, name="Night", start=time(22, 0), end=time(6, 0))
 ensure_demo_calibration_chart(tank_petrol)
 ensure_demo_calibration_chart(tank_diesel)
+
+upsert_customer(
+    station_id=station.id,
+    code="CUST-PUMP-A",
+    name="Pump A",
+    credit_limit=500000,
+    outstanding_balance=180000,
+)
+upsert_customer(
+    station_id=station.id,
+    code="CUST-PUMP-B",
+    name="Pump B",
+    credit_limit=350000,
+    outstanding_balance=95000,
+)
+upsert_supplier(code="SUP-PSO", name="PSO Supply", payable_balance=220000)
+upsert_supplier(code="SUP-SHELL", name="Shell Bulk", payable_balance=150000)
+upsert_pos_product(
+    station_id=station.id,
+    code="LUB-20W50-1L",
+    name="Lubricant 20W50 1L",
+    category="Lubricants",
+    module="other",
+    price=1800,
+    stock_quantity=24,
+)
+upsert_pos_product(
+    station_id=station.id,
+    code="LUB-2T-500",
+    name="2T Oil 500ml",
+    category="Lubricants",
+    module="other",
+    price=650,
+    stock_quantity=40,
+)
 
 if not db.query(User).filter(User.username == "masteradmin").first():
     master_admin = User(
