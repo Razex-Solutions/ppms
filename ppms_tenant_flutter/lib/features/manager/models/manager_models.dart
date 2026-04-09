@@ -851,10 +851,12 @@ class ManagerDashboardRequest {
   const ManagerDashboardRequest({
     required this.stationId,
     this.shiftId,
+    this.fromDate,
   });
 
   final int stationId;
   final int? shiftId;
+  final String? fromDate;
 
   @override
   bool operator ==(Object other) =>
@@ -862,10 +864,11 @@ class ManagerDashboardRequest {
       other is ManagerDashboardRequest &&
           runtimeType == other.runtimeType &&
           stationId == other.stationId &&
-          shiftId == other.shiftId;
+          shiftId == other.shiftId &&
+          fromDate == other.fromDate;
 
   @override
-  int get hashCode => Object.hash(stationId, shiftId);
+  int get hashCode => Object.hash(stationId, shiftId, fromDate);
 }
 
 class ManagerDashboardData {

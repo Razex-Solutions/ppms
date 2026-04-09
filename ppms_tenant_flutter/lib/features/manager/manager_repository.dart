@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../app/session/session_controller.dart';
 import 'models/manager_models.dart';
@@ -9,8 +8,6 @@ class ManagerRepository {
   const ManagerRepository(this._dio);
 
   final Dio _dio;
-
-  String get _today => DateFormat('yyyy-MM-dd').format(DateTime.now());
 
   List<dynamic> _listData(Object? data) {
     if (data is List<dynamic>) {
@@ -158,7 +155,7 @@ class ManagerRepository {
         queryParameters: _query({
           'station_id': request.stationId,
           'shift_id': request.shiftId,
-          'from_date': _today,
+          'from_date': request.fromDate,
           'limit': 200,
         }),
       ),
@@ -166,7 +163,7 @@ class ManagerRepository {
         '/pos-sales/',
         queryParameters: _query({
           'station_id': request.stationId,
-          'from_date': _today,
+          'from_date': request.fromDate,
           'limit': 200,
         }),
       ),
@@ -174,7 +171,7 @@ class ManagerRepository {
         '/purchases/',
         queryParameters: _query({
           'station_id': request.stationId,
-          'from_date': _today,
+          'from_date': request.fromDate,
           'limit': 200,
         }),
       ),
@@ -182,7 +179,7 @@ class ManagerRepository {
         '/expenses/',
         queryParameters: _query({
           'station_id': request.stationId,
-          'from_date': _today,
+          'from_date': request.fromDate,
           'limit': 200,
         }),
       ),
@@ -190,7 +187,7 @@ class ManagerRepository {
         '/customer-payments/',
         queryParameters: _query({
           'station_id': request.stationId,
-          'from_date': _today,
+          'from_date': request.fromDate,
           'limit': 200,
         }),
       ),
@@ -213,7 +210,7 @@ class ManagerRepository {
         '/tank-dips/',
         queryParameters: _query({
           'station_id': request.stationId,
-          'from_date': _today,
+          'from_date': request.fromDate,
           'limit': 20,
         }),
       ),
