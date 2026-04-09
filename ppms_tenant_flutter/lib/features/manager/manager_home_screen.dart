@@ -19,6 +19,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   final _actualCashController = TextEditingController();
   final Map<int, TextEditingController> _closingControllers = {};
   final Map<int, TextEditingController> _boundaryControllers = {};
+  final Map<int, String> _lastSyncedClosingValues = {};
+  final Map<int, String> _lastSyncedBoundaryValues = {};
+  int? _lastWorkspaceShiftId;
+  String? _lastWorkspaceStatus;
 
   final _dipReadingController = TextEditingController();
   final _dipNotesController = TextEditingController();
@@ -214,29 +218,59 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   }
 
   void _syncWorkspaceControllers(ManagerCurrentWorkspace workspace) {
+    final shiftChanged =
+        _lastWorkspaceShiftId != workspace.activeShift?.id ||
+        _lastWorkspaceStatus != workspace.status;
+    if (shiftChanged) {
+      for (final controller in _closingControllers.values) {
+        controller.dispose();
+      }
+      for (final controller in _boundaryControllers.values) {
+        controller.dispose();
+      }
+      _closingControllers.clear();
+      _boundaryControllers.clear();
+      _lastSyncedClosingValues.clear();
+      _lastSyncedBoundaryValues.clear();
+    }
+
     for (final group in workspace.openingNozzleGroups) {
       for (final nozzle in group.nozzles) {
+        final currentMeterText = nozzle.currentMeter.toStringAsFixed(0);
         final controller = _closingControllers.putIfAbsent(
           nozzle.nozzleId,
-          () => TextEditingController(text: nozzle.currentMeter.toStringAsFixed(0)),
+          () => TextEditingController(text: currentMeterText),
         );
-        if (controller.text.trim().isEmpty) {
-          controller.text = nozzle.currentMeter.toStringAsFixed(0);
+        final lastSyncedClosing = _lastSyncedClosingValues[nozzle.nozzleId];
+        if (controller.text.trim().isEmpty ||
+            lastSyncedClosing == null ||
+            controller.text.trim() == lastSyncedClosing) {
+          controller.text = currentMeterText;
+          _lastSyncedClosingValues[nozzle.nozzleId] = currentMeterText;
         }
         if (nozzle.requiresRateChangeBoundary &&
             !nozzle.rateChangeBoundaryRecorded) {
+          final boundaryMeterText = nozzle.currentMeter.toStringAsFixed(0);
           final boundaryController = _boundaryControllers.putIfAbsent(
             nozzle.nozzleId,
-            () => TextEditingController(
-              text: nozzle.currentMeter.toStringAsFixed(0),
-            ),
+            () => TextEditingController(text: boundaryMeterText),
           );
-          if (boundaryController.text.trim().isEmpty) {
-            boundaryController.text = nozzle.currentMeter.toStringAsFixed(0);
+          final lastSyncedBoundary = _lastSyncedBoundaryValues[nozzle.nozzleId];
+          if (boundaryController.text.trim().isEmpty ||
+              lastSyncedBoundary == null ||
+              boundaryController.text.trim() == lastSyncedBoundary) {
+            boundaryController.text = boundaryMeterText;
+            _lastSyncedBoundaryValues[nozzle.nozzleId] = boundaryMeterText;
           }
+        } else {
+          final boundaryController = _boundaryControllers.remove(nozzle.nozzleId);
+          boundaryController?.dispose();
+          _lastSyncedBoundaryValues.remove(nozzle.nozzleId);
         }
       }
     }
+    _lastWorkspaceShiftId = workspace.activeShift?.id;
+    _lastWorkspaceStatus = workspace.status;
   }
 
   void _syncSupportDefaults(ManagerSupportData support) {
