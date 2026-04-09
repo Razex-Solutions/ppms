@@ -279,8 +279,26 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
     SupplierPaymentItem? existing,
   }) async {
     final l10n = context.l10n;
+    final bundle = await _bundleFuture;
+    final selectedSupplier = existing != null
+        ? bundle.suppliers
+            .where((item) => item.id == existing.supplierId)
+            .cast<SupplierFinanceItem?>()
+            .firstOrNull
+        : bundle.suppliers
+            .where((item) => item.id == _selectedSupplierId)
+            .cast<SupplierFinanceItem?>()
+            .firstOrNull;
     final supplierId = existing?.supplierId ?? _selectedSupplierId;
     if (supplierId == null) return;
+    if (existing == null &&
+        (selectedSupplier == null || selectedSupplier.payableBalance <= 0)) {
+      setState(() {
+        _actionError = l10n.text('supplierHasNoPayableBalance');
+        _actionMessage = null;
+      });
+      return;
+    }
     final amountController =
         TextEditingController(text: existing?.amount.toStringAsFixed(0) ?? '');
     final referenceController =
@@ -298,6 +316,15 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (selectedSupplier != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${l10n.text('supplierBalance')}: ${_money(selectedSupplier.payableBalance)}',
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: amountController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -333,6 +360,15 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
     final amount = double.tryParse(amountController.text.trim());
     if (amount == null) {
       setState(() => _actionError = l10n.text('saveFailed'));
+      return;
+    }
+    if (existing == null &&
+        selectedSupplier != null &&
+        amount > selectedSupplier.payableBalance) {
+      setState(() {
+        _actionError = l10n.text('supplierPaymentExceedsBalance');
+        _actionMessage = null;
+      });
       return;
     }
     final stationId = ref.read(sessionControllerProvider).session?.stationId;
@@ -780,7 +816,9 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
                 .map(
                   (supplier) => DropdownMenuItem(
                     value: supplier.id,
-                    child: Text('${supplier.name} (${supplier.code})'),
+                    child: Text(
+                      '${supplier.name} (${supplier.code}) - ${_money(supplier.payableBalance)}',
+                    ),
                   ),
                 )
                 .toList(),

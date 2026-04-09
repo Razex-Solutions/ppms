@@ -323,6 +323,9 @@ class AppLocalizations {
       'updatePayment': 'Update payment',
       'customerExposure': 'Customer exposure',
       'supplierBalance': 'Supplier balance',
+      'supplierHasNoPayableBalance': 'This supplier has no payable balance right now.',
+      'supplierPaymentExceedsBalance':
+          'Entered payment is greater than the supplier payable balance.',
       'totalChargesLabel': 'Total charges',
       'totalPaymentsLabel': 'Total payments',
       'transactionCountLabel': 'Transactions',
@@ -575,6 +578,9 @@ class AppLocalizations {
       'updatePayment': 'پیمنٹ اپڈیٹ کریں',
       'customerExposure': 'کسٹمر ایکسپوژر',
       'supplierBalance': 'سپلائر بیلینس',
+      'supplierHasNoPayableBalance': 'اس سپلائر کا ابھی کوئی قابل ادائیگی بیلینس نہیں ہے۔',
+      'supplierPaymentExceedsBalance':
+          'درج کی گئی پیمنٹ سپلائر کے قابل ادائیگی بیلینس سے زیادہ ہے۔',
       'totalChargesLabel': 'کل چارجز',
       'totalPaymentsLabel': 'کل پیمنٹس',
       'transactionCountLabel': 'لین دین',
