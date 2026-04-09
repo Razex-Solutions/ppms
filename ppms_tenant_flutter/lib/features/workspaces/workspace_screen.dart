@@ -7,6 +7,7 @@ import '../../app/session/session_controller.dart';
 import '../manager/manager_home_screen.dart';
 import '../onboarding/master_admin_onboarding_screen.dart';
 import '../operator/operator_home_screen.dart';
+import '../accountant/accountant_home_screen.dart';
 import '../../widgets/info_card.dart';
 
 class WorkspaceScreen extends ConsumerWidget {
@@ -37,6 +38,11 @@ class WorkspaceScreen extends ConsumerWidget {
     if ((requestedType == 'manager' || requestedType == null) &&
         session.role == AppRole.manager) {
       return const ManagerHomeScreen();
+    }
+
+    if ((requestedType == 'accountant' || requestedType == null) &&
+        session.role == AppRole.accountant) {
+      return const AccountantHomeScreen();
     }
 
     final titleKey = _resolveTitleKey(session.role, requestedType);
