@@ -156,12 +156,12 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               data: (support) {
                 _syncSupportDefaults(support);
                 return dashboardAsync.when(
-                  data: (dashboard) => Column(
+                      data: (dashboard) => Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _summarySection(context, dashboard),
                       const SizedBox(height: 16),
-                      _taskSection(context, dashboard),
+                      _taskSection(context, support, dashboard),
                       const SizedBox(height: 16),
                       _actionsSection(
                         context,
@@ -338,10 +338,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               _kv(
                 context.l10n.text('recoveryCard'),
                 cash.creditRecoveries.toStringAsFixed(0),
-              ),
-              _kv(
-                context.l10n.text('creditGivenCard'),
-                cash.creditGiven.toStringAsFixed(0),
               ),
               _kv(
                 context.l10n.text('expenseCard'),
@@ -684,8 +680,16 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     );
   }
 
-  Widget _taskSection(BuildContext context, ManagerDashboardData dashboard) {
+  Widget _taskSection(
+    BuildContext context,
+    ManagerSupportData support,
+    ManagerDashboardData dashboard,
+  ) {
     final followUps = dashboard.outstandingCustomers.take(5).toList();
+    final recentDipByTank = <int, TankDipEntry>{};
+    for (final dip in dashboard.recentDips) {
+      recentDipByTank.putIfAbsent(dip.tankId, () => dip);
+    }
     return Wrap(
       spacing: 16,
       runSpacing: 16,
@@ -743,6 +747,36 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                         ),
                         subtitle: Text(
                           '${dip.calculatedVolume.toStringAsFixed(0)} ${context.l10n.text('liters')} • ${DateFormat('dd MMM • hh:mm a').format(dip.createdAt.toLocal())}',
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 420,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.l10n.text('remainingFuelStatus'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  if (support.tanks.isEmpty)
+                    Text(context.l10n.text('noRecentItems'))
+                  else
+                    for (final tank in support.tanks)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('${tank.name} (${tank.code})'),
+                        subtitle: Text(
+                          '${context.l10n.text('currentVolumeLabel')}: ${tank.currentVolume.toStringAsFixed(0)} ${context.l10n.text('liters')}'
+                          '${recentDipByTank[tank.id] == null ? '' : ' • ${context.l10n.text('lastDipVolume')}: ${recentDipByTank[tank.id]!.calculatedVolume.toStringAsFixed(0)} ${context.l10n.text('liters')}'}',
                         ),
                       ),
                 ],

@@ -102,6 +102,7 @@ Important finance/accountability rule for manager shifts:
 - customer credit should capture nozzle, fuel type, tank path, quantity/liters, and the applied active rate
 - customer outstanding must increase from that fuel-linked credit sale
 - stock and meter movement should still come from the normal nozzle sale path so petrol and diesel never get mixed incorrectly
+- this credit entry should classify part of the nozzle sale as customer credit, not reduce manager cash in hand by itself
 - shift cash accountability should be checked as:
   - opening cash
   - plus fuel cash sales

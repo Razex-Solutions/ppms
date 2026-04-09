@@ -589,6 +589,9 @@ class ManagerActionController extends Notifier<ManagerActionState> {
             dipReadingMm: dipReadingMm,
             notes: notes,
           );
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
       _refreshStation(stationId, shiftId: shiftId);
       state = const ManagerActionState(successMessage: 'Dip recorded.');
     } on DioException catch (error) {
@@ -635,6 +638,9 @@ class ManagerActionController extends Notifier<ManagerActionState> {
           notes: 'After receiving${referenceNo == null || referenceNo.isEmpty ? '' : ' ($referenceNo)'}',
         );
       }
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
       _refreshStation(stationId, shiftId: shiftId);
       state = const ManagerActionState(successMessage: 'Receiving recorded.');
     } on DioException catch (error) {
@@ -661,6 +667,9 @@ class ManagerActionController extends Notifier<ManagerActionState> {
             referenceNo: referenceNo,
             notes: notes,
           );
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
       _refreshStation(stationId, shiftId: shiftId);
       state = const ManagerActionState(successMessage: 'Recovery recorded.');
     } on DioException catch (error) {
@@ -687,6 +696,9 @@ class ManagerActionController extends Notifier<ManagerActionState> {
             shiftId: shiftId,
             notes: notes,
           );
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
       _refreshStation(stationId, shiftId: shiftId);
       state = const ManagerActionState(successMessage: 'Credit recorded.');
     } on DioException catch (error) {
@@ -711,6 +723,9 @@ class ManagerActionController extends Notifier<ManagerActionState> {
             amount: amount,
             notes: notes,
           );
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
       _refreshStation(stationId, shiftId: shiftId);
       state = const ManagerActionState(successMessage: 'Expense recorded.');
     } on DioException catch (error) {
@@ -735,6 +750,9 @@ class ManagerActionController extends Notifier<ManagerActionState> {
             quantity: quantity,
             notes: notes,
           );
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
       _refreshStation(stationId, shiftId: shiftId);
       state = const ManagerActionState(successMessage: 'Lubricant sale recorded.');
     } on DioException catch (error) {
@@ -762,6 +780,9 @@ class ManagerActionController extends Notifier<ManagerActionState> {
             purpose: purpose,
             notes: notes,
           );
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
       _refreshStation(stationId, shiftId: shiftId);
       state = const ManagerActionState(successMessage: 'Internal fuel usage recorded.');
     } on DioException catch (error) {
@@ -778,11 +799,16 @@ class ManagerActionController extends Notifier<ManagerActionState> {
   void _refreshStation(int stationId, {int? shiftId}) {
     ref.invalidate(managerWorkspaceProvider);
     ref.invalidate(managerSupportProvider(stationId));
+    ref.invalidate(managerDashboardProvider);
     ref.invalidate(
       managerDashboardProvider(
         ManagerDashboardRequest(stationId: stationId, shiftId: shiftId),
       ),
     );
+    if (shiftId != null) {
+      ref.invalidate(shiftCashProvider(shiftId));
+      ref.invalidate(cashSubmissionsProvider(shiftId));
+    }
   }
 
   String _extractError(DioException error) {

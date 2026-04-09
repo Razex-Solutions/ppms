@@ -431,6 +431,7 @@ Support direction:
   - active station rate
 - this credit entry is the payment type for a real sale, not a separate stock adjustment
 - stock deduction and nozzle movement must stay on the normal nozzle-sale path
+- manager cash accountability should not subtract customer credit again as if cash was collected first
 
 ### 9.4 Receiving
 

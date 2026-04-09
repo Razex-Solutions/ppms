@@ -128,6 +128,7 @@ Expected:
 
 - calibration converts `1015 mm` to approximately `10150 liters`
 - recent dip activity shows the new dip
+- remaining fuel card for `HQ-T1` updates to around `10150 liters`
 
 ### Step 7: Close shift with nozzle readings
 
@@ -142,20 +143,20 @@ Enter these closing meters:
 
 Enter closing cash left in hand:
 
-- `26771`
+- `32221`
 
 Expected:
 
 - close check should pass with no blocking credit/meter issue from the credit-given entry
-- `50,000 submitted + 26,771 closing cash = 76,771`
-- final close accountability should reflect the credit-given reduction at close, not during the open shift
+- `50,000 submitted + 32,221 closing cash = 82,221`
+- final close accountability should keep customer credit in ledger/sale classification, not subtract it again from manager cash
 - shift closes successfully if no other blocking dip/meter issue remains
 - next manager sees prepared/opening nozzle values carried forward exactly as:
   - `125120`
   - `98110`
   - `110640`
   - `87725`
-- next manager opening cash preview becomes `26771`
+- next manager opening cash preview becomes `32221`
 
 ## Handover Check
 
@@ -168,7 +169,7 @@ Expected:
 
 - `manager` should no longer see `occupied`
 - `manager` should see the next prepared shift
-- opening cash preview should be `26771`
+- opening cash preview should be `32221`
 - opening nozzle readings should match the Step 7 closing values exactly
 
 ## Important Note

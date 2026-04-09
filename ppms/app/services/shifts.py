@@ -84,8 +84,6 @@ def _get_shift_window_end(shift: Shift):
 def calculate_shift_cash_breakdown(
     db: Session,
     shift: Shift,
-    *,
-    include_credit_given_in_accountable_cash: bool = False,
 ) -> dict[str, float]:
     window_end = _get_shift_window_end(shift)
 
@@ -159,7 +157,6 @@ def calculate_shift_cash_breakdown(
         + fuel_cash_sales
         + lubricant_cash_sales
         + credit_recoveries
-        - (credit_given if include_credit_given_in_accountable_cash else 0.0)
         - cash_expenses,
         2,
     )
@@ -286,11 +283,10 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
     cash_breakdown = calculate_shift_cash_breakdown(
         db,
         shift,
-        include_credit_given_in_accountable_cash=True,
     )
     shift_cash = ensure_shift_cash(db, shift)
 
-    shift.total_sales_cash = max(round(total_cash - cash_breakdown["credit_given"], 2), 0.0)
+    shift.total_sales_cash = round(total_cash, 2)
     shift.total_sales_credit = round(total_credit + cash_breakdown["credit_given"], 2)
     shift.expected_cash = cash_breakdown["accountable_cash"]
     shift.actual_cash_collected = data.actual_cash_collected
@@ -831,7 +827,6 @@ def validate_shift_close(
     cash_breakdown = calculate_shift_cash_breakdown(
         db,
         shift,
-        include_credit_given_in_accountable_cash=True,
     )
     accountable_cash = round(cash_breakdown["accountable_cash"] or 0.0, 2)
     submission_total = round(sum(submission.amount for submission in shift.shift_cash.submissions), 2) if shift.shift_cash else 0.0
