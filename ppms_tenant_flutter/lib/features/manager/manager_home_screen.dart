@@ -1125,12 +1125,37 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     ManagerActionState actionState,
     int? activeShiftId,
   ) {
-    ManagerTankerTripOption? ownTankerTrip;
-    for (final trip in support.ownTankerTrips) {
-      if (trip.id == _receiveOwnTankerTripId) {
-        ownTankerTrip = trip;
-      }
+    final supplierById = <int, SupplierSummary>{};
+    for (final supplier in support.suppliers) {
+      supplierById[supplier.id] = supplier;
     }
+    final tankById = <int, TankOption>{};
+    for (final tank in support.tanks) {
+      tankById[tank.id] = tank;
+    }
+    final fuelTypeById = <int, FuelTypeOption>{};
+    for (final fuelType in support.fuelTypes) {
+      fuelTypeById[fuelType.id] = fuelType;
+    }
+    final ownTankerTripById = <int, ManagerTankerTripOption>{};
+    for (final trip in support.ownTankerTrips) {
+      ownTankerTripById[trip.id] = trip;
+    }
+
+    final selectedSupplierId =
+        supplierById.containsKey(_receiveSupplierId) ? _receiveSupplierId : null;
+    final selectedTankId =
+        tankById.containsKey(_receiveTankId) ? _receiveTankId : null;
+    final selectedFuelTypeId =
+        fuelTypeById.containsKey(_receiveFuelTypeId) ? _receiveFuelTypeId : null;
+    final selectedOwnTankerTripId = ownTankerTripById.containsKey(
+      _receiveOwnTankerTripId,
+    )
+        ? _receiveOwnTankerTripId
+        : null;
+    final ownTankerTrip = selectedOwnTankerTripId == null
+        ? null
+        : ownTankerTripById[selectedOwnTankerTripId];
     return _actionCard(
       context,
       title: context.l10n.text('recordReceivingAction'),
@@ -1164,10 +1189,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
           const SizedBox(height: 12),
           if (_receiveSource == 'supplier')
             DropdownButtonFormField<int>(
-              initialValue: _receiveSupplierId,
+              initialValue: selectedSupplierId,
               decoration: InputDecoration(labelText: context.l10n.text('supplier')),
               items: [
-                for (final supplier in support.suppliers)
+                for (final supplier in supplierById.values)
                   DropdownMenuItem(
                     value: supplier.id,
                     child: Text('${supplier.name} (${supplier.code})'),
@@ -1177,10 +1202,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             )
           else
             DropdownButtonFormField<int>(
-              initialValue: _receiveOwnTankerTripId,
+              initialValue: selectedOwnTankerTripId,
               decoration: InputDecoration(labelText: context.l10n.text('ownTankerTrip')),
               items: [
-                for (final trip in support.ownTankerTrips)
+                for (final trip in ownTankerTripById.values)
                   DropdownMenuItem(
                     value: trip.id,
                     child: Text(
@@ -1195,10 +1220,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
-            initialValue: _receiveTankId,
+            initialValue: selectedTankId,
             decoration: InputDecoration(labelText: context.l10n.text('tank')),
             items: [
-              for (final tank in support.tanks)
+              for (final tank in tankById.values)
                 DropdownMenuItem(
                   value: tank.id,
                   child: Text('${tank.name} (${tank.code})'),
@@ -1214,10 +1239,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
           const SizedBox(height: 12),
           if (_receiveSource == 'supplier')
             DropdownButtonFormField<int>(
-              initialValue: _receiveFuelTypeId,
+              initialValue: selectedFuelTypeId,
               decoration: InputDecoration(labelText: context.l10n.text('fuelType')),
               items: [
-                for (final fuelType in support.fuelTypes)
+                for (final fuelType in fuelTypeById.values)
                   DropdownMenuItem(
                     value: fuelType.id,
                     child: Text(fuelType.name),
