@@ -260,7 +260,7 @@ Manager capabilities:
 - receive fuel from supplier
 - receive fuel from own tanker
 - recover credit payments
-- increase customer credit with notification to admin
+- trigger over-limit visibility/notification when customer exposure crosses the admin-set credit limit
 - record expenses
 - record lubricant sales
 - record internal fuel usage
@@ -285,6 +285,19 @@ Cash rules:
 
 - cash can be submitted multiple times during a shift
 - remaining closing cash becomes next shift opening cash
+- shift cash accountability is:
+  - opening cash
+  - plus fuel cash sales
+  - plus lubricant and other cash sales
+  - plus customer recoveries
+  - minus cash expenses
+  - checked against submissions plus closing cash left in hand
+
+Credit limit rule:
+
+- manager does not formally increase customer credit limit
+- credit limit remains an admin-controlled setting
+- when customer exposure crosses that limit, admins should be notified
 
 Meter rules:
 

@@ -204,7 +204,7 @@ Backend deliverables:
 - supplier receiving
 - own-tanker receiving base path
 - customer recovery entry
-- credit increase audit/notification
+- over-limit customer exposure notification
 - expense entry
 - lubricant sale entry
 - internal fuel usage entry

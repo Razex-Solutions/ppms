@@ -26,7 +26,11 @@ class ShiftCashResponse(BaseModel):
     manager_id: int
     opening_cash: float
     cash_sales: float
+    lubricant_cash_sales: float = 0.0
+    credit_recoveries: float = 0.0
+    cash_expenses: float = 0.0
     expected_cash: float
+    accountable_cash: float = 0.0
     cash_submitted: float
     closing_cash: float | None = None
     difference: float | None = None

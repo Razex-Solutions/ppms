@@ -12,6 +12,7 @@ from app.schemas.shift import CurrentShiftWorkspaceResponse, ShiftCloseValidatio
 from app.services.shifts import close_shift as close_shift_service
 from app.services.shifts import create_cash_submission as create_cash_submission_service
 from app.services.shifts import create_shift as create_shift_service
+from app.services.shifts import calculate_shift_cash_breakdown
 from app.services.shifts import ensure_shift_access
 from app.services.shifts import ensure_shift_cash, list_cash_submissions as list_cash_submissions_service
 from app.services.shifts import get_current_shift_workspace, sync_shift_cash, validate_shift_close
@@ -19,8 +20,11 @@ from app.services.shifts import get_current_shift_workspace, sync_shift_cash, va
 router = APIRouter(prefix="/shifts", tags=["Shifts"])
 
 
-def _serialize_shift_cash(shift_cash) -> dict[str, object | None]:
+def _serialize_shift_cash(shift_cash, cash_breakdown: dict[str, float] | None = None) -> dict[str, object | None]:
+    cash_breakdown = cash_breakdown or {}
     cash_in_hand = round((shift_cash.expected_cash or 0.0) - (shift_cash.cash_submitted or 0.0), 2)
+    if cash_in_hand < 0:
+        cash_in_hand = 0.0
     if shift_cash.closing_cash is not None:
         cash_in_hand = round(shift_cash.closing_cash or 0.0, 2)
     return {
@@ -30,7 +34,11 @@ def _serialize_shift_cash(shift_cash) -> dict[str, object | None]:
         "manager_id": shift_cash.manager_id,
         "opening_cash": shift_cash.opening_cash,
         "cash_sales": shift_cash.cash_sales,
+        "lubricant_cash_sales": cash_breakdown.get("lubricant_cash_sales", 0.0),
+        "credit_recoveries": cash_breakdown.get("credit_recoveries", 0.0),
+        "cash_expenses": cash_breakdown.get("cash_expenses", 0.0),
         "expected_cash": shift_cash.expected_cash,
+        "accountable_cash": cash_breakdown.get("accountable_cash", shift_cash.expected_cash or 0.0),
         "cash_submitted": shift_cash.cash_submitted,
         "closing_cash": shift_cash.closing_cash,
         "difference": shift_cash.difference,
@@ -154,7 +162,7 @@ def get_shift_cash(
     require_permission(current_user, "shifts", "read", detail="You do not have permission to view shift cash")
     ensure_shift_access(shift, current_user)
     shift_cash = sync_shift_cash(db, shift)
-    return _serialize_shift_cash(shift_cash)
+    return _serialize_shift_cash(shift_cash, calculate_shift_cash_breakdown(db, shift))
 
 
 @router.get("/{shift_id}/cash-submissions", response_model=list[CashSubmissionResponse])

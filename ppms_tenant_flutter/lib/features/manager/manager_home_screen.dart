@@ -37,10 +37,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   final _recoveryNotesController = TextEditingController();
   int? _recoveryCustomerId;
 
-  final _creditIncreaseAmountController = TextEditingController();
-  final _creditIncreaseReasonController = TextEditingController();
-  int? _creditCustomerId;
-
   final _expenseAmountController = TextEditingController();
   final _expenseNotesController = TextEditingController();
   String _expenseCategory = _expenseCategories.first;
@@ -79,8 +75,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     _recoveryAmountController.dispose();
     _recoveryReferenceController.dispose();
     _recoveryNotesController.dispose();
-    _creditIncreaseAmountController.dispose();
-    _creditIncreaseReasonController.dispose();
     _expenseAmountController.dispose();
     _expenseNotesController.dispose();
     _lubricantQuantityController.dispose();
@@ -211,8 +205,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     _receiveFuelTypeId ??= _fuelTypeForTank(support, _receiveTankId);
     _recoveryCustomerId ??=
         support.customers.isNotEmpty ? support.customers.first.id : null;
-    _creditCustomerId ??=
-        support.customers.isNotEmpty ? support.customers.first.id : null;
     _lubricantProductId ??=
         support.lubricants.isNotEmpty ? support.lubricants.first.id : null;
     _internalTankId ??=
@@ -330,7 +322,26 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                 context.l10n.text('openingCashCarryForward'),
                 cash.openingCash.toStringAsFixed(0),
               ),
-              _kv(context.l10n.text('expectedCash'), cash.expectedCash.toStringAsFixed(0)),
+              _kv(
+                context.l10n.text('fuelSalesCard'),
+                cash.cashSales.toStringAsFixed(0),
+              ),
+              _kv(
+                context.l10n.text('lubricantSalesCard'),
+                cash.lubricantCashSales.toStringAsFixed(0),
+              ),
+              _kv(
+                context.l10n.text('recoveryCard'),
+                cash.creditRecoveries.toStringAsFixed(0),
+              ),
+              _kv(
+                context.l10n.text('expenseCard'),
+                cash.cashExpenses.toStringAsFixed(0),
+              ),
+              _kv(
+                context.l10n.text('expectedCash'),
+                cash.accountableCash.toStringAsFixed(0),
+              ),
               _kv(
                 context.l10n.text('cashSubmittedSoFar'),
                 cash.cashSubmitted.toStringAsFixed(0),
@@ -1018,13 +1029,9 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     int? activeShiftId,
   ) {
     CustomerSummary? selectedCustomer;
-    CustomerSummary? selectedCreditCustomer;
     for (final customer in support.customers) {
       if (customer.id == _recoveryCustomerId) {
         selectedCustomer = customer;
-      }
-      if (customer.id == _creditCustomerId) {
-        selectedCreditCustomer = customer;
       }
     }
     return _actionCard(
@@ -1089,64 +1096,6 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                       _recoveryNotesController.clear();
                     },
               child: Text(context.l10n.text('recoverNow')),
-            ),
-          ),
-          const Divider(height: 24),
-          Text(
-            context.l10n.text('increaseCreditAction'),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _creditCustomerId,
-            decoration: InputDecoration(labelText: context.l10n.text('customer')),
-            items: [
-              for (final customer in support.customers)
-                DropdownMenuItem(
-                  value: customer.id,
-                  child: Text('${customer.name} (${customer.code})'),
-                ),
-            ],
-            onChanged: (value) => setState(() => _creditCustomerId = value),
-          ),
-          if (selectedCreditCustomer != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${context.l10n.text('creditLimitLabel')}: ${selectedCreditCustomer.creditLimit.toStringAsFixed(0)}',
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: _creditIncreaseAmountController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(labelText: context.l10n.text('increaseBy')),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _creditIncreaseReasonController,
-            decoration: InputDecoration(labelText: context.l10n.text('reasonOptional')),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.tonal(
-              onPressed: actionState.isBusy
-                  ? null
-                  : () {
-                      final amount =
-                          double.tryParse(_creditIncreaseAmountController.text) ?? 0;
-                      if ((_creditCustomerId ?? 0) <= 0 || amount <= 0) return;
-                      ref.read(managerActionProvider.notifier).increaseCustomerCredit(
-                            stationId: workspace.stationId,
-                            shiftId: activeShiftId,
-                            customerId: _creditCustomerId!,
-                            amount: amount,
-                            reason: _emptyToNull(_creditIncreaseReasonController.text),
-                          );
-                      _creditIncreaseAmountController.clear();
-                      _creditIncreaseReasonController.clear();
-                    },
-              child: Text(context.l10n.text('increaseCreditAction')),
             ),
           ),
           if (dashboard.outstandingCustomers.isNotEmpty) ...[

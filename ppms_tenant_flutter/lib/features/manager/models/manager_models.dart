@@ -229,7 +229,11 @@ class ShiftCashSummary {
     required this.managerId,
     required this.openingCash,
     required this.cashSales,
+    required this.lubricantCashSales,
+    required this.creditRecoveries,
+    required this.cashExpenses,
     required this.expectedCash,
+    required this.accountableCash,
     required this.cashSubmitted,
     required this.cashInHand,
     required this.createdAt,
@@ -245,7 +249,11 @@ class ShiftCashSummary {
   final int managerId;
   final double openingCash;
   final double cashSales;
+  final double lubricantCashSales;
+  final double creditRecoveries;
+  final double cashExpenses;
   final double expectedCash;
+  final double accountableCash;
   final double cashSubmitted;
   final double cashInHand;
   final DateTime createdAt;
@@ -262,7 +270,11 @@ class ShiftCashSummary {
       managerId: json['manager_id'] as int,
       openingCash: (json['opening_cash'] as num).toDouble(),
       cashSales: (json['cash_sales'] as num).toDouble(),
+      lubricantCashSales: (json['lubricant_cash_sales'] as num? ?? 0).toDouble(),
+      creditRecoveries: (json['credit_recoveries'] as num? ?? 0).toDouble(),
+      cashExpenses: (json['cash_expenses'] as num? ?? 0).toDouble(),
       expectedCash: (json['expected_cash'] as num).toDouble(),
+      accountableCash: (json['accountable_cash'] as num? ?? json['expected_cash'] as num).toDouble(),
       cashSubmitted: (json['cash_submitted'] as num).toDouble(),
       cashInHand: (json['cash_in_hand'] as num).toDouble(),
       createdAt: DateTime.parse(json['created_at'] as String),

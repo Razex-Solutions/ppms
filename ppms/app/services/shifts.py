@@ -5,12 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.core.access import is_master_admin
 from app.core.time import utc_now
+from app.models.customer_payment import CustomerPayment
 from app.models.dispenser import Dispenser
+from app.models.expense import Expense
 from app.models.fuel_sale import FuelSale
 from app.models.cash_submission import CashSubmission
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle import Nozzle
 from app.models.nozzle_reading import NozzleReading
+from app.models.pos_sale import POSSale
 from app.models.purchase import Purchase
 from app.models.shift import Shift
 from app.models.shift_cash import ShiftCash
@@ -71,6 +74,84 @@ def derive_shift_opening_cash(db: Session, station_id: int) -> float:
     if cash_in_hand < 0:
         return 0.0
     return cash_in_hand
+
+
+def _get_shift_window_end(shift: Shift):
+    return shift.end_time or utc_now()
+
+
+def calculate_shift_cash_breakdown(db: Session, shift: Shift) -> dict[str, float]:
+    window_end = _get_shift_window_end(shift)
+
+    fuel_cash_sales = round(
+        sum(
+            sale.total_amount
+            for sale in db.query(FuelSale).filter(
+                FuelSale.shift_id == shift.id,
+                FuelSale.sale_type == "cash",
+                FuelSale.is_reversed.is_(False),
+            ).all()
+        ),
+        2,
+    )
+
+    lubricant_cash_sales = round(
+        sum(
+            sale.total_amount
+            for sale in db.query(POSSale).filter(
+                POSSale.station_id == shift.station_id,
+                POSSale.created_at >= shift.start_time,
+                POSSale.created_at <= window_end,
+                POSSale.payment_method == "cash",
+                POSSale.is_reversed.is_(False),
+            ).all()
+        ),
+        2,
+    )
+
+    credit_recoveries = round(
+        sum(
+            payment.amount
+            for payment in db.query(CustomerPayment).filter(
+                CustomerPayment.station_id == shift.station_id,
+                CustomerPayment.created_at >= shift.start_time,
+                CustomerPayment.created_at <= window_end,
+                CustomerPayment.payment_method == "cash",
+                CustomerPayment.is_reversed.is_(False),
+            ).all()
+        ),
+        2,
+    )
+
+    cash_expenses = round(
+        sum(
+            expense.amount
+            for expense in db.query(Expense).filter(
+                Expense.station_id == shift.station_id,
+                Expense.created_at >= shift.start_time,
+                Expense.created_at <= window_end,
+                Expense.status != "rejected",
+            ).all()
+        ),
+        2,
+    )
+
+    accountable_cash = round(
+        (shift.initial_cash or 0.0)
+        + fuel_cash_sales
+        + lubricant_cash_sales
+        + credit_recoveries
+        - cash_expenses,
+        2,
+    )
+
+    return {
+        "fuel_cash_sales": fuel_cash_sales,
+        "lubricant_cash_sales": lubricant_cash_sales,
+        "credit_recoveries": credit_recoveries,
+        "cash_expenses": cash_expenses,
+        "accountable_cash": accountable_cash,
+    }
 
 
 def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
@@ -182,16 +263,17 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
     ).all()
     total_cash = sum(s.total_amount for s in sales if s.sale_type == "cash")
     total_credit = sum(s.total_amount for s in sales if s.sale_type == "credit")
+    cash_breakdown = calculate_shift_cash_breakdown(db, shift)
     shift_cash = ensure_shift_cash(db, shift)
 
     shift.total_sales_cash = total_cash
     shift.total_sales_credit = total_credit
-    shift.expected_cash = shift.initial_cash + total_cash
+    shift.expected_cash = cash_breakdown["accountable_cash"]
     shift.actual_cash_collected = data.actual_cash_collected
     shift.status = "closed"
     shift.end_time = utc_now()
     shift.notes = data.notes if data.notes else shift.notes
-    shift_cash.cash_sales = total_cash
+    shift_cash.cash_sales = cash_breakdown["fuel_cash_sales"]
     shift_cash.expected_cash = shift.expected_cash
     submission_total = sum(submission.amount for submission in shift_cash.submissions)
     shift_cash.cash_submitted = submission_total
@@ -212,6 +294,9 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
             "expected_cash": shift.expected_cash,
             "closing_cash": shift.actual_cash_collected,
             "cash_submitted": shift_cash.cash_submitted,
+            "lubricant_cash_sales": cash_breakdown["lubricant_cash_sales"],
+            "credit_recoveries": cash_breakdown["credit_recoveries"],
+            "cash_expenses": cash_breakdown["cash_expenses"],
             "difference": shift.difference,
         },
     )
@@ -237,12 +322,13 @@ def sync_shift_cash(db: Session, shift: Shift) -> ShiftCash:
     ).all()
     total_cash = round(sum(s.total_amount for s in sales if s.sale_type == "cash"), 2)
     total_credit = round(sum(s.total_amount for s in sales if s.sale_type == "credit"), 2)
+    cash_breakdown = calculate_shift_cash_breakdown(db, shift)
     submission_total = round(sum(submission.amount for submission in shift_cash.submissions), 2)
 
     shift.total_sales_cash = total_cash
     shift.total_sales_credit = total_credit
-    shift.expected_cash = round((shift.initial_cash or 0.0) + total_cash, 2)
-    shift_cash.cash_sales = total_cash
+    shift.expected_cash = cash_breakdown["accountable_cash"]
+    shift_cash.cash_sales = cash_breakdown["fuel_cash_sales"]
     shift_cash.expected_cash = shift.expected_cash
     shift_cash.cash_submitted = submission_total
     if shift.status == "closed" and shift.actual_cash_collected is not None:
@@ -300,6 +386,13 @@ def create_cash_submission(
         raise HTTPException(status_code=400, detail="Cannot record a cash submission for a closed shift")
 
     shift_cash = ensure_shift_cash(db, shift)
+    sync_shift_cash(db, shift)
+    available_cash = round((shift.expected_cash or 0.0) - (shift_cash.cash_submitted or 0.0), 2)
+    if data.amount > available_cash:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot submit {round(data.amount, 2)}. Only {round(available_cash, 2)} is currently accountable in hand for this shift.",
+        )
     submission = CashSubmission(
         shift_cash_id=shift_cash.id,
         amount=data.amount,
@@ -308,8 +401,6 @@ def create_cash_submission(
     )
     db.add(submission)
     db.flush()
-
-    shift_cash.cash_submitted = (shift_cash.cash_submitted or 0.0) + data.amount
     sync_shift_cash(db, shift)
 
     log_audit_event(
@@ -662,13 +753,18 @@ def validate_shift_close(
         )
 
     sync_shift_cash(db, shift)
-    expected_cash = round(shift.expected_cash or 0.0, 2)
-    if round(actual_cash_collected, 2) != expected_cash:
+    accountable_cash = round(shift.expected_cash or 0.0, 2)
+    submission_total = round(sum(submission.amount for submission in shift.shift_cash.submissions), 2) if shift.shift_cash else 0.0
+    accountable_total = round(submission_total + actual_cash_collected, 2)
+    if accountable_total != accountable_cash:
         issues.append(
             ShiftCloseValidationIssueResponse(
                 code="cash_variance_detected",
                 title="Cash variance detected",
-                detail=f"Expected cash is {expected_cash} but actual cash entered is {round(actual_cash_collected, 2)}.",
+                detail=(
+                    f"Accountable cash is {accountable_cash} but submissions plus closing cash "
+                    f"equal {accountable_total}."
+                ),
                 blocking=False,
             )
         )

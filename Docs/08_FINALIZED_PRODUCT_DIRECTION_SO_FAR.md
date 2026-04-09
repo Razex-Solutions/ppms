@@ -77,8 +77,8 @@ Current finalized scope:
 - sell lubricant like a fixed-price inventory item
 - view customer credit list
 - recover customer money
-- increase customer credit directly
-- system sends notification to higher admin when manager increases credit
+- see when customer exposure is above the admin-set credit limit
+- system sends notification to higher admin when a customer goes above credit limit
 - record station expenses
 - record shift-worker expenses such as food
 - record own/internal fuel usage such as boss or organization vehicle fuel
@@ -92,6 +92,19 @@ Manager should also see operational totals:
 - expense totals
 - combined totals
 - separated totals by category
+
+Important finance/accountability rule for manager shifts:
+
+- manager does not formally increase customer credit limit
+- credit limit is an admin-controlled value
+- manager can continue operational credit behavior, but the system should alert admins when customer exposure crosses the configured limit
+- shift cash accountability should be checked as:
+  - opening cash
+  - plus fuel cash sales
+  - plus lubricant and other cash sales
+  - plus customer recoveries
+  - minus cash expenses
+  - compared against submissions plus closing cash left in hand
 
 ### Accountant
 
