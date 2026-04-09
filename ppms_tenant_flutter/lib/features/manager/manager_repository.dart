@@ -26,6 +26,16 @@ class ManagerRepository {
     return const <String, dynamic>{};
   }
 
+  Map<String, dynamic> _query(Map<String, dynamic> values) {
+    final result = <String, dynamic>{};
+    values.forEach((key, value) {
+      if (value != null) {
+        result[key] = value;
+      }
+    });
+    return result;
+  }
+
   Future<ManagerCurrentWorkspace> getCurrentWorkspace() async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/shifts/current-workspace',
@@ -145,63 +155,63 @@ class ManagerRepository {
     final responses = await Future.wait([
       _dio.get<List<dynamic>>(
         '/fuel-sales/',
-        queryParameters: {
+        queryParameters: _query({
           'station_id': request.stationId,
           'shift_id': request.shiftId,
           'from_date': _today,
           'limit': 200,
-        },
+        }),
       ),
       _dio.get<List<dynamic>>(
         '/pos-sales/',
-        queryParameters: {
+        queryParameters: _query({
           'station_id': request.stationId,
           'from_date': _today,
           'limit': 200,
-        },
+        }),
       ),
       _dio.get<List<dynamic>>(
         '/purchases/',
-        queryParameters: {
+        queryParameters: _query({
           'station_id': request.stationId,
           'from_date': _today,
           'limit': 200,
-        },
+        }),
       ),
       _dio.get<List<dynamic>>(
         '/expenses/',
-        queryParameters: {
+        queryParameters: _query({
           'station_id': request.stationId,
           'from_date': _today,
           'limit': 200,
-        },
+        }),
       ),
       _dio.get<List<dynamic>>(
         '/customer-payments/',
-        queryParameters: {
+        queryParameters: _query({
           'station_id': request.stationId,
           'from_date': _today,
           'limit': 200,
-        },
+        }),
       ),
       _dio.get<List<dynamic>>(
         '/internal-fuel-usage/',
-        queryParameters: {
+        queryParameters: _query({
           'station_id': request.stationId,
           'limit': 200,
-        },
+        }),
       ),
       _dio.get<List<dynamic>>(
         '/tank-dips/',
-        queryParameters: {
+        queryParameters: _query({
           'station_id': request.stationId,
           'from_date': _today,
           'limit': 20,
-        },
+        }),
       ),
       _dio.get<List<dynamic>>(
         '/customers/',
-        queryParameters: {'station_id': request.stationId, 'limit': 200},
+        queryParameters: _query({'station_id': request.stationId, 'limit': 200}),
       ),
       _dio.get<Map<String, dynamic>>('/notifications/summary'),
     ]);
