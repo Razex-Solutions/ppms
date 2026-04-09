@@ -170,10 +170,14 @@ class ManagerCurrentWorkspace {
     this.activeShift,
     this.matchedTemplate,
     this.openingCashPreview,
+    this.activeManagerUserId,
+    this.activeManagerName,
   });
 
   final int stationId;
   final int managerUserId;
+  final int? activeManagerUserId;
+  final String? activeManagerName;
   final DateTime shiftDate;
   final String status;
   final String message;
@@ -185,11 +189,14 @@ class ManagerCurrentWorkspace {
 
   bool get isPrepared => status == 'prepared';
   bool get isOpen => status == 'open';
+  bool get isOccupied => status == 'occupied';
 
   factory ManagerCurrentWorkspace.fromJson(Map<String, dynamic> json) {
     return ManagerCurrentWorkspace(
       stationId: json['station_id'] as int,
       managerUserId: json['manager_user_id'] as int,
+      activeManagerUserId: json['active_manager_user_id'] as int?,
+      activeManagerName: json['active_manager_name'] as String?,
       shiftDate: DateTime.parse(json['shift_date'] as String),
       status: json['status'] as String,
       message: json['message'] as String,

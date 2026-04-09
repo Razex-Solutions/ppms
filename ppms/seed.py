@@ -762,8 +762,19 @@ demo_users = [
     {
         "username": "manager",
         "password": "manager123",
-        "full_name": "Station Manager",
+        "full_name": "Shift Manager A",
         "email": "manager@ppms.com",
+        "role": manager_role,
+        "organization_id": organization.id,
+        "station_id": station.id,
+        "scope_level": "station",
+        "is_platform_user": False,
+    },
+    {
+        "username": "manager2",
+        "password": "manager223",
+        "full_name": "Shift Manager B",
+        "email": "manager2@ppms.com",
         "role": manager_role,
         "organization_id": organization.id,
         "station_id": station.id,
@@ -863,8 +874,15 @@ demo_profile_blueprints = [
     {
         "username": "manager",
         "staff_type": "manager",
-        "staff_title": "Shift Manager",
+        "staff_title": "Shift Manager A",
         "employee_code": "EMP-MG-001",
+        "monthly_salary": 90000.0,
+    },
+    {
+        "username": "manager2",
+        "staff_type": "manager",
+        "staff_title": "Shift Manager B",
+        "employee_code": "EMP-MG-002",
         "monthly_salary": 90000.0,
     },
     {
@@ -956,6 +974,7 @@ if demo_payroll_run is None:
 payroll_line_blueprints = {
     "stationadmin": {"additions": 8000.0, "attendance_deductions": 0.0, "other_deductions": 0.0},
     "manager": {"additions": 6000.0, "attendance_deductions": 1500.0, "other_deductions": 500.0},
+    "manager2": {"additions": 5500.0, "attendance_deductions": 0.0, "other_deductions": 300.0},
     "operator": {"additions": 2500.0, "attendance_deductions": 500.0, "other_deductions": 0.0},
     "accountant": {"additions": 4000.0, "attendance_deductions": 0.0, "other_deductions": 1000.0},
 }

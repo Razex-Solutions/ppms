@@ -71,6 +71,8 @@ class CurrentShiftDispenserGroupResponse(BaseModel):
 class CurrentShiftWorkspaceResponse(BaseModel):
     station_id: int
     manager_user_id: int
+    active_manager_user_id: int | None = None
+    active_manager_name: str | None = None
     shift_date: datetime
     status: str
     message: str

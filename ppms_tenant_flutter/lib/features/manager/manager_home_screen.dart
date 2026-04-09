@@ -238,6 +238,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     final statusLabel = switch (workspace.status) {
       'open' => context.l10n.text('shiftOpen'),
       'prepared' => context.l10n.text('shiftPrepared'),
+      'occupied' => context.l10n.text('shiftOccupied'),
       _ => context.l10n.text('shiftMissingTemplate'),
     };
     return Card(
@@ -254,6 +255,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                 context.l10n.text('shiftTemplate'),
                 '${workspace.matchedTemplate!.name} • ${workspace.matchedTemplate!.windowLabel}',
               ),
+            if (workspace.activeManagerName != null)
+              _kv(context.l10n.text('currentRole'), workspace.activeManagerName!),
             if (workspace.openingCashPreview != null)
               _kv(
                 context.l10n.text('openingCash'),
@@ -277,6 +280,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                 icon: const Icon(Icons.play_circle_outline),
                 label: Text(context.l10n.text('startCurrentShift')),
               )
+            else if (workspace.isOccupied)
+              Text(context.l10n.text('managerShiftOccupied'))
             else if (workspace.activeShift == null)
               Text(context.l10n.text('managerNoShift')),
           ],
@@ -295,7 +300,11 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Text(context.l10n.text('managerNoShift')),
+          child: Text(
+            workspace.isOccupied
+                ? context.l10n.text('managerShiftOccupied')
+                : workspace.message,
+          ),
         ),
       );
     }
@@ -451,6 +460,18 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
       return const SizedBox.shrink();
     }
     final activeShift = workspace.activeShift;
+    if (workspace.isOccupied || activeShift == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            workspace.isOccupied
+                ? context.l10n.text('managerShiftOccupied')
+                : workspace.message,
+          ),
+        ),
+      );
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -462,8 +483,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
-            if (activeShift != null)
-              Row(
+            Row(
                 children: [
                   Expanded(
                     child: TextField(
@@ -502,7 +522,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                   ),
                 ],
               ),
-            if (activeShift != null) const SizedBox(height: 16),
+            const SizedBox(height: 16),
             for (final group in workspace.openingNozzleGroups)
               ExpansionTile(
                 initiallyExpanded: workspace.openingNozzleGroups.length == 1,

@@ -57,8 +57,13 @@ Current finalized scope:
 Current finalized scope:
 
 - see shift summary on login
+- each shift belongs to one manager only
+- there is no single manager handling all station shifts together
+- each next shift is handed over to the next manager
+- operators work under the current manager shift
 - receive opening cash automatically carried from previous shift
 - receive opening nozzle readings automatically carried from previous shift
+- receive dip context carried from the previous completed shift where relevant
 - close shift, not create shift
 - enter closing nozzle readings for all nozzles
 - fuel sales should be calculated from meter differences
@@ -684,6 +689,12 @@ Finalized behavior:
 - manager does not manually create shifts
 - manager lands on the current prepared shift and operates it
 - open/close flow should follow prepared shift boundaries
+- only one manager shift can be open at a station at a time
+- next manager can only start after previous manager closes and hands over the shift
+- handover carries forward:
+  - closing cash left in hand
+  - final nozzle/meter readings
+  - dip/close context needed for the next manager
 
 ### 13B. Sales Posting From Closing Meters
 

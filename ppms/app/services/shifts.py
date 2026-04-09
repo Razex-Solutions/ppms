@@ -47,6 +47,18 @@ def get_latest_station_closed_shift(db: Session, station_id: int) -> Shift | Non
     )
 
 
+def get_station_open_shift(db: Session, station_id: int) -> Shift | None:
+    return (
+        db.query(Shift)
+        .filter(
+            Shift.station_id == station_id,
+            Shift.status == "open",
+        )
+        .order_by(Shift.start_time.desc(), Shift.id.desc())
+        .first()
+    )
+
+
 def derive_shift_opening_cash(db: Session, station_id: int) -> float:
     latest_closed_shift = get_latest_station_closed_shift(db, station_id)
     if latest_closed_shift is None:
@@ -65,13 +77,22 @@ def create_shift(db: Session, data: ShiftCreate, current_user: User) -> Shift:
     if not is_master_admin(current_user) and current_user.station_id != data.station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
 
-    existing = db.query(Shift).filter(
-        Shift.user_id == current_user.id,
-        Shift.station_id == data.station_id,
-        Shift.status == "open",
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail=f"You already have an open shift (ID: {existing.id}) at this station")
+    existing_station_shift = get_station_open_shift(db, data.station_id)
+    if existing_station_shift is not None:
+        if existing_station_shift.user_id == current_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You already have an open shift (ID: {existing_station_shift.id}) at this station",
+            )
+        active_manager_name = (
+            existing_station_shift.user.full_name
+            if existing_station_shift.user and existing_station_shift.user.full_name
+            else f"Manager {existing_station_shift.user_id}"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Shift handover is pending. {active_manager_name} still has an open shift at this station.",
+        )
 
     station = db.query(Station).filter(Station.id == data.station_id).first()
     if not station:
@@ -695,21 +716,34 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
     if not is_master_admin(current_user) and current_user.station_id != station_id:
         raise HTTPException(status_code=403, detail="Not authorized for this station")
 
-    active_shift = (
-        db.query(Shift)
-        .filter(
-            Shift.station_id == station_id,
-            Shift.user_id == current_user.id,
-            Shift.status == "open",
-        )
-        .order_by(Shift.start_time.desc(), Shift.id.desc())
-        .first()
-    )
+    active_shift = get_station_open_shift(db, station_id)
     if active_shift:
+        active_manager_name = (
+            active_shift.user.full_name
+            if active_shift.user and active_shift.user.full_name
+            else f"Manager {active_shift.user_id}"
+        )
+        if active_shift.user_id != current_user.id:
+            return CurrentShiftWorkspaceResponse(
+                station_id=station_id,
+                manager_user_id=current_user.id,
+                active_manager_user_id=active_shift.user_id,
+                active_manager_name=active_manager_name,
+                shift_date=active_shift.start_time,
+                status="occupied",
+                message=f"{active_manager_name} is currently handling this station shift. The next manager can start only after shift handover/close.",
+                active_shift=None,
+                matched_template=_serialize_shift_template(active_shift.shift_template) if active_shift.shift_template else None,
+                opening_cash_preview=active_shift.initial_cash,
+                opening_nozzle_groups=build_station_opening_nozzle_groups(db, station_id, shift=active_shift),
+                requires_manual_open=False,
+            )
         sync_shift_cash(db, active_shift)
         return CurrentShiftWorkspaceResponse(
             station_id=station_id,
             manager_user_id=current_user.id,
+            active_manager_user_id=active_shift.user_id,
+            active_manager_name=active_manager_name,
             shift_date=active_shift.start_time,
             status="open",
             message="Active shift is ready.",
@@ -727,6 +761,8 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
         return CurrentShiftWorkspaceResponse(
             station_id=station_id,
             manager_user_id=current_user.id,
+            active_manager_user_id=None,
+            active_manager_name=None,
             shift_date=utc_now(),
             status="missing_template",
             message="No active shift template is configured for this station.",
@@ -740,9 +776,11 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
     return CurrentShiftWorkspaceResponse(
         station_id=station_id,
         manager_user_id=current_user.id,
+        active_manager_user_id=None,
+        active_manager_name=None,
         shift_date=utc_now(),
         status="prepared",
-        message="A prepared shift template is available for the current time window.",
+        message="A prepared shift is ready for the next manager handover at this station.",
         active_shift=None,
         matched_template=_serialize_shift_template(matched_template),
         opening_cash_preview=opening_cash_preview,

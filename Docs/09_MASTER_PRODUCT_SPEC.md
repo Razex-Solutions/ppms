@@ -250,6 +250,9 @@ Default pending tasks:
 
 Manager capabilities:
 
+- each shift belongs to one manager only
+- next manager takes over through shift handover, not parallel shift ownership
+- operators work under the current manager shift
 - close prepared shifts
 - enter closing nozzle readings
 - review calculated sales before final close
@@ -266,8 +269,11 @@ Manager capabilities:
 Important manager rules:
 
 - shifts are pre-generated from templates
+- only one manager shift can be open at a station at a time
+- the next manager cannot start until the previous manager closes and hands over
 - opening cash carries forward from previous shift
 - opening nozzle readings carry forward from previous shift
+- dip/close context carries forward from the previous completed shift where relevant
 - fuel sales are meter-based and per nozzle
 - final shift close is blocked by:
   - missing nozzle readings

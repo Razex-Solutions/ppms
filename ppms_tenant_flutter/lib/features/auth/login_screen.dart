@@ -147,6 +147,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           const _SeedAccountTile('headoffice', 'office123'),
                           const _SeedAccountTile('stationadmin', 'station123'),
                           const _SeedAccountTile('manager', 'manager123'),
+                          const _SeedAccountTile('manager2', 'manager223'),
                           const _SeedAccountTile('operator', 'operator123'),
                           const _SeedAccountTile('accountant', 'accountant123'),
                           const SizedBox(height: 16),

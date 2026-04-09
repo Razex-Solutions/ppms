@@ -190,9 +190,12 @@ Goal:
 Backend deliverables:
 
 - shift template and current-shift endpoints
+- one-open-shift-per-station enforcement
+- explicit manager-to-manager handover state
 - shift open/current/close
 - opening cash carry-forward
 - opening nozzle carry-forward
+- dip-context carry-forward where relevant
 - nozzle close reading submission
 - meter abnormality handling
 - rate-change boundary reading support

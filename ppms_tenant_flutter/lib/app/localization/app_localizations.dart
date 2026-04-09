@@ -168,6 +168,7 @@ class AppLocalizations {
           'Open the current shift, record cash movement, enter nozzle closings, and validate before closing.',
       'shiftPrepared': 'Prepared shift',
       'shiftOpen': 'Open shift',
+      'shiftOccupied': 'Shift with another manager',
       'shiftMissingTemplate': 'Missing shift template',
       'openingCash': 'Opening cash',
       'startCurrentShift': 'Start current shift',
@@ -198,6 +199,8 @@ class AppLocalizations {
           'Enter the change cash that will remain with the shift and carry forward to the next shift.',
       'managerNoShift':
           'No active shift is open yet. Use the prepared current shift for this station.',
+      'managerShiftOccupied':
+          'Another manager is still on shift. You can start only after that shift is closed and handed over.',
       'shiftStartedAt': 'Started at',
       'runCloseHint': 'Run close check to see blockers and warnings.',
       'openingMeter': 'Opening meter',
@@ -421,6 +424,7 @@ class AppLocalizations {
           'موجودہ شفٹ کھولیں، نقدی کی حرکت درج کریں، نوزل کلوزنگ دیں، اور بند کرنے سے پہلے چیک کریں۔',
       'shiftPrepared': 'تیار شفٹ',
       'shiftOpen': 'کھلی شفٹ',
+      'shiftOccupied': 'دوسرے منیجر کے ساتھ شفٹ',
       'shiftMissingTemplate': 'شفٹ ٹیمپلیٹ موجود نہیں',
       'openingCash': 'اوپننگ کیش',
       'startCurrentShift': 'موجودہ شفٹ شروع کریں',
@@ -451,6 +455,8 @@ class AppLocalizations {
           'وہ چینج کیش درج کریں جو شفٹ کے پاس رہے گی اور اگلی شفٹ میں منتقل ہوگی۔',
       'managerNoShift':
           'ابھی کوئی فعال شفٹ کھلی نہیں۔ اس اسٹیشن کی تیار شدہ موجودہ شفٹ استعمال کریں۔',
+      'managerShiftOccupied':
+          'ایک اور منیجر ابھی اس شفٹ پر ہے۔ نئی شفٹ اسی وقت شروع ہوگی جب پچھلی شفٹ بند ہو کر ہینڈ اوور ہو جائے۔',
       'operatorActionSuccess': 'عمل مکمل ہو گیا',
       'attendanceCard': 'حاضری',
       'attendanceDisabled': 'اس اکاؤنٹ کے لیے حاضری فعال نہیں ہے۔',
