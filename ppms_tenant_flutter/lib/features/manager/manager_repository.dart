@@ -195,6 +195,14 @@ class ManagerRepository {
         }),
       ),
       _dio.get<List<dynamic>>(
+        '/customers/credit-issues/',
+        queryParameters: _query({
+          'station_id': request.stationId,
+          'shift_id': request.shiftId,
+          'limit': 200,
+        }),
+      ),
+      _dio.get<List<dynamic>>(
         '/internal-fuel-usage/',
         queryParameters: _query({
           'station_id': request.stationId,
@@ -239,19 +247,25 @@ class ManagerRepository {
                 CustomerRecoveryEntry.fromJson(item as Map<String, dynamic>),
           )
           .toList(),
-      internalFuelUsages: _listData(responses[5].data)
+      creditIssues: _listData(responses[5].data)
+          .map(
+            (item) =>
+                CustomerCreditIssueEntry.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+      internalFuelUsages: _listData(responses[6].data)
           .map(
             (item) =>
                 InternalFuelUsageEntry.fromJson(item as Map<String, dynamic>),
           )
           .toList(),
-      recentDips: _listData(responses[6].data)
+      recentDips: _listData(responses[7].data)
           .map((item) => TankDipEntry.fromJson(item as Map<String, dynamic>))
           .toList(),
-      customers: _listData(responses[7].data)
+      customers: _listData(responses[8].data)
           .map((item) => CustomerSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
-      notificationSummary: NotificationSummaryData.fromJson(_mapData(responses[8].data)),
+      notificationSummary: NotificationSummaryData.fromJson(_mapData(responses[9].data)),
     );
   }
 
@@ -316,19 +330,23 @@ class ManagerRepository {
     );
   }
 
-  Future<CustomerSummary> increaseCustomerCredit({
+  Future<CustomerCreditIssueEntry> createCustomerCreditIssue({
     required int customerId,
     required double amount,
-    String? reason,
+    int? shiftId,
+    String? notes,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
-      '/customers/$customerId/manager-credit-adjustment',
+      '/customers/$customerId/manager-credit-issue',
       data: {
         'amount': amount,
-        'reason': reason,
+        'shift_id': shiftId,
+        'notes': notes,
       },
     );
-    return CustomerSummary.fromJson(response.data ?? <String, dynamic>{});
+    return CustomerCreditIssueEntry.fromJson(
+      response.data ?? <String, dynamic>{},
+    );
   }
 
   Future<ExpenseEntry> createExpense({
@@ -650,26 +668,27 @@ class ManagerActionController extends Notifier<ManagerActionState> {
     }
   }
 
-  Future<void> increaseCustomerCredit({
+  Future<void> giveCustomerCredit({
     required int stationId,
     int? shiftId,
     required int customerId,
     required double amount,
-    String? reason,
+    String? notes,
   }) async {
     state = const ManagerActionState(isBusy: true);
     try {
-      await ref.read(managerRepositoryProvider).increaseCustomerCredit(
+      await ref.read(managerRepositoryProvider).createCustomerCreditIssue(
             customerId: customerId,
             amount: amount,
-            reason: reason,
+            shiftId: shiftId,
+            notes: notes,
           );
       _refreshStation(stationId, shiftId: shiftId);
-      state = const ManagerActionState(successMessage: 'Credit increased and admins notified.');
+      state = const ManagerActionState(successMessage: 'Credit recorded.');
     } on DioException catch (error) {
       state = ManagerActionState(errorMessage: _extractError(error));
     } catch (_) {
-      state = const ManagerActionState(errorMessage: 'Unable to adjust credit');
+      state = const ManagerActionState(errorMessage: 'Unable to record credit');
     }
   }
 

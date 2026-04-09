@@ -36,6 +36,7 @@ def _serialize_shift_cash(shift_cash, cash_breakdown: dict[str, float] | None = 
         "cash_sales": shift_cash.cash_sales,
         "lubricant_cash_sales": cash_breakdown.get("lubricant_cash_sales", 0.0),
         "credit_recoveries": cash_breakdown.get("credit_recoveries", 0.0),
+        "credit_given": cash_breakdown.get("credit_given", 0.0),
         "cash_expenses": cash_breakdown.get("cash_expenses", 0.0),
         "expected_cash": shift_cash.expected_cash,
         "accountable_cash": cash_breakdown.get("accountable_cash", shift_cash.expected_cash or 0.0),

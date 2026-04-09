@@ -35,6 +35,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   final _recoveryAmountController = TextEditingController();
   final _recoveryReferenceController = TextEditingController();
   final _recoveryNotesController = TextEditingController();
+  final _creditIssueAmountController = TextEditingController();
+  final _creditIssueNotesController = TextEditingController();
   int? _recoveryCustomerId;
 
   final _expenseAmountController = TextEditingController();
@@ -75,6 +77,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     _recoveryAmountController.dispose();
     _recoveryReferenceController.dispose();
     _recoveryNotesController.dispose();
+    _creditIssueAmountController.dispose();
+    _creditIssueNotesController.dispose();
     _expenseAmountController.dispose();
     _expenseNotesController.dispose();
     _lubricantQuantityController.dispose();
@@ -333,6 +337,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               _kv(
                 context.l10n.text('recoveryCard'),
                 cash.creditRecoveries.toStringAsFixed(0),
+              ),
+              _kv(
+                context.l10n.text('creditGivenCard'),
+                cash.creditGiven.toStringAsFixed(0),
               ),
               _kv(
                 context.l10n.text('expenseCard'),
@@ -650,6 +658,12 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               context.l10n.text('recoveryCard'),
               dashboard.recoveryAmount.toStringAsFixed(0),
               '${dashboard.recoveries.length} ${context.l10n.text('entries')}',
+            ),
+            _metricCard(
+              context,
+              context.l10n.text('creditGivenCard'),
+              dashboard.creditGivenAmount.toStringAsFixed(0),
+              '${dashboard.creditIssues.length} ${context.l10n.text('entries')}',
             ),
             _metricCard(
               context,
@@ -1036,7 +1050,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     }
     return _actionCard(
       context,
-      title: context.l10n.text('creditRecoveryAction'),
+      title: context.l10n.text('customerCreditAction'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1055,10 +1069,53 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
           if (selectedCustomer != null) ...[
             const SizedBox(height: 8),
             Text(
-              '${context.l10n.text('outstandingLabel')}: ${selectedCustomer.outstandingBalance.toStringAsFixed(0)}',
+              '${context.l10n.text('outstandingLabel')}: ${selectedCustomer.outstandingBalance.toStringAsFixed(0)} • ${context.l10n.text('creditLimitLabel')}: ${selectedCustomer.creditLimit.toStringAsFixed(0)}',
             ),
           ],
           const SizedBox(height: 12),
+          Text(
+            context.l10n.text('creditGivenAction'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _creditIssueAmountController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: context.l10n.text('creditGivenAmount')),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _creditIssueNotesController,
+            decoration: InputDecoration(labelText: context.l10n.text('optionalNotes')),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.tonal(
+              onPressed: actionState.isBusy
+                  ? null
+                  : () {
+                      final amount = double.tryParse(_creditIssueAmountController.text) ?? 0;
+                      if ((_recoveryCustomerId ?? 0) <= 0 || amount <= 0) return;
+                      ref.read(managerActionProvider.notifier).giveCustomerCredit(
+                            stationId: workspace.stationId,
+                            shiftId: activeShiftId,
+                            customerId: _recoveryCustomerId!,
+                            amount: amount,
+                            notes: _emptyToNull(_creditIssueNotesController.text),
+                          );
+                      _creditIssueAmountController.clear();
+                      _creditIssueNotesController.clear();
+                    },
+              child: Text(context.l10n.text('giveCreditNow')),
+            ),
+          ),
+          const Divider(height: 24),
+          Text(
+            context.l10n.text('creditRecoveryAction'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _recoveryAmountController,
             keyboardType: TextInputType.number,

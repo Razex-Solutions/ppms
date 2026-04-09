@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.access import is_master_admin
 from app.core.time import utc_now
 from app.models.customer_payment import CustomerPayment
+from app.models.customer_credit_issue import CustomerCreditIssue
 from app.models.dispenser import Dispenser
 from app.models.expense import Expense
 from app.models.fuel_sale import FuelSale
@@ -123,6 +124,18 @@ def calculate_shift_cash_breakdown(db: Session, shift: Shift) -> dict[str, float
         2,
     )
 
+    credit_given = round(
+        sum(
+            credit_issue.amount
+            for credit_issue in db.query(CustomerCreditIssue).filter(
+                CustomerCreditIssue.station_id == shift.station_id,
+                CustomerCreditIssue.created_at >= shift.start_time,
+                CustomerCreditIssue.created_at <= window_end,
+            ).all()
+        ),
+        2,
+    )
+
     cash_expenses = round(
         sum(
             expense.amount
@@ -141,6 +154,7 @@ def calculate_shift_cash_breakdown(db: Session, shift: Shift) -> dict[str, float
         + fuel_cash_sales
         + lubricant_cash_sales
         + credit_recoveries
+        - credit_given
         - cash_expenses,
         2,
     )
@@ -149,6 +163,7 @@ def calculate_shift_cash_breakdown(db: Session, shift: Shift) -> dict[str, float
         "fuel_cash_sales": fuel_cash_sales,
         "lubricant_cash_sales": lubricant_cash_sales,
         "credit_recoveries": credit_recoveries,
+        "credit_given": credit_given,
         "cash_expenses": cash_expenses,
         "accountable_cash": accountable_cash,
     }
@@ -266,8 +281,8 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
     cash_breakdown = calculate_shift_cash_breakdown(db, shift)
     shift_cash = ensure_shift_cash(db, shift)
 
-    shift.total_sales_cash = total_cash
-    shift.total_sales_credit = total_credit
+    shift.total_sales_cash = max(round(total_cash - cash_breakdown["credit_given"], 2), 0.0)
+    shift.total_sales_credit = round(total_credit + cash_breakdown["credit_given"], 2)
     shift.expected_cash = cash_breakdown["accountable_cash"]
     shift.actual_cash_collected = data.actual_cash_collected
     shift.status = "closed"
@@ -296,6 +311,7 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
             "cash_submitted": shift_cash.cash_submitted,
             "lubricant_cash_sales": cash_breakdown["lubricant_cash_sales"],
             "credit_recoveries": cash_breakdown["credit_recoveries"],
+            "credit_given": cash_breakdown["credit_given"],
             "cash_expenses": cash_breakdown["cash_expenses"],
             "difference": shift.difference,
         },
@@ -325,8 +341,8 @@ def sync_shift_cash(db: Session, shift: Shift) -> ShiftCash:
     cash_breakdown = calculate_shift_cash_breakdown(db, shift)
     submission_total = round(sum(submission.amount for submission in shift_cash.submissions), 2)
 
-    shift.total_sales_cash = total_cash
-    shift.total_sales_credit = total_credit
+    shift.total_sales_cash = max(round(total_cash - cash_breakdown["credit_given"], 2), 0.0)
+    shift.total_sales_credit = round(total_credit + cash_breakdown["credit_given"], 2)
     shift.expected_cash = cash_breakdown["accountable_cash"]
     shift_cash.cash_sales = cash_breakdown["fuel_cash_sales"]
     shift_cash.expected_cash = shift.expected_cash

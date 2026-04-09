@@ -29,6 +29,7 @@ from app.models.dispenser import Dispenser
 from app.models.nozzle import Nozzle
 from app.models.fuel_sale import FuelSale
 from app.models.customer import Customer
+from app.models.customer_credit_issue import CustomerCreditIssue
 from app.models.supplier import Supplier
 from app.models.internal_fuel_usage import InternalFuelUsage
 from app.models.purchase import Purchase

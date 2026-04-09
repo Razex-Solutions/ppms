@@ -6,13 +6,17 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.permissions import require_permission
 from app.models.customer import Customer
+from app.models.customer_credit_issue import CustomerCreditIssue
 from app.models.customer_payment import CustomerPayment
 from app.models.fuel_sale import FuelSale
 from app.models.user import User
 from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerResponse, CustomerUpdate, ManagerCreditAdjustmentRequest
+from app.schemas.customer import ManagerCreditIssueRequest
+from app.schemas.customer_credit_issue import CustomerCreditIssueResponse
 from app.services.customers import approve_credit_override as approve_credit_override_service
 from app.services.customers import create_customer as create_customer_service
 from app.services.customers import manager_adjust_credit_limit as manager_adjust_credit_limit_service
+from app.services.customers import manager_record_credit_issue as manager_record_credit_issue_service
 from app.services.customers import reject_credit_override as reject_credit_override_service
 from app.services.customers import request_credit_override as request_credit_override_service
 from app.services.customers import update_customer as update_customer_service
@@ -51,6 +55,29 @@ def list_customers(
     if search:
         q = q.filter((Customer.name.ilike(f"%{search}%")) | (Customer.code.ilike(f"%{search}%")))
     return q.offset(skip).limit(limit).all()
+
+
+@router.get("/credit-issues/", response_model=list[CustomerCreditIssueResponse])
+def list_customer_credit_issues(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    station_id: int | None = Query(None),
+    customer_id: int | None = Query(None),
+    shift_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not is_master_admin(current_user):
+        station_id = current_user.station_id
+
+    q = db.query(CustomerCreditIssue)
+    if station_id:
+        q = q.filter(CustomerCreditIssue.station_id == station_id)
+    if customer_id:
+        q = q.filter(CustomerCreditIssue.customer_id == customer_id)
+    if shift_id:
+        q = q.filter(CustomerCreditIssue.shift_id == shift_id)
+    return q.order_by(CustomerCreditIssue.created_at.desc(), CustomerCreditIssue.id.desc()).offset(skip).limit(limit).all()
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
@@ -129,6 +156,21 @@ def manager_adjust_credit_limit(
     require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
     require_permission(current_user, "customers", "update", detail="You do not have permission to adjust customer credit")
     return manager_adjust_credit_limit_service(customer, data, db, current_user)
+
+
+@router.post("/{customer_id}/manager-credit-issue", response_model=CustomerCreditIssueResponse)
+def manager_record_credit_issue(
+    customer_id: int,
+    data: ManagerCreditIssueRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    require_station_access(current_user, customer.station_id, detail="Not authorized for this customer")
+    require_permission(current_user, "customers", "update", detail="You do not have permission to record customer credit")
+    return manager_record_credit_issue_service(customer, data, db, current_user)
 
 
 @router.post("/{customer_id}/approve-credit-override", response_model=CustomerResponse)

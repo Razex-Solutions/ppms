@@ -31,6 +31,12 @@ class ManagerCreditAdjustmentRequest(BaseModel):
     reason: str | None = None
 
 
+class ManagerCreditIssueRequest(BaseModel):
+    amount: float
+    shift_id: int | None = None
+    notes: str | None = None
+
+
 class CustomerResponse(BaseModel):
     id: int
     name: str

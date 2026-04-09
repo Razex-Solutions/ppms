@@ -4,10 +4,12 @@ from sqlalchemy.orm import Session
 from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.time import utc_now
 from app.models.customer import Customer
+from app.models.customer_credit_issue import CustomerCreditIssue
 from app.models.role import Role
+from app.models.shift import Shift
 from app.models.station import Station
 from app.models.user import User
-from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerUpdate, ManagerCreditAdjustmentRequest
+from app.schemas.customer import CreditOverrideRequest, CustomerCreate, CustomerUpdate, ManagerCreditAdjustmentRequest, ManagerCreditIssueRequest
 from app.services.audit import log_audit_event
 from app.services.notifications import notify_users
 
@@ -202,3 +204,88 @@ def manager_adjust_credit_limit(
     db.commit()
     db.refresh(customer)
     return customer
+
+
+def manager_record_credit_issue(
+    customer: Customer,
+    data: ManagerCreditIssueRequest,
+    db: Session,
+    current_user: User,
+) -> CustomerCreditIssue:
+    _ensure_customer_scope(customer, current_user)
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Credit amount must be greater than 0")
+
+    shift_id = None
+    if data.shift_id is not None:
+        shift = db.query(Shift).filter(Shift.id == data.shift_id).first()
+        if shift is None:
+            raise HTTPException(status_code=404, detail="Shift not found")
+        if shift.station_id != customer.station_id:
+            raise HTTPException(status_code=400, detail="Shift does not belong to this customer station")
+        shift_id = shift.id
+
+    credit_issue = CustomerCreditIssue(
+        customer_id=customer.id,
+        station_id=customer.station_id,
+        shift_id=shift_id,
+        amount=round(data.amount, 2),
+        notes=data.notes,
+        created_by_user_id=current_user.id,
+    )
+    db.add(credit_issue)
+    db.flush()
+
+    before_balance = customer.outstanding_balance or 0.0
+    customer.outstanding_balance = round(before_balance + data.amount, 2)
+
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="customers",
+        action="customers.manager_record_credit_issue",
+        entity_type="customer_credit_issue",
+        entity_id=credit_issue.id,
+        station_id=customer.station_id,
+        details={
+            "customer_id": customer.id,
+            "before_outstanding_balance": before_balance,
+            "credit_issued": credit_issue.amount,
+            "after_outstanding_balance": customer.outstanding_balance,
+            "notes": data.notes,
+        },
+    )
+
+    if customer.outstanding_balance > (customer.credit_limit or 0.0):
+        recipients = (
+            db.query(User)
+            .join(Role, User.role_id == Role.id)
+            .filter(
+                User.is_active.is_(True),
+                (
+                    ((Role.name == "StationAdmin") & (User.station_id == customer.station_id)) |
+                    ((Role.name == "HeadOffice") & (User.organization_id == customer.station.organization_id)) |
+                    (Role.name == "MasterAdmin")
+                ),
+            )
+            .all()
+        )
+        notify_users(
+            db,
+            recipients=recipients,
+            actor_user=current_user,
+            station_id=customer.station_id,
+            organization_id=customer.station.organization_id if customer.station else None,
+            event_type="customer.credit_limit_exceeded",
+            title="Customer credit exposure exceeded",
+            message=(
+                f"{customer.name} is now above the credit limit after manager credit entry. "
+                f"Outstanding: {customer.outstanding_balance:.2f}, limit: {(customer.credit_limit or 0.0):.2f}."
+            ),
+            entity_type="customer",
+            entity_id=customer.id,
+        )
+
+    db.commit()
+    db.refresh(credit_issue)
+    return credit_issue

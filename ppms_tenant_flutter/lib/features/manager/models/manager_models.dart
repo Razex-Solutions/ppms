@@ -231,6 +231,7 @@ class ShiftCashSummary {
     required this.cashSales,
     required this.lubricantCashSales,
     required this.creditRecoveries,
+    required this.creditGiven,
     required this.cashExpenses,
     required this.expectedCash,
     required this.accountableCash,
@@ -251,6 +252,7 @@ class ShiftCashSummary {
   final double cashSales;
   final double lubricantCashSales;
   final double creditRecoveries;
+  final double creditGiven;
   final double cashExpenses;
   final double expectedCash;
   final double accountableCash;
@@ -272,6 +274,7 @@ class ShiftCashSummary {
       cashSales: (json['cash_sales'] as num).toDouble(),
       lubricantCashSales: (json['lubricant_cash_sales'] as num? ?? 0).toDouble(),
       creditRecoveries: (json['credit_recoveries'] as num? ?? 0).toDouble(),
+      creditGiven: (json['credit_given'] as num? ?? 0).toDouble(),
       cashExpenses: (json['cash_expenses'] as num? ?? 0).toDouble(),
       expectedCash: (json['expected_cash'] as num).toDouble(),
       accountableCash: (json['accountable_cash'] as num? ?? json['expected_cash'] as num).toDouble(),
@@ -697,6 +700,41 @@ class CustomerRecoveryEntry {
   }
 }
 
+class CustomerCreditIssueEntry {
+  const CustomerCreditIssueEntry({
+    required this.id,
+    required this.customerId,
+    required this.stationId,
+    required this.amount,
+    required this.createdByUserId,
+    required this.createdAt,
+    this.shiftId,
+    this.notes,
+  });
+
+  final int id;
+  final int customerId;
+  final int stationId;
+  final int? shiftId;
+  final double amount;
+  final int createdByUserId;
+  final DateTime createdAt;
+  final String? notes;
+
+  factory CustomerCreditIssueEntry.fromJson(Map<String, dynamic> json) {
+    return CustomerCreditIssueEntry(
+      id: json['id'] as int,
+      customerId: json['customer_id'] as int,
+      stationId: json['station_id'] as int,
+      shiftId: json['shift_id'] as int?,
+      amount: (json['amount'] as num).toDouble(),
+      createdByUserId: json['created_by_user_id'] as int,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      notes: json['notes'] as String?,
+    );
+  }
+}
+
 class InternalFuelUsageEntry {
   const InternalFuelUsageEntry({
     required this.id,
@@ -822,6 +860,7 @@ class ManagerDashboardData {
     required this.purchases,
     required this.expenses,
     required this.recoveries,
+    required this.creditIssues,
     required this.internalFuelUsages,
     required this.recentDips,
     required this.customers,
@@ -833,6 +872,7 @@ class ManagerDashboardData {
   final List<PurchaseEntry> purchases;
   final List<ExpenseEntry> expenses;
   final List<CustomerRecoveryEntry> recoveries;
+  final List<CustomerCreditIssueEntry> creditIssues;
   final List<InternalFuelUsageEntry> internalFuelUsages;
   final List<TankDipEntry> recentDips;
   final List<CustomerSummary> customers;
@@ -852,6 +892,8 @@ class ManagerDashboardData {
       expenses.fold(0, (sum, item) => sum + item.amount);
   double get recoveryAmount =>
       recoveries.fold(0, (sum, item) => sum + item.amount);
+  double get creditGivenAmount =>
+      creditIssues.fold(0, (sum, item) => sum + item.amount);
   double get internalUsageLiters =>
       internalFuelUsages.fold(0, (sum, item) => sum + item.quantity);
 

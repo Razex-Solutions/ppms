@@ -17,6 +17,7 @@ EVENT_REPORT_EXPORT_COMPLETED = "report_export.completed"
 EVENT_FUEL_SALE_REVERSAL_REQUESTED = "fuel_sale.reversal_requested"
 EVENT_FUEL_SALE_REVERSAL_APPROVED = "fuel_sale.reversal_approved"
 EVENT_FUEL_SALE_REVERSAL_REJECTED = "fuel_sale.reversal_rejected"
+EVENT_CUSTOMER_CREDIT_LIMIT_EXCEEDED = "customer.credit_limit_exceeded"
 
 
 def _organization_id_for_user(user: User | None) -> int | None:
