@@ -8,8 +8,9 @@ from app.core.permissions import require_permission
 from app.models.shift import Shift
 from app.models.user import User
 from app.schemas.shift_cash import CashSubmissionCreate, CashSubmissionResponse, ShiftCashResponse
-from app.schemas.shift import CurrentShiftWorkspaceResponse, ShiftCloseValidationResponse, ShiftCreate, ShiftUpdate, ShiftResponse
+from app.schemas.shift import CurrentShiftWorkspaceResponse, ShiftCloseValidationResponse, ShiftCreate, ShiftRateChangeBoundaryCapture, ShiftUpdate, ShiftResponse
 from app.services.shifts import close_shift as close_shift_service
+from app.services.shifts import capture_rate_change_boundary_readings
 from app.services.shifts import create_cash_submission as create_cash_submission_service
 from app.services.shifts import create_shift as create_shift_service
 from app.services.shifts import calculate_shift_cash_breakdown
@@ -105,6 +106,27 @@ def close_shift_check(
         actual_cash_collected=data.actual_cash_collected,
         nozzle_readings=data.nozzle_readings,
     )
+
+
+@router.post("/{shift_id}/rate-change-boundary", response_model=CurrentShiftWorkspaceResponse)
+def capture_rate_change_boundary(
+    shift_id: int,
+    data: ShiftRateChangeBoundaryCapture,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    shift = db.query(Shift).filter(Shift.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    require_permission(current_user, "shifts", "close", detail="You do not have permission to capture rate-change boundaries")
+    ensure_shift_access(shift, current_user)
+    capture_rate_change_boundary_readings(
+        db,
+        shift=shift,
+        nozzle_readings=data.nozzle_readings,
+        current_user=current_user,
+    )
+    return get_current_shift_workspace(db, station_id=shift.station_id, current_user=current_user)
 
 
 @router.get("/", response_model=list[ShiftResponse])

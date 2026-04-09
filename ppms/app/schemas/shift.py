@@ -59,6 +59,8 @@ class CurrentShiftNozzleOpeningResponse(BaseModel):
     opening_meter: float
     current_meter: float
     has_meter_adjustment_history: bool = False
+    requires_rate_change_boundary: bool = False
+    rate_change_boundary_recorded: bool = False
 
 
 class CurrentShiftDispenserGroupResponse(BaseModel):
@@ -66,6 +68,15 @@ class CurrentShiftDispenserGroupResponse(BaseModel):
     dispenser_name: str
     dispenser_code: str
     nozzles: list[CurrentShiftNozzleOpeningResponse]
+
+
+class ShiftRateChangeAlertResponse(BaseModel):
+    fuel_type_id: int
+    fuel_type_name: str | None = None
+    effective_at: datetime
+    affected_nozzle_ids: list[int] = []
+    recorded_nozzle_ids: list[int] = []
+    message: str
 
 
 class CurrentShiftWorkspaceResponse(BaseModel):
@@ -80,12 +91,17 @@ class CurrentShiftWorkspaceResponse(BaseModel):
     matched_template: ShiftTemplateSummaryResponse | None = None
     opening_cash_preview: float | None = None
     opening_nozzle_groups: list[CurrentShiftDispenserGroupResponse] = []
+    rate_change_alerts: list[ShiftRateChangeAlertResponse] = []
     requires_manual_open: bool = False
 
 
 class ShiftCloseNozzleReading(BaseModel):
     nozzle_id: int
     closing_meter: float
+
+
+class ShiftRateChangeBoundaryCapture(BaseModel):
+    nozzle_readings: list[ShiftCloseNozzleReading] = []
 
 
 class ShiftCloseValidationIssueResponse(BaseModel):

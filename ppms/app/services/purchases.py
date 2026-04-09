@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from app.core.access import get_user_organization_id, is_head_office_user, is_master_admin
 from app.core.time import utc_now
 from app.models.fuel_type import FuelType
+from app.models.fuel_transfer import FuelTransfer
 from app.models.purchase import Purchase
 from app.models.supplier import Supplier
 from app.models.tank import Tank
 from app.models.tanker import Tanker
+from app.models.tanker_trip import TankerTrip
 from app.models.user import User
-from app.schemas.purchase import ManagerReceivingCreate, PurchaseCreate
+from app.schemas.purchase import ManagerOwnTankerReceivingCreate, ManagerReceivingCreate, PurchaseCreate
 from app.services.audit import log_audit_event
 from app.services.notifications import notify_approval_requested, notify_decision
 
@@ -170,6 +172,96 @@ def create_manager_receiving(
         ),
         current_user,
     )
+
+
+def create_manager_own_tanker_receiving(
+    db: Session,
+    data: ManagerOwnTankerReceivingCreate,
+    current_user: User,
+) -> FuelTransfer:
+    trip = db.query(TankerTrip).filter(TankerTrip.id == data.trip_id).first()
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Tanker trip not found")
+    if not is_master_admin(current_user):
+        if current_user.station_id != trip.station_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this tanker trip")
+
+    tank = db.query(Tank).filter(Tank.id == data.tank_id).first()
+    if tank is None:
+        raise HTTPException(status_code=404, detail="Tank not found")
+    if tank.station_id != trip.station_id:
+        raise HTTPException(status_code=400, detail="Target tank must belong to the same station as the tanker trip")
+    if data.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
+
+    remaining_loads = [item for item in trip.compartment_loads if (item.remaining_quantity or 0.0) > 0]
+    if not remaining_loads:
+        raise HTTPException(status_code=400, detail="This tanker trip has no remaining fuel available for receiving")
+
+    remaining_fuel_type_ids = {item.fuel_type_id for item in remaining_loads}
+    if len(remaining_fuel_type_ids) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Own-tanker receiving requires a single remaining fuel type in the current trip. Mixed remaining fuel should be settled through detailed tanker handling.",
+        )
+
+    selected_load = remaining_loads[0]
+    if tank.fuel_type_id != selected_load.fuel_type_id:
+        raise HTTPException(status_code=400, detail="Target tank fuel type does not match the remaining tanker fuel type")
+
+    available_quantity = round(sum(item.remaining_quantity or 0.0 for item in remaining_loads), 2)
+    requested_quantity = round(float(data.quantity), 2)
+    if requested_quantity > available_quantity:
+        raise HTTPException(status_code=400, detail=f"Only {available_quantity} liters remain in the selected tanker trip")
+    if tank.current_volume + requested_quantity > tank.capacity:
+        raise HTTPException(status_code=400, detail="Tank capacity exceeded")
+
+    quantity_left = requested_quantity
+    for load in sorted(remaining_loads, key=lambda item: item.id):
+        if quantity_left <= 0:
+            break
+        take_quantity = min(round(load.remaining_quantity or 0.0, 2), quantity_left)
+        load.remaining_quantity = round((load.remaining_quantity or 0.0) - take_quantity, 2)
+        quantity_left = round(quantity_left - take_quantity, 2)
+
+    tank.current_volume += requested_quantity
+    trip.transferred_quantity = round((trip.transferred_quantity or 0.0) + requested_quantity, 2)
+    trip.leftover_quantity = round((trip.leftover_quantity or 0.0) - requested_quantity, 2)
+
+    notes = data.notes
+    if data.reference_no:
+        reference_label = f"Reference: {data.reference_no}"
+        notes = reference_label if not notes else f"{reference_label} | {notes}"
+
+    transfer = FuelTransfer(
+        station_id=trip.station_id,
+        tank_id=tank.id,
+        tanker_trip_id=trip.id,
+        fuel_type_id=selected_load.fuel_type_id,
+        quantity=requested_quantity,
+        transfer_type="own_tanker_to_station",
+        notes=notes,
+    )
+    db.add(transfer)
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="purchases",
+        action="purchases.manager_own_tanker_receiving",
+        entity_type="fuel_transfer",
+        entity_id=trip.id,
+        station_id=trip.station_id,
+        details={
+            "trip_id": trip.id,
+            "tank_id": tank.id,
+            "fuel_type_id": selected_load.fuel_type_id,
+            "quantity": requested_quantity,
+            "reference_no": data.reference_no,
+        },
+    )
+    db.commit()
+    db.refresh(transfer)
+    return transfer
 
 
 def approve_purchase(db: Session, purchase: Purchase, current_user: User, reason: str | None = None) -> Purchase:

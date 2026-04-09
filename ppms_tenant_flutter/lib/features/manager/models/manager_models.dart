@@ -94,6 +94,8 @@ class ManagerNozzleOpening {
     required this.openingMeter,
     required this.currentMeter,
     required this.hasMeterAdjustmentHistory,
+    required this.requiresRateChangeBoundary,
+    required this.rateChangeBoundaryRecorded,
     this.fuelTypeName,
     this.tankName,
   });
@@ -110,6 +112,8 @@ class ManagerNozzleOpening {
   final double openingMeter;
   final double currentMeter;
   final bool hasMeterAdjustmentHistory;
+  final bool requiresRateChangeBoundary;
+  final bool rateChangeBoundaryRecorded;
 
   factory ManagerNozzleOpening.fromJson(Map<String, dynamic> json) {
     return ManagerNozzleOpening(
@@ -125,6 +129,8 @@ class ManagerNozzleOpening {
       openingMeter: (json['opening_meter'] as num).toDouble(),
       currentMeter: (json['current_meter'] as num).toDouble(),
       hasMeterAdjustmentHistory: json['has_meter_adjustment_history'] == true,
+      requiresRateChangeBoundary: json['requires_rate_change_boundary'] == true,
+      rateChangeBoundaryRecorded: json['rate_change_boundary_recorded'] == true,
     );
   }
 }
@@ -166,6 +172,7 @@ class ManagerCurrentWorkspace {
     required this.status,
     required this.message,
     required this.openingNozzleGroups,
+    required this.rateChangeAlerts,
     required this.requiresManualOpen,
     this.activeShift,
     this.matchedTemplate,
@@ -185,6 +192,7 @@ class ManagerCurrentWorkspace {
   final ShiftTemplateSummary? matchedTemplate;
   final double? openingCashPreview;
   final List<ManagerDispenserGroup> openingNozzleGroups;
+  final List<RateChangeAlert> rateChangeAlerts;
   final bool requiresManualOpen;
 
   bool get isPrepared => status == 'prepared';
@@ -216,7 +224,46 @@ class ManagerCurrentWorkspace {
             ),
           )
           .toList(),
+      rateChangeAlerts: (json['rate_change_alerts'] as List<dynamic>? ?? [])
+          .map((item) => RateChangeAlert.fromJson(item as Map<String, dynamic>))
+          .toList(),
       requiresManualOpen: json['requires_manual_open'] == true,
+    );
+  }
+}
+
+class RateChangeAlert {
+  const RateChangeAlert({
+    required this.fuelTypeId,
+    required this.effectiveAt,
+    required this.affectedNozzleIds,
+    required this.recordedNozzleIds,
+    required this.message,
+    this.fuelTypeName,
+  });
+
+  final int fuelTypeId;
+  final String? fuelTypeName;
+  final DateTime effectiveAt;
+  final List<int> affectedNozzleIds;
+  final List<int> recordedNozzleIds;
+  final String message;
+
+  bool get isResolved =>
+      affectedNozzleIds.every((id) => recordedNozzleIds.contains(id));
+
+  factory RateChangeAlert.fromJson(Map<String, dynamic> json) {
+    return RateChangeAlert(
+      fuelTypeId: json['fuel_type_id'] as int,
+      fuelTypeName: json['fuel_type_name'] as String?,
+      effectiveAt: DateTime.parse(json['effective_at'] as String),
+      affectedNozzleIds: (json['affected_nozzle_ids'] as List<dynamic>? ?? [])
+          .map((item) => item as int)
+          .toList(),
+      recordedNozzleIds: (json['recorded_nozzle_ids'] as List<dynamic>? ?? [])
+          .map((item) => item as int)
+          .toList(),
+      message: json['message'] as String,
     );
   }
 }
@@ -639,6 +686,76 @@ class PurchaseEntry {
   }
 }
 
+class FuelTransferEntry {
+  const FuelTransferEntry({
+    required this.id,
+    required this.stationId,
+    required this.tankId,
+    required this.fuelTypeId,
+    required this.quantity,
+    required this.transferType,
+    required this.createdAt,
+    this.tankerTripId,
+    this.notes,
+  });
+
+  final int id;
+  final int stationId;
+  final int tankId;
+  final int fuelTypeId;
+  final double quantity;
+  final String transferType;
+  final DateTime createdAt;
+  final int? tankerTripId;
+  final String? notes;
+
+  factory FuelTransferEntry.fromJson(Map<String, dynamic> json) {
+    return FuelTransferEntry(
+      id: json['id'] as int,
+      stationId: json['station_id'] as int,
+      tankId: json['tank_id'] as int,
+      fuelTypeId: json['fuel_type_id'] as int,
+      quantity: (json['quantity'] as num).toDouble(),
+      transferType: json['transfer_type'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      tankerTripId: json['tanker_trip_id'] as int?,
+      notes: json['notes'] as String?,
+    );
+  }
+}
+
+class ManagerTankerTripOption {
+  const ManagerTankerTripOption({
+    required this.id,
+    required this.tankerId,
+    required this.tripType,
+    required this.status,
+    required this.leftoverQuantity,
+    required this.fuelTypeId,
+    this.destinationName,
+  });
+
+  final int id;
+  final int tankerId;
+  final String tripType;
+  final String status;
+  final double leftoverQuantity;
+  final int? fuelTypeId;
+  final String? destinationName;
+
+  factory ManagerTankerTripOption.fromJson(Map<String, dynamic> json) {
+    return ManagerTankerTripOption(
+      id: json['id'] as int,
+      tankerId: json['tanker_id'] as int,
+      tripType: json['trip_type'] as String,
+      status: json['status'] as String,
+      leftoverQuantity: (json['leftover_quantity'] as num? ?? 0).toDouble(),
+      fuelTypeId: json['fuel_type_id'] as int?,
+      destinationName: json['destination_name'] as String?,
+    );
+  }
+}
+
 class ExpenseEntry {
   const ExpenseEntry({
     required this.id,
@@ -834,6 +951,7 @@ class ManagerSupportData {
     required this.tanks,
     required this.customers,
     required this.suppliers,
+    required this.ownTankerTrips,
     required this.products,
   });
 
@@ -841,6 +959,7 @@ class ManagerSupportData {
   final List<TankOption> tanks;
   final List<CustomerSummary> customers;
   final List<SupplierSummary> suppliers;
+  final List<ManagerTankerTripOption> ownTankerTrips;
   final List<PosProductSummary> products;
 
   List<PosProductSummary> get lubricants =>
@@ -879,6 +998,7 @@ class ManagerDashboardData {
     required this.fuelSales,
     required this.lubricantSales,
     required this.purchases,
+    required this.fuelTransfers,
     required this.expenses,
     required this.recoveries,
     required this.creditIssues,
@@ -891,6 +1011,7 @@ class ManagerDashboardData {
   final List<FuelSaleEntry> fuelSales;
   final List<PosSaleEntry> lubricantSales;
   final List<PurchaseEntry> purchases;
+  final List<FuelTransferEntry> fuelTransfers;
   final List<ExpenseEntry> expenses;
   final List<CustomerRecoveryEntry> recoveries;
   final List<CustomerCreditIssueEntry> creditIssues;
@@ -908,8 +1029,9 @@ class ManagerDashboardData {
   double get receivingAmount =>
       purchases.fold(0, (sum, item) => sum + item.totalAmount);
   double get receivingLiters =>
-      purchases.fold(0, (sum, item) => sum + item.quantity);
-  int get receivingCount => purchases.length;
+      purchases.fold(0.0, (sum, item) => sum + item.quantity) +
+      fuelTransfers.fold(0.0, (sum, item) => sum + item.quantity);
+  int get receivingCount => purchases.length + fuelTransfers.length;
   double get expenseAmount =>
       expenses.fold(0, (sum, item) => sum + item.amount);
   double get recoveryAmount =>

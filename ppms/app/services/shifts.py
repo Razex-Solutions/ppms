@@ -10,6 +10,7 @@ from app.models.customer_credit_issue import CustomerCreditIssue
 from app.models.dispenser import Dispenser
 from app.models.expense import Expense
 from app.models.fuel_sale import FuelSale
+from app.models.fuel_price_history import FuelPriceHistory
 from app.models.cash_submission import CashSubmission
 from app.models.meter_adjustment_event import MeterAdjustmentEvent
 from app.models.nozzle import Nozzle
@@ -26,6 +27,8 @@ from app.models.user import User
 from app.schemas.shift import (
     CurrentShiftDispenserGroupResponse,
     CurrentShiftNozzleOpeningResponse,
+    ShiftRateChangeAlertResponse,
+    ShiftRateChangeBoundaryCapture,
     ShiftCloseValidationIssueResponse,
     ShiftCloseValidationResponse,
     CurrentShiftWorkspaceResponse,
@@ -79,6 +82,72 @@ def derive_shift_opening_cash(db: Session, station_id: int) -> float:
 
 def _get_shift_window_end(shift: Shift):
     return shift.end_time or utc_now()
+
+
+def _get_shift_rate_change_alerts(
+    db: Session,
+    *,
+    shift: Shift,
+    station_id: int,
+) -> list[ShiftRateChangeAlertResponse]:
+    change_events = (
+        db.query(FuelPriceHistory)
+        .filter(
+            FuelPriceHistory.station_id == station_id,
+            FuelPriceHistory.effective_at >= shift.start_time,
+            FuelPriceHistory.effective_at <= _get_shift_window_end(shift),
+        )
+        .order_by(FuelPriceHistory.effective_at.asc(), FuelPriceHistory.id.asc())
+        .all()
+    )
+    if not change_events:
+        return []
+
+    nozzles = (
+        db.query(Nozzle)
+        .join(Dispenser, Dispenser.id == Nozzle.dispenser_id)
+        .filter(
+            Dispenser.station_id == station_id,
+            Dispenser.is_active.is_(True),
+            Nozzle.is_active.is_(True),
+        )
+        .all()
+    )
+    alerts: list[ShiftRateChangeAlertResponse] = []
+    for event in change_events:
+        affected_nozzle_ids = sorted(
+            nozzle.id for nozzle in nozzles if nozzle.fuel_type_id == event.fuel_type_id
+        )
+        if not affected_nozzle_ids:
+            continue
+        recorded_nozzle_ids = sorted(
+            nozzle_id
+            for (nozzle_id,) in (
+                db.query(NozzleReading.nozzle_id)
+                .filter(
+                    NozzleReading.shift_id == shift.id,
+                    NozzleReading.reading_type == "rate_change_boundary",
+                    NozzleReading.nozzle_id.in_(affected_nozzle_ids),
+                    NozzleReading.created_at >= event.effective_at,
+                )
+                .distinct()
+                .all()
+            )
+        )
+        alerts.append(
+            ShiftRateChangeAlertResponse(
+                fuel_type_id=event.fuel_type_id,
+                fuel_type_name=event.fuel_type.name if event.fuel_type else None,
+                effective_at=event.effective_at,
+                affected_nozzle_ids=affected_nozzle_ids,
+                recorded_nozzle_ids=recorded_nozzle_ids,
+                message=(
+                    f"Rate changed for {event.fuel_type.name if event.fuel_type else 'fuel'} during this shift. "
+                    "Affected nozzles need a boundary meter reading."
+                ),
+            )
+        )
+    return alerts
 
 
 def calculate_shift_cash_breakdown(
@@ -584,6 +653,69 @@ def record_shift_closing_snapshots(
     db.flush()
 
 
+def capture_rate_change_boundary_readings(
+    db: Session,
+    *,
+    shift: Shift,
+    nozzle_readings: list[ShiftCloseNozzleReading],
+    current_user: User,
+) -> Shift:
+    if shift.status != "open":
+        raise HTTPException(status_code=400, detail="Rate-change boundary readings can only be captured on an open shift")
+
+    rate_change_alerts = _get_shift_rate_change_alerts(db, shift=shift, station_id=shift.station_id)
+    if not rate_change_alerts:
+        raise HTTPException(status_code=400, detail="No active rate-change boundary reading is required for this shift")
+
+    station_nozzles = (
+        db.query(Nozzle)
+        .join(Dispenser, Dispenser.id == Nozzle.dispenser_id)
+        .filter(
+            Dispenser.station_id == shift.station_id,
+            Dispenser.is_active.is_(True),
+            Nozzle.is_active.is_(True),
+        )
+        .all()
+    )
+    nozzle_by_id = {nozzle.id: nozzle for nozzle in station_nozzles}
+    provided_by_id = {item.nozzle_id: float(item.closing_meter) for item in nozzle_readings}
+    required_nozzle_ids = {nozzle_id for alert in rate_change_alerts for nozzle_id in alert.affected_nozzle_ids}
+
+    for nozzle_id in required_nozzle_ids:
+        if nozzle_id not in provided_by_id:
+            continue
+        nozzle = nozzle_by_id.get(nozzle_id)
+        if nozzle is None:
+            continue
+        boundary_meter = provided_by_id[nozzle_id]
+        if boundary_meter < float(nozzle.meter_reading or 0.0):
+            raise HTTPException(status_code=400, detail=f"Boundary meter for nozzle {nozzle.name} cannot be lower than the current meter")
+        db.add(
+            NozzleReading(
+                nozzle_id=nozzle_id,
+                reading=boundary_meter,
+                shift_id=shift.id,
+                reading_type="rate_change_boundary",
+            )
+        )
+
+    log_audit_event(
+        db,
+        current_user=current_user,
+        module="shifts",
+        action="shifts.capture_rate_change_boundary",
+        entity_type="shift",
+        entity_id=shift.id,
+        station_id=shift.station_id,
+        details={
+            "nozzle_count": len([nozzle_id for nozzle_id in provided_by_id if nozzle_id in required_nozzle_ids]),
+        },
+    )
+    db.commit()
+    db.refresh(shift)
+    return shift
+
+
 def build_station_opening_nozzle_groups(
     db: Session,
     station_id: int,
@@ -626,6 +758,12 @@ def build_station_opening_nozzle_groups(
         )
     }
     opening_snapshot_map = _get_shift_snapshot_map(db, shift, snapshot_type) if shift is not None else {}
+    rate_change_required_nozzle_ids: set[int] = set()
+    rate_change_recorded_nozzle_ids: set[int] = set()
+    if shift is not None:
+        for alert in _get_shift_rate_change_alerts(db, shift=shift, station_id=station_id):
+            rate_change_required_nozzle_ids.update(alert.affected_nozzle_ids)
+            rate_change_recorded_nozzle_ids.update(alert.recorded_nozzle_ids)
 
     grouped: dict[int, list[CurrentShiftNozzleOpeningResponse]] = {}
     for nozzle in nozzles:
@@ -644,6 +782,8 @@ def build_station_opening_nozzle_groups(
                 opening_meter=opening_meter,
                 current_meter=float(nozzle.meter_reading or 0.0),
                 has_meter_adjustment_history=nozzle.id in adjustment_nozzle_ids,
+                requires_rate_change_boundary=nozzle.id in rate_change_required_nozzle_ids,
+                rate_change_boundary_recorded=nozzle.id in rate_change_recorded_nozzle_ids,
             )
         )
 
@@ -714,8 +854,26 @@ def validate_shift_close(
                         blocking=True,
                         nozzle_id=nozzle.id,
                         tank_id=nozzle.tank_id,
-                    )
                 )
+            )
+
+    for alert in _get_shift_rate_change_alerts(db, shift=shift, station_id=shift.station_id):
+        missing_nozzle_ids = sorted(set(alert.affected_nozzle_ids) - set(alert.recorded_nozzle_ids))
+        for nozzle_id in missing_nozzle_ids:
+            nozzle = next((item for item in station_nozzles if item.id == nozzle_id), None)
+            issues.append(
+                ShiftCloseValidationIssueResponse(
+                    code="missing_rate_change_boundary",
+                    title="Missing rate-change boundary reading",
+                    detail=(
+                        f"No boundary meter reading was captured for nozzle {nozzle.name if nozzle else nozzle_id} "
+                        f"after the mid-shift rate change for {alert.fuel_type_name or 'fuel'}."
+                    ),
+                    blocking=True,
+                    nozzle_id=nozzle_id,
+                    tank_id=nozzle.tank_id if nozzle else None,
+                )
+            )
 
     shift_credit_issues = (
         db.query(CustomerCreditIssue)
@@ -894,6 +1052,7 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
             if active_shift.user and active_shift.user.full_name
             else f"Manager {active_shift.user_id}"
         )
+        rate_change_alerts = _get_shift_rate_change_alerts(db, shift=active_shift, station_id=station_id)
         if active_shift.user_id != current_user.id:
             return CurrentShiftWorkspaceResponse(
                 station_id=station_id,
@@ -907,6 +1066,7 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
                 matched_template=_serialize_shift_template(active_shift.shift_template) if active_shift.shift_template else None,
                 opening_cash_preview=active_shift.initial_cash,
                 opening_nozzle_groups=build_station_opening_nozzle_groups(db, station_id, shift=active_shift),
+                rate_change_alerts=rate_change_alerts,
                 requires_manual_open=False,
             )
         sync_shift_cash(db, active_shift)
@@ -922,6 +1082,7 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
             matched_template=_serialize_shift_template(active_shift.shift_template) if active_shift.shift_template else None,
             opening_cash_preview=active_shift.initial_cash,
             opening_nozzle_groups=build_station_opening_nozzle_groups(db, station_id, shift=active_shift),
+            rate_change_alerts=rate_change_alerts,
             requires_manual_open=False,
         )
 
@@ -947,6 +1108,7 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
                 shift=latest_closed_shift,
                 snapshot_type="shift_closing",
             ),
+            rate_change_alerts=[],
             requires_manual_open=True,
         )
 
@@ -967,5 +1129,6 @@ def get_current_shift_workspace(db: Session, *, station_id: int, current_user: U
             shift=latest_closed_shift,
             snapshot_type="shift_closing",
         ),
+        rate_change_alerts=[],
         requires_manual_open=True,
     )

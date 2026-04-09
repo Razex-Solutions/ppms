@@ -18,6 +18,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   final _cashSubmissionController = TextEditingController();
   final _actualCashController = TextEditingController();
   final Map<int, TextEditingController> _closingControllers = {};
+  final Map<int, TextEditingController> _boundaryControllers = {};
 
   final _dipReadingController = TextEditingController();
   final _dipNotesController = TextEditingController();
@@ -28,7 +29,9 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   final _receiveNotesController = TextEditingController();
   final _receiveDipBeforeController = TextEditingController();
   final _receiveDipAfterController = TextEditingController();
+  String _receiveSource = 'supplier';
   int? _receiveSupplierId;
+  int? _receiveOwnTankerTripId;
   int? _receiveTankId;
   int? _receiveFuelTypeId;
 
@@ -88,6 +91,9 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     _internalPurposeController.dispose();
     _internalNotesController.dispose();
     for (final controller in _closingControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _boundaryControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -155,6 +161,11 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                 ),
               ],
             ),
+            if (workspace.activeShift != null &&
+                workspace.rateChangeAlerts.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _rateChangeCard(context, workspace, actionState),
+            ],
             const SizedBox(height: 16),
             _nozzleChecklistCard(context, workspace, actionState),
             const SizedBox(height: 16),
@@ -212,6 +223,18 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
         if (controller.text.trim().isEmpty) {
           controller.text = nozzle.currentMeter.toStringAsFixed(0);
         }
+        if (nozzle.requiresRateChangeBoundary &&
+            !nozzle.rateChangeBoundaryRecorded) {
+          final boundaryController = _boundaryControllers.putIfAbsent(
+            nozzle.nozzleId,
+            () => TextEditingController(
+              text: nozzle.currentMeter.toStringAsFixed(0),
+            ),
+          );
+          if (boundaryController.text.trim().isEmpty) {
+            boundaryController.text = nozzle.currentMeter.toStringAsFixed(0);
+          }
+        }
       }
     }
   }
@@ -220,6 +243,8 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     _dipTankId ??= support.tanks.isNotEmpty ? support.tanks.first.id : null;
     _receiveSupplierId ??=
         support.suppliers.isNotEmpty ? support.suppliers.first.id : null;
+    _receiveOwnTankerTripId ??=
+        support.ownTankerTrips.isNotEmpty ? support.ownTankerTrips.first.id : null;
     _receiveTankId ??= support.tanks.isNotEmpty ? support.tanks.first.id : null;
     _receiveFuelTypeId ??= _fuelTypeForTank(support, _receiveTankId);
     _recoveryCustomerId ??=
@@ -241,11 +266,25 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     return null;
   }
 
+  int? _fuelTypeForOwnTankerTrip(ManagerSupportData support, int? tripId) {
+    if (tripId == null) return null;
+    for (final trip in support.ownTankerTrips) {
+      if (trip.id == tripId) {
+        return trip.fuelTypeId;
+      }
+    }
+    return null;
+  }
+
   Widget _workspaceStatusCard(
     BuildContext context,
     ManagerCurrentWorkspace workspace,
     ManagerActionState actionState,
   ) {
+    final adjustedNozzleCount = workspace.openingNozzleGroups
+        .expand((group) => group.nozzles)
+        .where((nozzle) => nozzle.hasMeterAdjustmentHistory)
+        .length;
     final statusLabel = switch (workspace.status) {
       'open' => context.l10n.text('shiftOpen'),
       'prepared' => context.l10n.text('shiftPrepared'),
@@ -279,6 +318,16 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                 DateFormat('dd MMM yyyy • hh:mm a')
                     .format(workspace.activeShift!.startTime.toLocal()),
               ),
+            if (adjustedNozzleCount > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${context.l10n.text('meterAdjustedFlag')}: $adjustedNozzleCount ${context.l10n.text('entries')}',
+              ),
+              Text(
+                context.l10n.text('meterAdjustmentReviewHint'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 12),
             if (workspace.isPrepared)
               FilledButton.icon(
@@ -295,6 +344,98 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               Text(context.l10n.text('managerShiftOccupied'))
             else if (workspace.activeShift == null)
               Text(context.l10n.text('managerNoShift')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rateChangeCard(
+    BuildContext context,
+    ManagerCurrentWorkspace workspace,
+    ManagerActionState actionState,
+  ) {
+    final activeShift = workspace.activeShift;
+    if (activeShift == null) {
+      return const SizedBox.shrink();
+    }
+    final unresolvedNozzles = <ManagerNozzleOpening>[
+      for (final group in workspace.openingNozzleGroups)
+        for (final nozzle in group.nozzles)
+          if (nozzle.requiresRateChangeBoundary &&
+              !nozzle.rateChangeBoundaryRecorded)
+            nozzle,
+    ];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.text('rateChangeBoundaryTitle'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            for (final alert in workspace.rateChangeAlerts) ...[
+              Text(alert.message),
+              Text(
+                '${context.l10n.text('fuelType')}: ${alert.fuelTypeName ?? alert.fuelTypeId} • ${DateFormat('dd MMM • hh:mm a').format(alert.effectiveAt.toLocal())}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (unresolvedNozzles.isEmpty)
+              Text(context.l10n.text('rateChangeBoundaryResolved'))
+            else ...[
+              for (final nozzle in unresolvedNozzles) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${nozzle.nozzleCode} • ${nozzle.fuelTypeName ?? ''} • ${nozzle.tankName ?? ''}',
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _boundaryControllers[nozzle.nozzleId],
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.text('boundaryMeterReading'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: actionState.isBusy
+                      ? null
+                      : () {
+                          final readings = <Map<String, dynamic>>[];
+                          for (final nozzle in unresolvedNozzles) {
+                            final value = double.tryParse(
+                              _boundaryControllers[nozzle.nozzleId]?.text ?? '',
+                            );
+                            if (value != null && value > 0) {
+                              readings.add({
+                                'nozzle_id': nozzle.nozzleId,
+                                'closing_meter': value,
+                              });
+                            }
+                          }
+                          if (readings.isEmpty) return;
+                          ref
+                              .read(managerActionProvider.notifier)
+                              .captureRateChangeBoundary(
+                                stationId: workspace.stationId,
+                                shiftId: activeShift.id,
+                                nozzleReadings: readings,
+                              );
+                        },
+                  child: Text(
+                    context.l10n.text('captureBoundaryReadingAction'),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -589,6 +730,32 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                                         ),
                                         child: Text(
                                           context.l10n.text('meterAdjustedFlag'),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall,
+                                        ),
+                                      ),
+                                    if (nozzle.requiresRateChangeBoundary)
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: nozzle.rateChangeBoundaryRecorded
+                                              ? Theme.of(context)
+                                                  .colorScheme
+                                                  .primaryContainer
+                                              : Theme.of(context)
+                                                  .colorScheme
+                                                  .errorContainer,
+                                          borderRadius: BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          nozzle.rateChangeBoundaryRecorded
+                                              ? context.l10n.text('boundaryRecordedFlag')
+                                              : context.l10n.text('boundaryRequiredFlag'),
                                           style: Theme.of(context)
                                               .textTheme
                                               .labelSmall,
@@ -958,23 +1125,74 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
     ManagerActionState actionState,
     int? activeShiftId,
   ) {
+    ManagerTankerTripOption? ownTankerTrip;
+    for (final trip in support.ownTankerTrips) {
+      if (trip.id == _receiveOwnTankerTripId) {
+        ownTankerTrip = trip;
+      }
+    }
     return _actionCard(
       context,
       title: context.l10n.text('recordReceivingAction'),
       child: Column(
         children: [
-          DropdownButtonFormField<int>(
-            initialValue: _receiveSupplierId,
-            decoration: InputDecoration(labelText: context.l10n.text('supplier')),
+          DropdownButtonFormField<String>(
+            initialValue: _receiveSource,
+            decoration: InputDecoration(labelText: context.l10n.text('receivingSource')),
             items: [
-              for (final supplier in support.suppliers)
-                DropdownMenuItem(
-                  value: supplier.id,
-                  child: Text('${supplier.name} (${supplier.code})'),
-                ),
+              DropdownMenuItem(
+                value: 'supplier',
+                child: Text(context.l10n.text('supplierReceivingSource')),
+              ),
+              DropdownMenuItem(
+                value: 'own_tanker',
+                child: Text(context.l10n.text('ownTankerReceivingSource')),
+              ),
             ],
-            onChanged: (value) => setState(() => _receiveSupplierId = value),
+            onChanged: (value) => setState(() {
+              _receiveSource = value ?? 'supplier';
+              if (_receiveSource == 'own_tanker') {
+                _receiveFuelTypeId = _fuelTypeForOwnTankerTrip(
+                  support,
+                  _receiveOwnTankerTripId,
+                );
+              } else {
+                _receiveFuelTypeId = _fuelTypeForTank(support, _receiveTankId);
+              }
+            }),
           ),
+          const SizedBox(height: 12),
+          if (_receiveSource == 'supplier')
+            DropdownButtonFormField<int>(
+              initialValue: _receiveSupplierId,
+              decoration: InputDecoration(labelText: context.l10n.text('supplier')),
+              items: [
+                for (final supplier in support.suppliers)
+                  DropdownMenuItem(
+                    value: supplier.id,
+                    child: Text('${supplier.name} (${supplier.code})'),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _receiveSupplierId = value),
+            )
+          else
+            DropdownButtonFormField<int>(
+              initialValue: _receiveOwnTankerTripId,
+              decoration: InputDecoration(labelText: context.l10n.text('ownTankerTrip')),
+              items: [
+                for (final trip in support.ownTankerTrips)
+                  DropdownMenuItem(
+                    value: trip.id,
+                    child: Text(
+                      '#${trip.id} • ${trip.leftoverQuantity.toStringAsFixed(0)} ${context.l10n.text('liters')}',
+                    ),
+                  ),
+              ],
+              onChanged: (value) => setState(() {
+                _receiveOwnTankerTripId = value;
+                _receiveFuelTypeId = _fuelTypeForOwnTankerTrip(support, value);
+              }),
+            ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             initialValue: _receiveTankId,
@@ -988,23 +1206,47 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             ],
             onChanged: (value) => setState(() {
               _receiveTankId = value;
-              _receiveFuelTypeId = _fuelTypeForTank(support, value);
+              _receiveFuelTypeId = _receiveSource == 'own_tanker'
+                  ? _fuelTypeForOwnTankerTrip(support, _receiveOwnTankerTripId)
+                  : _fuelTypeForTank(support, value);
             }),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _receiveFuelTypeId,
-            decoration: InputDecoration(labelText: context.l10n.text('fuelType')),
-            items: [
-              for (final fuelType in support.fuelTypes)
-                DropdownMenuItem(
-                  value: fuelType.id,
-                  child: Text(fuelType.name),
-                ),
-            ],
-            onChanged: (value) => setState(() => _receiveFuelTypeId = value),
-          ),
+          if (_receiveSource == 'supplier')
+            DropdownButtonFormField<int>(
+              initialValue: _receiveFuelTypeId,
+              decoration: InputDecoration(labelText: context.l10n.text('fuelType')),
+              items: [
+                for (final fuelType in support.fuelTypes)
+                  DropdownMenuItem(
+                    value: fuelType.id,
+                    child: Text(fuelType.name),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _receiveFuelTypeId = value),
+            )
+          else
+            InputDecorator(
+              decoration: InputDecoration(labelText: context.l10n.text('fuelType')),
+              child: Text(() {
+                for (final fuelType in support.fuelTypes) {
+                  if (fuelType.id == _receiveFuelTypeId) {
+                    return fuelType.name;
+                  }
+                }
+                return context.l10n.text('notAvailableLabel');
+              }()),
+            ),
           const SizedBox(height: 12),
+          if (_receiveSource == 'own_tanker' && ownTankerTrip != null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${context.l10n.text('remainingFuelStatus')}: ${ownTankerTrip.leftoverQuantity.toStringAsFixed(0)} ${context.l10n.text('liters')}',
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           TextField(
             controller: _receiveQuantityController,
             keyboardType: TextInputType.number,
@@ -1049,26 +1291,48 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                   ? null
                   : () {
                       final quantity = double.tryParse(_receiveQuantityController.text) ?? 0;
-                      if ((_receiveSupplierId ?? 0) <= 0 ||
-                          (_receiveTankId ?? 0) <= 0 ||
-                          (_receiveFuelTypeId ?? 0) <= 0 ||
-                          quantity <= 0) {
+                      if ((_receiveTankId ?? 0) <= 0 || quantity <= 0) {
                         return;
                       }
-                      ref.read(managerActionProvider.notifier).createReceiving(
-                            stationId: workspace.stationId,
-                            shiftId: activeShiftId,
-                            supplierId: _receiveSupplierId!,
-                            tankId: _receiveTankId!,
-                            fuelTypeId: _receiveFuelTypeId!,
-                            quantity: quantity,
-                            referenceNo: _emptyToNull(_receiveReferenceController.text),
-                            notes: _emptyToNull(_receiveNotesController.text),
-                            dipBeforeMm:
-                                double.tryParse(_receiveDipBeforeController.text),
-                            dipAfterMm:
-                                double.tryParse(_receiveDipAfterController.text),
-                          );
+                      if (_receiveSource == 'supplier') {
+                        if ((_receiveSupplierId ?? 0) <= 0 ||
+                            (_receiveFuelTypeId ?? 0) <= 0) {
+                          return;
+                        }
+                        ref.read(managerActionProvider.notifier).createReceiving(
+                              stationId: workspace.stationId,
+                              shiftId: activeShiftId,
+                              supplierId: _receiveSupplierId!,
+                              tankId: _receiveTankId!,
+                              fuelTypeId: _receiveFuelTypeId!,
+                              quantity: quantity,
+                              referenceNo: _emptyToNull(_receiveReferenceController.text),
+                              notes: _emptyToNull(_receiveNotesController.text),
+                              dipBeforeMm:
+                                  double.tryParse(_receiveDipBeforeController.text),
+                              dipAfterMm:
+                                  double.tryParse(_receiveDipAfterController.text),
+                            );
+                      } else {
+                        if ((_receiveOwnTankerTripId ?? 0) <= 0) {
+                          return;
+                        }
+                        ref
+                            .read(managerActionProvider.notifier)
+                            .createOwnTankerReceiving(
+                              stationId: workspace.stationId,
+                              shiftId: activeShiftId,
+                              tripId: _receiveOwnTankerTripId!,
+                              tankId: _receiveTankId!,
+                              quantity: quantity,
+                              referenceNo: _emptyToNull(_receiveReferenceController.text),
+                              notes: _emptyToNull(_receiveNotesController.text),
+                              dipBeforeMm:
+                                  double.tryParse(_receiveDipBeforeController.text),
+                              dipAfterMm:
+                                  double.tryParse(_receiveDipAfterController.text),
+                            );
+                      }
                       _receiveQuantityController.clear();
                       _receiveReferenceController.clear();
                       _receiveNotesController.clear();

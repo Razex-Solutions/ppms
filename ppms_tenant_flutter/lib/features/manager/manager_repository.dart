@@ -121,6 +121,7 @@ class ManagerRepository {
       _dio.get<List<dynamic>>('/tanks/', queryParameters: {'station_id': stationId}),
       _dio.get<List<dynamic>>('/customers/', queryParameters: {'station_id': stationId, 'limit': 200}),
       _dio.get<List<dynamic>>('/suppliers/', queryParameters: {'limit': 200}),
+      _dio.get<List<dynamic>>('/tankers/trips', queryParameters: {'station_id': stationId, 'limit': 200}),
       _dio.get<List<dynamic>>(
         '/pos-products/',
         queryParameters: {'station_id': stationId, 'is_active': true, 'limit': 200},
@@ -140,7 +141,11 @@ class ManagerRepository {
       suppliers: _listData(responses[3].data)
           .map((item) => SupplierSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
-      products: _listData(responses[4].data)
+      ownTankerTrips: _listData(responses[4].data)
+          .map((item) => ManagerTankerTripOption.fromJson(item as Map<String, dynamic>))
+          .where((trip) => trip.leftoverQuantity > 0 && trip.status != 'settled')
+          .toList(),
+      products: _listData(responses[5].data)
           .map((item) => PosProductSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
@@ -172,6 +177,14 @@ class ManagerRepository {
       ),
       _dio.get<List<dynamic>>(
         '/purchases/',
+        queryParameters: _query({
+          'station_id': request.stationId,
+          'from_date': request.fromDate,
+          'limit': 200,
+        }),
+      ),
+      _dio.get<List<dynamic>>(
+        '/fuel-transfers/',
         queryParameters: _query({
           'station_id': request.stationId,
           'from_date': request.fromDate,
@@ -239,26 +252,31 @@ class ManagerRepository {
         .where((item) => isInShiftWindow(item.createdAt))
         .toList();
 
-    final expenses = _listData(responses[3].data)
+    final fuelTransfers = _listData(responses[3].data)
+        .map((item) => FuelTransferEntry.fromJson(item as Map<String, dynamic>))
+        .where((item) => isInShiftWindow(item.createdAt))
+        .toList();
+
+    final expenses = _listData(responses[4].data)
         .map((item) => ExpenseEntry.fromJson(item as Map<String, dynamic>))
         .where((item) => isInShiftWindow(item.createdAt))
         .toList();
 
-    final recoveries = _listData(responses[4].data)
+    final recoveries = _listData(responses[5].data)
         .map(
           (item) => CustomerRecoveryEntry.fromJson(item as Map<String, dynamic>),
         )
         .where((item) => isInShiftWindow(item.createdAt))
         .toList();
 
-    final internalFuelUsages = _listData(responses[6].data)
+    final internalFuelUsages = _listData(responses[7].data)
         .map(
           (item) => InternalFuelUsageEntry.fromJson(item as Map<String, dynamic>),
         )
         .where((item) => isInShiftWindow(item.createdAt))
         .toList();
 
-    final recentDips = _listData(responses[7].data)
+    final recentDips = _listData(responses[8].data)
         .map((item) => TankDipEntry.fromJson(item as Map<String, dynamic>))
         .where((item) => isInShiftWindow(item.createdAt))
         .toList();
@@ -271,9 +289,10 @@ class ManagerRepository {
           .where((sale) => sale.module == 'other')
           .toList(),
       purchases: purchases,
+      fuelTransfers: fuelTransfers,
       expenses: expenses,
       recoveries: recoveries,
-      creditIssues: _listData(responses[5].data)
+      creditIssues: _listData(responses[6].data)
           .map(
             (item) =>
                 CustomerCreditIssueEntry.fromJson(item as Map<String, dynamic>),
@@ -281,10 +300,10 @@ class ManagerRepository {
           .toList(),
       internalFuelUsages: internalFuelUsages,
       recentDips: recentDips,
-      customers: _listData(responses[8].data)
+      customers: _listData(responses[9].data)
           .map((item) => CustomerSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
-      notificationSummary: NotificationSummaryData.fromJson(_mapData(responses[9].data)),
+      notificationSummary: NotificationSummaryData.fromJson(_mapData(responses[10].data)),
     );
   }
 
@@ -324,6 +343,39 @@ class ManagerRepository {
       },
     );
     return PurchaseEntry.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<FuelTransferEntry> createOwnTankerReceiving({
+    required int tripId,
+    required int tankId,
+    required double quantity,
+    String? referenceNo,
+    String? notes,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/purchases/manager-own-tanker-receiving',
+      data: {
+        'trip_id': tripId,
+        'tank_id': tankId,
+        'quantity': quantity,
+        'reference_no': referenceNo,
+        'notes': notes,
+      },
+    );
+    return FuelTransferEntry.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  Future<ManagerCurrentWorkspace> captureRateChangeBoundary({
+    required int shiftId,
+    required List<Map<String, dynamic>> nozzleReadings,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/shifts/$shiftId/rate-change-boundary',
+      data: {
+        'nozzle_readings': nozzleReadings,
+      },
+    );
+    return ManagerCurrentWorkspace.fromJson(response.data ?? <String, dynamic>{});
   }
 
   Future<CustomerRecoveryEntry> createCustomerRecovery({
@@ -666,6 +718,73 @@ class ManagerActionController extends Notifier<ManagerActionState> {
       state = ManagerActionState(errorMessage: _extractError(error));
     } catch (_) {
       state = const ManagerActionState(errorMessage: 'Unable to record receiving');
+    }
+  }
+
+  Future<void> createOwnTankerReceiving({
+    required int stationId,
+    int? shiftId,
+    required int tripId,
+    required int tankId,
+    required double quantity,
+    String? referenceNo,
+    String? notes,
+    double? dipBeforeMm,
+    double? dipAfterMm,
+  }) async {
+    state = const ManagerActionState(isBusy: true);
+    try {
+      final repository = ref.read(managerRepositoryProvider);
+      if (dipBeforeMm != null && dipBeforeMm > 0) {
+        await repository.recordDip(
+          tankId: tankId,
+          dipReadingMm: dipBeforeMm,
+          notes: 'Before own tanker receiving${referenceNo == null || referenceNo.isEmpty ? '' : ' ($referenceNo)'}',
+        );
+      }
+      await repository.createOwnTankerReceiving(
+        tripId: tripId,
+        tankId: tankId,
+        quantity: quantity,
+        referenceNo: referenceNo,
+        notes: notes,
+      );
+      if (dipAfterMm != null && dipAfterMm > 0) {
+        await repository.recordDip(
+          tankId: tankId,
+          dipReadingMm: dipAfterMm,
+          notes: 'After own tanker receiving${referenceNo == null || referenceNo.isEmpty ? '' : ' ($referenceNo)'}',
+        );
+      }
+      if (shiftId != null) {
+        ref.invalidate(shiftCashProvider(shiftId));
+      }
+      _refreshStation(stationId, shiftId: shiftId);
+      state = const ManagerActionState(successMessage: 'Own tanker receiving recorded.');
+    } on DioException catch (error) {
+      state = ManagerActionState(errorMessage: _extractError(error));
+    } catch (_) {
+      state = const ManagerActionState(errorMessage: 'Unable to record own tanker receiving');
+    }
+  }
+
+  Future<void> captureRateChangeBoundary({
+    required int stationId,
+    required int shiftId,
+    required List<Map<String, dynamic>> nozzleReadings,
+  }) async {
+    state = const ManagerActionState(isBusy: true);
+    try {
+      await ref.read(managerRepositoryProvider).captureRateChangeBoundary(
+            shiftId: shiftId,
+            nozzleReadings: nozzleReadings,
+          );
+      _refreshStation(stationId, shiftId: shiftId);
+      state = const ManagerActionState(successMessage: 'Rate-change boundary captured.');
+    } on DioException catch (error) {
+      state = ManagerActionState(errorMessage: _extractError(error));
+    } catch (_) {
+      state = const ManagerActionState(errorMessage: 'Unable to capture rate-change boundary');
     }
   }
 

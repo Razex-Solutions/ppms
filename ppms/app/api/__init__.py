@@ -13,6 +13,7 @@ from app.api.expense import router as expense_router
 from app.api.fuel_sale import router as fuel_sale_router
 from app.api.fuel_type import router as fuel_type_router
 from app.api.financial_document import router as financial_document_router
+from app.api.fuel_transfer import router as fuel_transfer_router
 from app.api.hardware import router as hardware_router
 from app.api.invoice_profile import router as invoice_profile_router
 from app.api.internal_fuel_usage import router as internal_fuel_usage_router
@@ -67,6 +68,7 @@ ROUTER_REGISTRY = [
     {"name": "online_api_hooks", "router": online_api_hook_router, "protected": True},
     {"name": "online_api_hooks_public", "router": online_api_hook_public_router, "protected": False},
     {"name": "fuel_sales", "router": fuel_sale_router, "protected": True},
+    {"name": "fuel_transfers", "router": fuel_transfer_router, "protected": True},
     {"name": "financial_documents", "router": financial_document_router, "protected": True},
     {"name": "saas", "router": saas_router, "protected": True},
     {"name": "hardware", "router": hardware_router, "protected": True},

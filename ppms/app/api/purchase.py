@@ -9,11 +9,13 @@ from app.core.permissions import require_permission
 from app.models.purchase import Purchase
 from app.models.station import Station
 from app.models.tank import Tank
-from app.schemas.purchase import ManagerReceivingCreate, PurchaseApprovalRequest, PurchaseCreate, PurchaseResponse, ReversalRequest
+from app.schemas.purchase import ManagerOwnTankerReceivingCreate, ManagerReceivingCreate, PurchaseApprovalRequest, PurchaseCreate, PurchaseResponse, ReversalRequest
+from app.schemas.tanker import FuelTransferResponse
 from app.services.purchases import approve_purchase as approve_purchase_service
 from app.services.purchases import approve_purchase_reversal as approve_purchase_reversal_service
 from app.services.purchases import create_purchase as create_purchase_service
 from app.services.purchases import create_manager_receiving as create_manager_receiving_service
+from app.services.purchases import create_manager_own_tanker_receiving as create_manager_own_tanker_receiving_service
 from app.services.purchases import ensure_purchase_access, reverse_purchase as reverse_purchase_service
 from app.services.purchases import reject_purchase as reject_purchase_service
 from app.services.purchases import reject_purchase_reversal as reject_purchase_reversal_service
@@ -40,6 +42,16 @@ def create_manager_receiving(
 ):
     require_permission(current_user, "purchases", "create", detail="You do not have permission to create purchases")
     return create_manager_receiving_service(db, data, current_user)
+
+
+@router.post("/manager-own-tanker-receiving", response_model=FuelTransferResponse)
+def create_manager_own_tanker_receiving(
+    data: ManagerOwnTankerReceivingCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    require_permission(current_user, "purchases", "create", detail="You do not have permission to record receiving")
+    return create_manager_own_tanker_receiving_service(db, data, current_user)
 
 
 @router.get("/", response_model=list[PurchaseResponse])
