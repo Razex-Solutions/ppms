@@ -32,9 +32,21 @@ class AccountantRepository {
   }
 
   Future<ProfitSummary> getProfitSummary({int? stationId}) async {
+    return getProfitSummaryForRange(stationId: stationId);
+  }
+
+  Future<ProfitSummary> getProfitSummaryForRange({
+    int? stationId,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/accounting/profit-summary',
-      queryParameters: _query({'station_id': stationId}),
+      queryParameters: _query({
+        'station_id': stationId,
+        'from_date': fromDate?.toIso8601String().split('T').first,
+        'to_date': toDate?.toIso8601String().split('T').first,
+      }),
     );
     return ProfitSummary.fromJson(response.data ?? <String, dynamic>{});
   }
@@ -267,10 +279,18 @@ class AccountantRepository {
     return PayrollRunItem.fromJson(response.data ?? <String, dynamic>{});
   }
 
-  Future<AccountantDashboardBundle> loadDashboard({required int stationId}) async {
+  Future<AccountantDashboardBundle> loadDashboard({
+    required int stationId,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
     final results = await Future.wait([
       getWorkspaceSummary(stationId: stationId),
-      getProfitSummary(stationId: stationId),
+      getProfitSummaryForRange(
+        stationId: stationId,
+        fromDate: fromDate,
+        toDate: toDate,
+      ),
       listCustomers(stationId: stationId),
       listSuppliers(),
       listCustomerPayments(stationId: stationId),

@@ -8,6 +8,8 @@ import '../../app/session/session_controller.dart';
 import 'accountant_repository.dart';
 import 'models/accountant_models.dart';
 
+enum AccountantRangePreset { daily, weekly, monthly, yearly }
+
 class AccountantHomeScreen extends ConsumerStatefulWidget {
   const AccountantHomeScreen({super.key});
 
@@ -29,6 +31,7 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
   bool _loadingPayrollLines = false;
   String? _actionMessage;
   String? _actionError;
+  AccountantRangePreset _selectedRange = AccountantRangePreset.monthly;
 
   @override
   void initState() {
@@ -42,9 +45,14 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
     if (stationId == null) {
       throw Exception('Station scope is required for accountant workspace.');
     }
+    final range = _resolveRange(_selectedRange);
     final bundle = await ref
         .read(accountantRepositoryProvider)
-        .loadDashboard(stationId: stationId);
+        .loadDashboard(
+          stationId: stationId,
+          fromDate: range.start,
+          toDate: range.end,
+        );
     _selectedCustomerId ??=
         bundle.customers.isNotEmpty ? bundle.customers.first.id : null;
     _selectedSupplierId ??=
@@ -156,32 +164,94 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
 
   String _money(double value) => value.toStringAsFixed(0);
 
-  ExpensePeriodSummary _buildExpenseSummary(List<ExpenseItem> expenses) {
+  _DateRange _resolveRange(AccountantRangePreset preset) {
     final now = DateTime.now();
-    double daily = 0;
-    double weekly = 0;
-    double monthly = 0;
-    double yearly = 0;
-    for (final expense in expenses) {
-      final createdAt = expense.createdAt.toLocal();
-      if (createdAt.year == now.year) {
-        yearly += expense.amount;
-        if (createdAt.month == now.month) {
-          monthly += expense.amount;
-          if (now.difference(createdAt).inDays < 7) {
-            weekly += expense.amount;
-          }
-          if (createdAt.day == now.day) {
-            daily += expense.amount;
-          }
-        }
-      }
+    final todayStart = DateTime(now.year, now.month, now.day);
+    switch (preset) {
+      case AccountantRangePreset.daily:
+        return _DateRange(todayStart, todayStart.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1)));
+      case AccountantRangePreset.weekly:
+        final start = todayStart.subtract(Duration(days: now.weekday - 1));
+        final end = start.add(const Duration(days: 7)).subtract(const Duration(milliseconds: 1));
+        return _DateRange(start, end);
+      case AccountantRangePreset.monthly:
+        final start = DateTime(now.year, now.month, 1);
+        final end = DateTime(now.year, now.month + 1, 1).subtract(const Duration(milliseconds: 1));
+        return _DateRange(start, end);
+      case AccountantRangePreset.yearly:
+        final start = DateTime(now.year, 1, 1);
+        final end = DateTime(now.year + 1, 1, 1).subtract(const Duration(milliseconds: 1));
+        return _DateRange(start, end);
     }
-    return ExpensePeriodSummary(
-      daily: daily,
-      weekly: weekly,
-      monthly: monthly,
-      yearly: yearly,
+  }
+
+  bool _matchesRange(DateTime value) {
+    final localValue = value.toLocal();
+    final range = _resolveRange(_selectedRange);
+    return !localValue.isBefore(range.start) && !localValue.isAfter(range.end);
+  }
+
+  List<CustomerPaymentItem> _filteredCustomerPayments(
+    List<CustomerPaymentItem> items,
+  ) {
+    return items.where((item) => _matchesRange(item.createdAt)).toList();
+  }
+
+  List<SupplierPaymentItem> _filteredSupplierPayments(
+    List<SupplierPaymentItem> items,
+  ) {
+    return items.where((item) => _matchesRange(item.createdAt)).toList();
+  }
+
+  List<ExpenseItem> _filteredExpenses(List<ExpenseItem> expenses) {
+    return expenses.where((item) => _matchesRange(item.createdAt)).toList();
+  }
+
+  List<PayrollRunItem> _filteredPayrollRuns(List<PayrollRunItem> runs) {
+    return runs
+        .where(
+          (item) =>
+              _matchesRange(item.createdAt) ||
+              _matchesRange(item.periodStart) ||
+              _matchesRange(item.periodEnd),
+        )
+        .toList();
+  }
+
+  String _rangeLabel(AccountantRangePreset preset) {
+    switch (preset) {
+      case AccountantRangePreset.daily:
+        return context.l10n.text('dailySummary');
+      case AccountantRangePreset.weekly:
+        return context.l10n.text('weeklySummary');
+      case AccountantRangePreset.monthly:
+        return context.l10n.text('monthlySummary');
+      case AccountantRangePreset.yearly:
+        return context.l10n.text('yearlySummary');
+    }
+  }
+
+  Future<void> _changeRange(AccountantRangePreset value) async {
+    if (_selectedRange == value) return;
+    setState(() {
+      _selectedRange = value;
+      _bundleFuture = _loadBundle();
+    });
+    await _bundleFuture;
+  }
+
+  Widget _buildRangeSelector() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: AccountantRangePreset.values.map((preset) {
+        final selected = preset == _selectedRange;
+        return ChoiceChip(
+          label: Text(_rangeLabel(preset)),
+          selected: selected,
+          onSelected: (_) => _changeRange(preset),
+        );
+      }).toList(),
     );
   }
 
@@ -575,8 +645,19 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
           );
         }
         final bundle = snapshot.data!;
-        final expenseSummary = _buildExpenseSummary(bundle.expenses);
-        final selectedPayroll = bundle.payrollRuns
+        final filteredExpenses = _filteredExpenses(bundle.expenses);
+        final filteredCustomerPayments =
+            _filteredCustomerPayments(bundle.customerPayments);
+        final filteredSupplierPayments =
+            _filteredSupplierPayments(bundle.supplierPayments);
+        final filteredPayrollRuns = _filteredPayrollRuns(bundle.payrollRuns);
+        final expenseSummary = ExpensePeriodSummary(
+          daily: filteredExpenses.fold(0, (sum, item) => sum + item.amount),
+          weekly: filteredExpenses.fold(0, (sum, item) => sum + item.amount),
+          monthly: filteredExpenses.fold(0, (sum, item) => sum + item.amount),
+          yearly: filteredExpenses.fold(0, (sum, item) => sum + item.amount),
+        );
+        final selectedPayroll = filteredPayrollRuns
             .where((item) => item.id == _selectedPayrollRunId)
             .cast<PayrollRunItem?>()
             .firstOrNull;
@@ -593,6 +674,8 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
               context.l10n.text('accountantSubtitle'),
               style: Theme.of(context).textTheme.bodyLarge,
             ),
+            const SizedBox(height: 16),
+            _buildRangeSelector(),
             if (_actionMessage != null) ...[
               const SizedBox(height: 12),
               _MessageBanner(
@@ -643,13 +726,17 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
             const SizedBox(height: 24),
             _buildFinanceSummarySection(bundle),
             const SizedBox(height: 24),
-            _buildCustomerSection(bundle),
+            _buildCustomerSection(bundle, filteredCustomerPayments),
             const SizedBox(height: 24),
-            _buildSupplierSection(bundle, session.stationId ?? 0),
+            _buildSupplierSection(
+              bundle,
+              session.stationId ?? 0,
+              filteredSupplierPayments,
+            ),
             const SizedBox(height: 24),
-            _buildExpenseSection(bundle, expenseSummary),
+            _buildExpenseSection(filteredExpenses, expenseSummary),
             const SizedBox(height: 24),
-            _buildPayrollSection(bundle, selectedPayroll),
+            _buildPayrollSection(filteredPayrollRuns, selectedPayroll),
           ],
         );
       },
@@ -715,7 +802,10 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
     );
   }
 
-  Widget _buildCustomerSection(AccountantDashboardBundle bundle) {
+  Widget _buildCustomerSection(
+    AccountantDashboardBundle bundle,
+    List<CustomerPaymentItem> filteredPayments,
+  ) {
     return _SectionCard(
       title: context.l10n.text('customerLedger'),
       action: FilledButton.tonalIcon(
@@ -767,7 +857,7 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          ...bundle.customerPayments.take(8).map(
+          ...filteredPayments.take(8).map(
             (payment) => ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(_money(payment.amount)),
@@ -777,16 +867,18 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
               trailing: Wrap(
                 spacing: 8,
                 children: [
-                  IconButton(
+                  TextButton.icon(
                     onPressed: () => _showCustomerPaymentDialog(existing: payment),
-                    icon: const Icon(Icons.edit_outlined),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: Text(context.l10n.text('editLabel')),
                   ),
-                  IconButton(
+                  TextButton.icon(
                     onPressed: () => _performAction(
                       () => ref.read(accountantRepositoryProvider).deleteCustomerPayment(payment.id),
                       successMessage: context.l10n.text('paymentDeleted'),
                     ),
-                    icon: const Icon(Icons.delete_outline),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: Text(context.l10n.text('deleteLabel')),
                   ),
                 ],
               ),
@@ -797,7 +889,11 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
     );
   }
 
-  Widget _buildSupplierSection(AccountantDashboardBundle bundle, int stationId) {
+  Widget _buildSupplierSection(
+    AccountantDashboardBundle bundle,
+    int stationId,
+    List<SupplierPaymentItem> filteredPayments,
+  ) {
     return _SectionCard(
       title: context.l10n.text('supplierLedger'),
       action: FilledButton.tonalIcon(
@@ -851,7 +947,7 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          ...bundle.supplierPayments.take(8).map(
+          ...filteredPayments.take(8).map(
             (payment) => ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(_money(payment.amount)),
@@ -861,16 +957,18 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
               trailing: Wrap(
                 spacing: 8,
                 children: [
-                  IconButton(
+                  TextButton.icon(
                     onPressed: () => _showSupplierPaymentDialog(existing: payment),
-                    icon: const Icon(Icons.edit_outlined),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: Text(context.l10n.text('editLabel')),
                   ),
-                  IconButton(
+                  TextButton.icon(
                     onPressed: () => _performAction(
                       () => ref.read(accountantRepositoryProvider).deleteSupplierPayment(payment.id),
                       successMessage: context.l10n.text('paymentDeleted'),
                     ),
-                    icon: const Icon(Icons.delete_outline),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: Text(context.l10n.text('deleteLabel')),
                   ),
                 ],
               ),
@@ -882,11 +980,16 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
   }
 
   Widget _buildExpenseSection(
-    AccountantDashboardBundle bundle,
+    List<ExpenseItem> filteredExpenses,
     ExpensePeriodSummary expenseSummary,
   ) {
     return _SectionCard(
       title: context.l10n.text('expenseWorkspace'),
+      action: FilledButton.tonalIcon(
+        onPressed: _reloadAll,
+        icon: const Icon(Icons.refresh_outlined),
+        label: Text(context.l10n.text('refreshLabel')),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -894,14 +997,12 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
             spacing: 16,
             runSpacing: 16,
             children: [
-              _MetricCard(title: context.l10n.text('dailySummary'), value: _money(expenseSummary.daily), width: 180),
-              _MetricCard(title: context.l10n.text('weeklySummary'), value: _money(expenseSummary.weekly), width: 180),
-              _MetricCard(title: context.l10n.text('monthlySummary'), value: _money(expenseSummary.monthly), width: 180),
-              _MetricCard(title: context.l10n.text('yearlySummary'), value: _money(expenseSummary.yearly), width: 180),
+              _MetricCard(title: _rangeLabel(_selectedRange), value: _money(expenseSummary.daily), width: 180),
+              _MetricCard(title: context.l10n.text('entries'), value: '${filteredExpenses.length}', width: 180),
             ],
           ),
           const SizedBox(height: 16),
-          ...bundle.expenses.take(12).map(
+          ...filteredExpenses.take(12).map(
             (expense) => ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('${expense.title} - ${expense.category}'),
@@ -910,16 +1011,18 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
                 spacing: 8,
                 children: [
                   Text(_money(expense.amount)),
-                  IconButton(
+                  TextButton.icon(
                     onPressed: () => _showExpenseEditDialog(expense),
-                    icon: const Icon(Icons.edit_outlined),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: Text(context.l10n.text('editLabel')),
                   ),
-                  IconButton(
+                  TextButton.icon(
                     onPressed: () => _performAction(
                       () => ref.read(accountantRepositoryProvider).deleteExpense(expense.id),
                       successMessage: context.l10n.text('expenseDeleted'),
                     ),
-                    icon: const Icon(Icons.delete_outline),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: Text(context.l10n.text('deleteLabel')),
                   ),
                 ],
               ),
@@ -931,7 +1034,7 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
   }
 
   Widget _buildPayrollSection(
-    AccountantDashboardBundle bundle,
+    List<PayrollRunItem> filteredRuns,
     PayrollRunItem? selectedPayroll,
   ) {
     return _SectionCard(
@@ -945,10 +1048,10 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           DropdownButtonFormField<int>(
-            initialValue: bundle.payrollRuns.any((item) => item.id == _selectedPayrollRunId)
+            initialValue: filteredRuns.any((item) => item.id == _selectedPayrollRunId)
                 ? _selectedPayrollRunId
                 : null,
-            items: bundle.payrollRuns
+            items: filteredRuns
                 .map(
                   (run) => DropdownMenuItem(
                     value: run.id,
@@ -1009,6 +1112,13 @@ class _AccountantHomeScreenState extends ConsumerState<AccountantHomeScreen> {
       ),
     );
   }
+}
+
+class _DateRange {
+  const _DateRange(this.start, this.end);
+
+  final DateTime start;
+  final DateTime end;
 }
 
 class _MessageBanner extends StatelessWidget {
