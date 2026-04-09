@@ -419,31 +419,31 @@ final managerRepositoryProvider = Provider<ManagerRepository>((ref) {
   return ManagerRepository(ref.watch(dioProvider));
 });
 
-final managerWorkspaceProvider = FutureProvider<ManagerCurrentWorkspace>((ref) {
+final managerWorkspaceProvider = FutureProvider.autoDispose<ManagerCurrentWorkspace>((ref) {
   return ref.watch(managerRepositoryProvider).getCurrentWorkspace();
 });
 
 final managerSupportProvider =
-    FutureProvider.family<ManagerSupportData, int>((ref, stationId) {
+    FutureProvider.autoDispose.family<ManagerSupportData, int>((ref, stationId) {
   return ref.watch(managerRepositoryProvider).loadSupportData(
         stationId: stationId,
       );
 });
 
 final managerDashboardProvider =
-    FutureProvider.family<ManagerDashboardData, ManagerDashboardRequest>(
+    FutureProvider.autoDispose.family<ManagerDashboardData, ManagerDashboardRequest>(
   (ref, request) {
     return ref.watch(managerRepositoryProvider).loadDashboard(request);
   },
 );
 
 final shiftCashProvider =
-    FutureProvider.family<ShiftCashSummary, int>((ref, shiftId) {
+    FutureProvider.autoDispose.family<ShiftCashSummary, int>((ref, shiftId) {
   return ref.watch(managerRepositoryProvider).getShiftCash(shiftId);
 });
 
 final cashSubmissionsProvider =
-    FutureProvider.family<List<CashSubmissionItem>, int>((ref, shiftId) {
+    FutureProvider.autoDispose.family<List<CashSubmissionItem>, int>((ref, shiftId) {
   return ref.watch(managerRepositoryProvider).listCashSubmissions(shiftId);
 });
 

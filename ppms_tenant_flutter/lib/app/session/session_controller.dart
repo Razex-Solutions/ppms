@@ -112,10 +112,9 @@ class SessionController extends Notifier<SessionState> {
     required String username,
     required String password,
   }) async {
-    state = state.copyWith(
+    state = const SessionState(
+      isInitializing: true,
       isSubmitting: true,
-      isInitializing: false,
-      clearError: true,
     );
 
     try {
@@ -166,6 +165,11 @@ class SessionController extends Notifier<SessionState> {
       state = const SessionState(isInitializing: false);
       return;
     }
+
+    state = const SessionState(
+      isInitializing: true,
+      isSubmitting: true,
+    );
 
     try {
       await ref.read(dioProvider).post('/auth/logout');
