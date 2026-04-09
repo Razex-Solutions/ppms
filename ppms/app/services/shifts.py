@@ -81,7 +81,12 @@ def _get_shift_window_end(shift: Shift):
     return shift.end_time or utc_now()
 
 
-def calculate_shift_cash_breakdown(db: Session, shift: Shift) -> dict[str, float]:
+def calculate_shift_cash_breakdown(
+    db: Session,
+    shift: Shift,
+    *,
+    include_credit_given_in_accountable_cash: bool = False,
+) -> dict[str, float]:
     window_end = _get_shift_window_end(shift)
 
     fuel_cash_sales = round(
@@ -154,7 +159,7 @@ def calculate_shift_cash_breakdown(db: Session, shift: Shift) -> dict[str, float
         + fuel_cash_sales
         + lubricant_cash_sales
         + credit_recoveries
-        - credit_given
+        - (credit_given if include_credit_given_in_accountable_cash else 0.0)
         - cash_expenses,
         2,
     )
@@ -278,7 +283,11 @@ def close_shift(db: Session, shift: Shift, data: ShiftUpdate, current_user: User
     ).all()
     total_cash = sum(s.total_amount for s in sales if s.sale_type == "cash")
     total_credit = sum(s.total_amount for s in sales if s.sale_type == "credit")
-    cash_breakdown = calculate_shift_cash_breakdown(db, shift)
+    cash_breakdown = calculate_shift_cash_breakdown(
+        db,
+        shift,
+        include_credit_given_in_accountable_cash=True,
+    )
     shift_cash = ensure_shift_cash(db, shift)
 
     shift.total_sales_cash = max(round(total_cash - cash_breakdown["credit_given"], 2), 0.0)
@@ -341,8 +350,8 @@ def sync_shift_cash(db: Session, shift: Shift) -> ShiftCash:
     cash_breakdown = calculate_shift_cash_breakdown(db, shift)
     submission_total = round(sum(submission.amount for submission in shift_cash.submissions), 2)
 
-    shift.total_sales_cash = max(round(total_cash - cash_breakdown["credit_given"], 2), 0.0)
-    shift.total_sales_credit = round(total_credit + cash_breakdown["credit_given"], 2)
+    shift.total_sales_cash = total_cash
+    shift.total_sales_credit = total_credit
     shift.expected_cash = cash_breakdown["accountable_cash"]
     shift_cash.cash_sales = cash_breakdown["fuel_cash_sales"]
     shift_cash.expected_cash = shift.expected_cash
@@ -784,7 +793,12 @@ def validate_shift_close(
         )
 
     sync_shift_cash(db, shift)
-    accountable_cash = round(shift.expected_cash or 0.0, 2)
+    cash_breakdown = calculate_shift_cash_breakdown(
+        db,
+        shift,
+        include_credit_given_in_accountable_cash=True,
+    )
+    accountable_cash = round(cash_breakdown["accountable_cash"] or 0.0, 2)
     submission_total = round(sum(submission.amount for submission in shift.shift_cash.submissions), 2) if shift.shift_cash else 0.0
     accountable_total = round(submission_total + actual_cash_collected, 2)
     if accountable_total != accountable_cash:
