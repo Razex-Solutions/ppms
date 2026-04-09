@@ -125,7 +125,9 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
               : DateFormat('yyyy-MM-dd').format(workspace.activeShift!.startTime),
           shiftStartIso: workspace.activeShift?.startTime.toIso8601String(),
         );
-        final dashboardAsync = ref.watch(managerDashboardProvider(dashboardRequest));
+        final dashboardAsync = workspace.activeShift == null
+            ? null
+            : ref.watch(managerDashboardProvider(dashboardRequest));
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
@@ -159,8 +161,16 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
             supportAsync.when(
               data: (support) {
                 _syncSupportDefaults(support);
+                if (dashboardAsync == null) {
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(workspace.message),
+                    ),
+                  );
+                }
                 return dashboardAsync.when(
-                      data: (dashboard) => Column(
+                  data: (dashboard) => Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _summarySection(context, dashboard),
