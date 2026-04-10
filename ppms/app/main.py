@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -19,6 +20,20 @@ from app.services.delivery_worker import run_delivery_worker
 
 setup_logging()
 logger = get_logger(__name__)
+
+
+def _sanitize_validation_errors(errors: list[dict]) -> list[dict]:
+    sanitized: list[dict] = []
+    for error in errors:
+        safe_error = dict(error)
+        ctx = safe_error.get("ctx")
+        if isinstance(ctx, dict):
+            safe_error["ctx"] = {
+                key: (str(value) if isinstance(value, Exception) else value)
+                for key, value in ctx.items()
+            }
+        sanitized.append(safe_error)
+    return sanitized
 
 
 def _resolve_enabled_modules(enabled_modules: str | None) -> set[str]:
@@ -141,6 +156,7 @@ def create_app(enabled_modules: str | None = None) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         request_id = getattr(request.state, "request_id", str(uuid4()))
+        errors = _sanitize_validation_errors(exc.errors())
         logger.warning(
             "Validation error",
             extra={
@@ -153,7 +169,7 @@ def create_app(enabled_modules: str | None = None) -> FastAPI:
         response = JSONResponse(
             status_code=422,
             content={
-                "detail": exc.errors(),
+                "detail": jsonable_encoder(errors),
                 "request_id": request_id,
             },
         )
