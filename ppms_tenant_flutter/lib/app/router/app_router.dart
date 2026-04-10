@@ -30,7 +30,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (isLoading || isLogin) {
-        return '/';
+        return _defaultRouteForSession(sessionState.session?.role.backendName);
+      }
+
+      if (path == '/') {
+        return _defaultRouteForSession(sessionState.session?.role.backendName);
       }
 
       return null;
@@ -80,3 +84,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+String _defaultRouteForSession(String? roleName) {
+  switch (roleName) {
+    case 'Operator':
+      return '/workspace/operator';
+    case 'Manager':
+      return '/workspace/manager';
+    case 'Accountant':
+      return '/workspace/accountant';
+    case 'StationAdmin':
+      return '/workspace/station-admin';
+    case 'HeadOffice':
+      return '/workspace/head-office';
+    case 'MasterAdmin':
+      return '/workspace/master-admin';
+    default:
+      return '/workspace/manager';
+  }
+}

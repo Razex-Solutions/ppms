@@ -118,10 +118,10 @@ class AppShell extends ConsumerWidget {
 
   List<AppNavigationItem> _buildItems(AppRole role) {
     final items = <AppNavigationItem>[
-      const AppNavigationItem(
+      AppNavigationItem(
         labelKey: 'overview',
         icon: Icons.dashboard_outlined,
-        location: '/',
+        location: _defaultWorkspaceLocation(role),
       ),
     ];
 
@@ -190,6 +190,23 @@ class AppShell extends ConsumerWidget {
     ]);
 
     return items;
+  }
+
+  String _defaultWorkspaceLocation(AppRole role) {
+    switch (role) {
+      case AppRole.manager:
+        return '/workspace/manager';
+      case AppRole.operator:
+        return '/workspace/operator';
+      case AppRole.accountant:
+        return '/workspace/accountant';
+      case AppRole.stationAdmin:
+        return '/workspace/station-admin';
+      case AppRole.headOffice:
+        return '/workspace/head-office';
+      case AppRole.masterAdmin:
+        return '/workspace/master-admin';
+    }
   }
 }
 
