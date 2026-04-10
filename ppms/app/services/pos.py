@@ -28,6 +28,8 @@ def create_pos_product(db: Session, data: POSProductCreate, current_user: User) 
     ensure_pos_station_access(data.station_id, current_user)
     if data.module not in VALID_POS_MODULES:
         raise HTTPException(status_code=400, detail="Invalid POS module")
+    if data.buying_price < 0:
+        raise HTTPException(status_code=400, detail="Buying price cannot be negative")
     if data.price <= 0:
         raise HTTPException(status_code=400, detail="Price must be greater than 0")
     if data.stock_quantity < 0:
@@ -50,6 +52,8 @@ def update_pos_product(db: Session, product: POSProduct, data: POSProductUpdate)
     updates = data.model_dump(exclude_unset=True)
     if "module" in updates and updates["module"] not in VALID_POS_MODULES:
         raise HTTPException(status_code=400, detail="Invalid POS module")
+    if "buying_price" in updates and updates["buying_price"] < 0:
+        raise HTTPException(status_code=400, detail="Buying price cannot be negative")
     if "price" in updates and updates["price"] <= 0:
         raise HTTPException(status_code=400, detail="Price must be greater than 0")
     if "stock_quantity" in updates and updates["stock_quantity"] < 0:

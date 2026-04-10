@@ -6,6 +6,7 @@ class POSProductCreate(BaseModel):
     code: str
     category: str
     module: str
+    buying_price: float = 0.0
     price: float
     stock_quantity: float = 0.0
     track_inventory: bool = True
@@ -17,6 +18,7 @@ class POSProductUpdate(BaseModel):
     name: str | None = None
     category: str | None = None
     module: str | None = None
+    buying_price: float | None = None
     price: float | None = None
     stock_quantity: float | None = None
     track_inventory: bool | None = None
@@ -29,6 +31,7 @@ class POSProductResponse(BaseModel):
     code: str
     category: str
     module: str
+    buying_price: float
     price: float
     stock_quantity: float
     track_inventory: bool

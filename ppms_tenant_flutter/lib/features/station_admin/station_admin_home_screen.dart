@@ -1265,7 +1265,7 @@ class _StationAdminHomeScreenState
                       ),
                       title: Text(product['name']?.toString() ?? '-'),
                       subtitle: Text(
-                        '${product['category'] ?? '-'} • ${product['module'] ?? '-'} • Selling ${_money(product['price'] as num?)} • Stock ${_money(product['stock_quantity'] as num?)} • ${(product['is_active'] as bool? ?? true) ? 'Active' : 'Inactive'}',
+                        '${product['category'] ?? '-'} • ${product['module'] ?? '-'} • Buying ${_money(product['buying_price'] as num?)} • Selling ${_money(product['price'] as num?)} • Stock ${_money(product['stock_quantity'] as num?)} • ${(product['is_active'] as bool? ?? true) ? 'Active' : 'Inactive'}',
                       ),
                       trailing: Wrap(
                         spacing: 8,
@@ -3163,6 +3163,10 @@ class _StationAdminHomeScreenState
     final moduleController = TextEditingController(
       text: product?['module']?.toString() ?? 'lubricant',
     );
+    final buyingPriceController = TextEditingController(
+      text: ((product?['buying_price'] as num?)?.toDouble() ?? 0)
+          .toStringAsFixed(2),
+    );
     final priceController = TextEditingController(
       text: ((product?['price'] as num?)?.toDouble() ?? 0).toStringAsFixed(2),
     );
@@ -3218,6 +3222,14 @@ class _StationAdminHomeScreenState
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    controller: buyingPriceController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration:
+                        const InputDecoration(labelText: 'Buying price'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
                     controller: stockController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
@@ -3261,6 +3273,7 @@ class _StationAdminHomeScreenState
         'code': codeController.text.trim(),
         'category': categoryController.text.trim(),
         'module': moduleController.text.trim(),
+        'buying_price': double.tryParse(buyingPriceController.text.trim()) ?? 0,
         'price': double.tryParse(priceController.text.trim()) ?? 0,
         'stock_quantity': double.tryParse(stockController.text.trim()) ?? 0,
         'track_inventory': trackInventory,
