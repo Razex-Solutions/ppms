@@ -2976,51 +2976,77 @@ class _StationAdminHomeScreenState
     );
     final reasonController = TextEditingController();
     final notesController = TextEditingController();
+    String? priceError;
+    String? reasonError;
+
+    void validate() {
+      final parsedPrice = double.tryParse(priceController.text.trim());
+      priceError = parsedPrice == null || parsedPrice <= 0
+          ? 'Enter a valid selling price.'
+          : null;
+      reasonError =
+          reasonController.text.trim().isEmpty ? 'Reason is required.' : null;
+    }
+
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Change ${fuelType['name'] ?? 'fuel'} price'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'New selling price',
-                  helperText:
-                      'This is the station selling price. If managers are already on shift, they will capture boundary readings after the price change.',
-                ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) {
+          return AlertDialog(
+            title: Text('Change ${fuelType['name'] ?? 'fuel'} price'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: priceController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'New selling price',
+                      helperText:
+                          'This is the station selling price. If managers are already on shift, they will capture boundary readings after the price change.',
+                      errorText: priceError,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    decoration: InputDecoration(
+                      labelText: 'Reason',
+                      errorText: reasonError,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Notes'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                decoration: const InputDecoration(labelText: 'Reason'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(context.l10n.text('cancelLabel')),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                minLines: 2,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Notes'),
+              FilledButton(
+                onPressed: () {
+                  setLocalState(validate);
+                  if (priceError != null || reasonError != null) {
+                    return;
+                  }
+                  Navigator.of(context).pop(true);
+                },
+                child: Text(context.l10n.text('saveLabel')),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(context.l10n.text('cancelLabel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(context.l10n.text('saveLabel')),
-          ),
-        ],
+          );
+        },
       ),
     );
     if (confirmed != true) return;
