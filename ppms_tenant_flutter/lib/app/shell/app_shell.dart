@@ -26,7 +26,7 @@ class AppShell extends ConsumerWidget {
     final items = _buildItems(session.role);
     final currentLocation = GoRouterState.of(context).uri.path;
     final selectedIndex = items.indexWhere(
-      (item) => item.location == currentLocation,
+      (item) => _matchesLocation(item.location, currentLocation),
     );
     final breakpoint = context.breakpoint;
     final selected = selectedIndex >= 0 ? selectedIndex : 0;
@@ -207,6 +207,16 @@ class AppShell extends ConsumerWidget {
       case AppRole.masterAdmin:
         return '/workspace/master-admin';
     }
+  }
+
+  bool _matchesLocation(String itemLocation, String currentLocation) {
+    if (itemLocation == currentLocation) {
+      return true;
+    }
+    if (itemLocation.startsWith('/workspace/')) {
+      return currentLocation.startsWith('$itemLocation/');
+    }
+    return false;
   }
 }
 

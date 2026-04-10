@@ -8,6 +8,7 @@ import '../../features/common/forbidden_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/onboarding/station_setup_screen.dart';
 import '../../features/profile/profile_screen.dart';
+import '../../features/station_admin/station_admin_home_screen.dart';
 import '../../features/workspaces/workspace_screen.dart';
 import '../session/session_controller.dart';
 
@@ -64,6 +65,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/notifications',
         builder: (context, state) =>
             const AppShell(child: NotificationsScreen()),
+      ),
+      GoRoute(
+        path: '/workspace/station-admin/:section',
+        builder: (context, state) => AppShell(
+          child: StationAdminHomeScreen(
+            initialSection: StationAdminHomeScreen.fromSlug(
+              state.pathParameters['section'],
+            ),
+          ),
+        ),
       ),
       GoRoute(
         path: '/workspace/:type',

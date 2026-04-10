@@ -1,12 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../app/session/session_controller.dart';
-import '../accountant/accountant_home_screen.dart';
-import '../manager/manager_home_screen.dart';
 import 'station_admin_repository.dart';
 
 enum StationAdminSection {
@@ -16,14 +15,37 @@ enum StationAdminSection {
   settings,
   meter,
   tanker,
-  operations,
-  finance,
 }
 
 enum StationAdminRangePreset { daily, weekly, monthly, yearly }
 
 class StationAdminHomeScreen extends ConsumerStatefulWidget {
-  const StationAdminHomeScreen({super.key});
+  const StationAdminHomeScreen({
+    super.key,
+    this.initialSection = StationAdminSection.overview,
+  });
+
+  final StationAdminSection initialSection;
+
+  static StationAdminSection fromSlug(String? slug) {
+    switch (slug) {
+      case 'staff':
+        return StationAdminSection.staff;
+      case 'forecourt':
+        return StationAdminSection.forecourt;
+      case 'settings':
+        return StationAdminSection.settings;
+      case 'meter':
+        return StationAdminSection.meter;
+      case 'tanker':
+        return StationAdminSection.tanker;
+      case 'dashboard':
+      case null:
+        return StationAdminSection.overview;
+      default:
+        return StationAdminSection.overview;
+    }
+  }
 
   @override
   ConsumerState<StationAdminHomeScreen> createState() =>
@@ -43,7 +65,16 @@ class _StationAdminHomeScreenState
   @override
   void initState() {
     super.initState();
+    _selectedSection = widget.initialSection;
     _bundleFuture = _loadBundle();
+  }
+
+  @override
+  void didUpdateWidget(covariant StationAdminHomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialSection != widget.initialSection) {
+      _selectedSection = widget.initialSection;
+    }
   }
 
   Future<_StationAdminBundle> _loadBundle() async {
@@ -235,11 +266,47 @@ class _StationAdminHomeScreenState
         return context.l10n.text('meterAdjustmentLabel');
       case StationAdminSection.tanker:
         return context.l10n.text('tankerWorkspace');
-      case StationAdminSection.operations:
-        return context.l10n.text('managerWorkspace');
-      case StationAdminSection.finance:
-        return context.l10n.text('accountantWorkspace');
     }
+  }
+
+  String _sectionSlug(StationAdminSection section) {
+    switch (section) {
+      case StationAdminSection.overview:
+        return 'dashboard';
+      case StationAdminSection.staff:
+        return 'staff';
+      case StationAdminSection.forecourt:
+        return 'forecourt';
+      case StationAdminSection.settings:
+        return 'settings';
+      case StationAdminSection.meter:
+        return 'meter';
+      case StationAdminSection.tanker:
+        return 'tanker';
+    }
+  }
+
+  String _sectionDescription(StationAdminSection section) {
+    switch (section) {
+      case StationAdminSection.overview:
+        return context.l10n.text('stationAdminSubtitle');
+      case StationAdminSection.staff:
+        return 'Create staff, assign access roles, update titles, and manage payroll basics.';
+      case StationAdminSection.forecourt:
+        return 'Manage fuel types, tanks, dispensers, and nozzles with safe structure changes.';
+      case StationAdminSection.settings:
+        return 'Update branding, modules, invoice settings, and document templates.';
+      case StationAdminSection.meter:
+        return 'Record controlled nozzle meter adjustments with full audit history.';
+      case StationAdminSection.tanker:
+        return 'Review tanker activity and manage tanker master records for this station.';
+    }
+  }
+
+  void _openSection(StationAdminSection section) {
+    final slug = _sectionSlug(section);
+    setState(() => _selectedSection = section);
+    context.go('/workspace/station-admin/$slug');
   }
 
   Future<void> _changeRange(StationAdminRangePreset preset) async {
@@ -273,48 +340,132 @@ class _StationAdminHomeScreenState
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text(
-              context.l10n.text('stationAdminTitle'),
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.l10n.text('stationAdminSubtitle'),
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: StationAdminSection.values.map((section) {
-                return ChoiceChip(
-                  label: Text(_sectionLabel(section)),
-                  selected: section == _selectedSection,
-                  onSelected: (_) =>
-                      setState(() => _selectedSection = section),
-                );
-              }).toList(),
-            ),
-            if (_actionMessage != null) ...[
-              const SizedBox(height: 12),
-              _MessageBanner(
-                message: _actionMessage!,
-                color: Colors.green.shade700,
-              ),
-            ],
-            if (_actionError != null) ...[
-              const SizedBox(height: 12),
-              _MessageBanner(
-                message: _actionError!,
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ],
-            const SizedBox(height: 24),
-            _buildSectionBody(bundle, session.stationId ?? 0),
+            if (_selectedSection == StationAdminSection.overview)
+              ..._buildDashboardPage(bundle, session.stationId ?? 0)
+            else
+              ..._buildWorkflowPage(bundle, session.stationId ?? 0),
           ],
         );
       },
     );
+  }
+
+  List<Widget> _buildDashboardPage(_StationAdminBundle bundle, int stationId) {
+    return [
+      Text(
+        context.l10n.text('stationAdminTitle'),
+        style: Theme.of(context).textTheme.headlineMedium,
+      ),
+      const SizedBox(height: 8),
+      Text(
+        context.l10n.text('stationAdminSubtitle'),
+        style: Theme.of(context).textTheme.bodyLarge,
+      ),
+      if (_actionMessage != null) ...[
+        const SizedBox(height: 12),
+        _MessageBanner(
+          message: _actionMessage!,
+          color: Colors.green.shade700,
+        ),
+      ],
+      if (_actionError != null) ...[
+        const SizedBox(height: 12),
+        _MessageBanner(
+          message: _actionError!,
+          color: Theme.of(context).colorScheme.error,
+        ),
+      ],
+      const SizedBox(height: 20),
+      _SectionCard(
+        title: 'Workflow pages',
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            for (final section in StationAdminSection.values
+                .where((item) => item != StationAdminSection.overview))
+              _WorkflowCard(
+                title: _sectionLabel(section),
+                description: _sectionDescription(section),
+                onOpen: () => _openSection(section),
+              ),
+            _WorkflowCard(
+              title: context.l10n.text('managerWorkspace'),
+              description:
+                  'Open live manager operations if you need to work the active shift from the admin side.',
+              onOpen: () => context.go('/workspace/manager'),
+            ),
+            _WorkflowCard(
+              title: context.l10n.text('accountantWorkspace'),
+              description:
+                  'Open the finance workspace when you need ledger, payment, or payroll operations.',
+              onOpen: () => context.go('/workspace/accountant'),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 24),
+      _buildOverviewSection(bundle),
+    ];
+  }
+
+  List<Widget> _buildWorkflowPage(_StationAdminBundle bundle, int stationId) {
+    return [
+      Row(
+        children: [
+          FilledButton.tonalIcon(
+            onPressed: () => _openSection(StationAdminSection.overview),
+            icon: const Icon(Icons.arrow_back_outlined),
+            label: const Text('Back to dashboard'),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _sectionLabel(_selectedSection),
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _sectionDescription(_selectedSection),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      if (_actionMessage != null) ...[
+        const SizedBox(height: 12),
+        _MessageBanner(
+          message: _actionMessage!,
+          color: Colors.green.shade700,
+        ),
+      ],
+      if (_actionError != null) ...[
+        const SizedBox(height: 12),
+        _MessageBanner(
+          message: _actionError!,
+          color: Theme.of(context).colorScheme.error,
+        ),
+      ],
+      const SizedBox(height: 16),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: StationAdminSection.values.map((section) {
+          return ChoiceChip(
+            label: Text(_sectionLabel(section)),
+            selected: section == _selectedSection,
+            onSelected: (_) => _openSection(section),
+          );
+        }).toList(),
+      ),
+      const SizedBox(height: 24),
+      _buildSectionBody(bundle, stationId),
+    ];
   }
 
   Widget _buildSectionBody(_StationAdminBundle bundle, int stationId) {
@@ -331,10 +482,6 @@ class _StationAdminHomeScreenState
         return _buildMeterSection(bundle);
       case StationAdminSection.tanker:
         return _buildTankerSection(bundle, stationId);
-      case StationAdminSection.operations:
-        return const ManagerHomeScreen();
-      case StationAdminSection.finance:
-        return const AccountantHomeScreen();
     }
   }
 
@@ -2642,6 +2789,47 @@ class _SectionCard extends StatelessWidget {
             const SizedBox(height: 16),
             child,
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkflowCard extends StatelessWidget {
+  const _WorkflowCard({
+    required this.title,
+    required this.description,
+    required this.onOpen,
+  });
+
+  final String title;
+  final String description;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 320,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(description),
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(
+                onPressed: onOpen,
+                icon: const Icon(Icons.open_in_new_outlined),
+                label: const Text('Open workflow'),
+              ),
+            ],
+          ),
         ),
       ),
     );
