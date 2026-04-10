@@ -256,6 +256,7 @@ def adjust_meter_reading(
     return adjust_nozzle_meter(
         db,
         nozzle=nozzle,
+        old_reading=data.old_reading,
         new_reading=data.new_reading,
         reason=data.reason,
         current_user=current_user,

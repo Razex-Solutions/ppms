@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class MeterAdjustmentRequest(BaseModel):
+    old_reading: float = Field(..., ge=0)
     new_reading: float = Field(..., ge=0)
     reason: str = Field(..., min_length=3, max_length=255)
 

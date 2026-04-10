@@ -182,6 +182,42 @@ class StationAdminRepository {
     return response.data ?? <String, dynamic>{};
   }
 
+  Future<List<Map<String, dynamic>>> listFuelPriceHistory({
+    required int stationId,
+    required int fuelTypeId,
+    int limit = 20,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/fuel-types/$fuelTypeId/price-history',
+      queryParameters: {
+        'station_id': stationId,
+        'limit': limit,
+      },
+    );
+    return (response.data ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createFuelPriceHistory({
+    required int stationId,
+    required int fuelTypeId,
+    required double price,
+    required String reason,
+    String? notes,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/fuel-types/$fuelTypeId/price-history',
+      data: {
+        'station_id': stationId,
+        'price': price,
+        'reason': reason,
+        'notes': notes,
+      },
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
   Future<List<Map<String, dynamic>>> listTanks({required int stationId}) async {
     final response = await _dio.get<List<dynamic>>(
       '/tanks/',
@@ -291,12 +327,17 @@ class StationAdminRepository {
 
   Future<Map<String, dynamic>> adjustNozzleMeter(
     int nozzleId, {
+    required double oldReading,
     required double newReading,
     required String reason,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/nozzles/$nozzleId/adjust-meter',
-      data: {'new_reading': newReading, 'reason': reason},
+      data: {
+        'old_reading': oldReading,
+        'new_reading': newReading,
+        'reason': reason,
+      },
     );
     return response.data ?? <String, dynamic>{};
   }
@@ -383,6 +424,90 @@ class StationAdminRepository {
     final response =
         await _dio.post<Map<String, dynamic>>('/tankers/', data: payload);
     return response.data ?? <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> listSuppliers() async {
+    final response = await _dio.get<List<dynamic>>(
+      '/suppliers/',
+      queryParameters: {'limit': 200},
+    );
+    return (response.data ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createSupplier(Map<String, dynamic> payload) async {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/suppliers/', data: payload);
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> updateSupplier(
+    int supplierId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '/suppliers/$supplierId',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<void> deleteSupplier(int supplierId) async {
+    await _dio.delete('/suppliers/$supplierId');
+  }
+
+  Future<List<Map<String, dynamic>>> listPurchases({
+    required int stationId,
+    int limit = 100,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/purchases/',
+      queryParameters: {'station_id': stationId, 'limit': limit},
+    );
+    return (response.data ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> listPosProducts({
+    required int stationId,
+    String? module,
+    bool? isActive,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/pos-products/',
+      queryParameters: _query({
+        'station_id': stationId,
+        'module': module,
+        'is_active': isActive,
+        'limit': 200,
+      }),
+    );
+    return (response.data ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createPosProduct(Map<String, dynamic> payload) async {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/pos-products/', data: payload);
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> updatePosProduct(
+    int productId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '/pos-products/$productId',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<void> deletePosProduct(int productId) async {
+    await _dio.delete('/pos-products/$productId');
   }
 }
 

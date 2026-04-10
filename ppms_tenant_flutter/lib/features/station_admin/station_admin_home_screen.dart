@@ -12,6 +12,9 @@ enum StationAdminSection {
   overview,
   staff,
   forecourt,
+  pricing,
+  suppliers,
+  inventory,
   settings,
   meter,
   tanker,
@@ -33,6 +36,12 @@ class StationAdminHomeScreen extends ConsumerStatefulWidget {
         return StationAdminSection.staff;
       case 'forecourt':
         return StationAdminSection.forecourt;
+      case 'pricing':
+        return StationAdminSection.pricing;
+      case 'suppliers':
+        return StationAdminSection.suppliers;
+      case 'inventory':
+        return StationAdminSection.inventory;
       case 'settings':
         return StationAdminSection.settings;
       case 'meter':
@@ -59,6 +68,7 @@ class _StationAdminHomeScreenState
   StationAdminRangePreset _selectedRange = StationAdminRangePreset.monthly;
   int? _selectedNozzleId;
   String? _selectedTemplateType;
+  int? _selectedPricingFuelTypeId;
   String? _actionMessage;
   String? _actionError;
 
@@ -101,6 +111,9 @@ class _StationAdminHomeScreenState
       repo.listTanks(stationId: stationId),
       repo.listDispensers(stationId: stationId),
       repo.listNozzles(stationId: stationId),
+      _safeList(() => repo.listSuppliers()),
+      _safeList(() => repo.listPurchases(stationId: stationId)),
+      _safeList(() => repo.listPosProducts(stationId: stationId)),
       _safeMap(() => repo.getInvoiceProfile(stationId)),
       _safeList(() => repo.listDocumentTemplates(stationId)),
       _safeMap(() => repo.getTankerSummary(stationId: stationId)),
@@ -119,15 +132,21 @@ class _StationAdminHomeScreenState
       tanks: results[7] as List<Map<String, dynamic>>,
       dispensers: results[8] as List<Map<String, dynamic>>,
       nozzles: results[9] as List<Map<String, dynamic>>,
-      invoiceProfile: results[10] as Map<String, dynamic>,
-      documentTemplates: results[11] as List<Map<String, dynamic>>,
-      tankerSummary: results[12] as Map<String, dynamic>,
-      tankers: results[13] as List<Map<String, dynamic>>,
-      tankerTrips: results[14] as List<Map<String, dynamic>>,
+      suppliers: results[10] as List<Map<String, dynamic>>,
+      purchases: results[11] as List<Map<String, dynamic>>,
+      posProducts: results[12] as List<Map<String, dynamic>>,
+      invoiceProfile: results[13] as Map<String, dynamic>,
+      documentTemplates: results[14] as List<Map<String, dynamic>>,
+      tankerSummary: results[15] as Map<String, dynamic>,
+      tankers: results[16] as List<Map<String, dynamic>>,
+      tankerTrips: results[17] as List<Map<String, dynamic>>,
     );
 
     _selectedNozzleId ??=
         bundle.nozzles.isNotEmpty ? bundle.nozzles.first['id'] as int : null;
+    _selectedPricingFuelTypeId ??= bundle.fuelTypes.isNotEmpty
+        ? bundle.fuelTypes.first['id'] as int
+        : null;
     _selectedTemplateType ??= bundle.documentTemplates.isNotEmpty
         ? bundle.documentTemplates.first['document_type'] as String?
         : null;
@@ -260,6 +279,12 @@ class _StationAdminHomeScreenState
         return context.l10n.text('staffManagement');
       case StationAdminSection.forecourt:
         return context.l10n.text('forecourtManagement');
+      case StationAdminSection.pricing:
+        return 'Fuel pricing';
+      case StationAdminSection.suppliers:
+        return 'Suppliers';
+      case StationAdminSection.inventory:
+        return 'Inventory pricing';
       case StationAdminSection.settings:
         return context.l10n.text('settingsLabel');
       case StationAdminSection.meter:
@@ -277,6 +302,12 @@ class _StationAdminHomeScreenState
         return 'staff';
       case StationAdminSection.forecourt:
         return 'forecourt';
+      case StationAdminSection.pricing:
+        return 'pricing';
+      case StationAdminSection.suppliers:
+        return 'suppliers';
+      case StationAdminSection.inventory:
+        return 'inventory';
       case StationAdminSection.settings:
         return 'settings';
       case StationAdminSection.meter:
@@ -294,6 +325,12 @@ class _StationAdminHomeScreenState
         return 'Create staff, assign access roles, update titles, and manage payroll basics.';
       case StationAdminSection.forecourt:
         return 'Manage fuel types, tanks, dispensers, and nozzles with safe structure changes.';
+      case StationAdminSection.pricing:
+        return 'Update station fuel selling prices and review recent price history with rate-change support for managers.';
+      case StationAdminSection.suppliers:
+        return 'Manage supplier master records and review recent purchase cost context by supplier and fuel.';
+      case StationAdminSection.inventory:
+        return 'Manage lubricant and other shop item selling prices, stock, and inventory behavior.';
       case StationAdminSection.settings:
         return 'Update branding, modules, invoice settings, and document templates.';
       case StationAdminSection.meter:
@@ -476,6 +513,12 @@ class _StationAdminHomeScreenState
         return _buildStaffSection(bundle, stationId);
       case StationAdminSection.forecourt:
         return _buildForecourtSection(bundle, stationId);
+      case StationAdminSection.pricing:
+        return _buildPricingSection(bundle, stationId);
+      case StationAdminSection.suppliers:
+        return _buildSuppliersSection(bundle);
+      case StationAdminSection.inventory:
+        return _buildInventorySection(bundle, stationId);
       case StationAdminSection.settings:
         return _buildSettingsSection(bundle, stationId);
       case StationAdminSection.meter:
@@ -979,6 +1022,288 @@ class _StationAdminHomeScreenState
     );
   }
 
+  Widget _buildPricingSection(_StationAdminBundle bundle, int stationId) {
+    final selectedFuelType = bundle.fuelTypes.firstWhere(
+      (item) => item['id'] == _selectedPricingFuelTypeId,
+      orElse: () => const <String, dynamic>{},
+    );
+    final currentPrice =
+        (selectedFuelType['price_per_liter'] as num?)?.toDouble();
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _selectedPricingFuelTypeId == null
+          ? Future.value(const [])
+          : ref.read(stationAdminRepositoryProvider).listFuelPriceHistory(
+                stationId: stationId,
+                fuelTypeId: _selectedPricingFuelTypeId!,
+              ),
+      builder: (context, snapshot) {
+        final history = snapshot.data ?? const <Map<String, dynamic>>[];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionCard(
+              title: 'Fuel selling prices',
+              action: FilledButton.tonalIcon(
+                onPressed: _selectedPricingFuelTypeId == null
+                    ? null
+                    : () => _showFuelPriceDialog(
+                          stationId: stationId,
+                          fuelType: selectedFuelType,
+                        ),
+                icon: const Icon(Icons.price_change_outlined),
+                label: const Text('Change price'),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<int>(
+                    initialValue: _selectedPricingFuelTypeId,
+                    items: bundle.fuelTypes
+                        .map(
+                          (fuelType) => DropdownMenuItem<int>(
+                            value: fuelType['id'] as int,
+                            child: Text(fuelType['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedPricingFuelTypeId = value),
+                    decoration: const InputDecoration(
+                      labelText: 'Fuel type',
+                      helperText:
+                          'Use this page for station selling price changes. Managers already on shift will capture boundary readings when the price changes.',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      _MetricCard(
+                        title: 'Current selling price',
+                        value: currentPrice == null ? '-' : _money(currentPrice),
+                        subtitle: selectedFuelType['name']?.toString() ?? '',
+                      ),
+                      _MetricCard(
+                        title: 'Recorded price changes',
+                        value: '${history.length}',
+                        subtitle: 'Recent station price history',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            _SectionCard(
+              title: 'Recent selling price history',
+              child: history.isEmpty
+                  ? const Text('No price history recorded yet for this fuel.')
+                  : Column(
+                      children: history.map((entry) {
+                        final notes = entry['notes']?.toString() ?? '';
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.history_outlined),
+                          title: Text(
+                            '${selectedFuelType['name'] ?? 'Fuel'} • ${_money(entry['price'] as num?)}',
+                          ),
+                          subtitle: Text(
+                            '${entry['reason'] ?? '-'} • ${_dateLabel(entry['effective_at']?.toString())}'
+                            '${notes.isEmpty ? '' : '\n$notes'}',
+                          ),
+                        );
+                      }).toList(),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSuppliersSection(_StationAdminBundle bundle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionCard(
+          title: 'Supplier records and buying context',
+          action: FilledButton.tonalIcon(
+            onPressed: _showSupplierDialog,
+            icon: const Icon(Icons.add_business_outlined),
+            label: const Text('Add supplier'),
+          ),
+          child: bundle.suppliers.isEmpty
+              ? const Text('No suppliers added yet.')
+              : Column(
+                  children: bundle.suppliers.map((supplier) {
+                    final supplierId = supplier['id'] as int?;
+                    final recentPurchases = bundle.purchases
+                        .where((item) => item['supplier_id'] == supplierId)
+                        .take(5)
+                        .toList();
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        supplier['name']?.toString() ?? '-',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${supplier['code'] ?? '-'} • Payable ${_money(supplier['payable_balance'] as num?)}',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      _showSupplierDialog(supplier: supplier),
+                                  child: Text(context.l10n.text('editLabel')),
+                                ),
+                                TextButton(
+                                  onPressed: supplierId == null
+                                      ? null
+                                      : () => _performAction(
+                                            () async {
+                                              await ref
+                                                  .read(
+                                                    stationAdminRepositoryProvider,
+                                                  )
+                                                  .deleteSupplier(supplierId);
+                                            },
+                                            successMessage:
+                                                context.l10n.text(
+                                                  'deletedLabel',
+                                                ),
+                                          ),
+                                  child:
+                                      Text(context.l10n.text('deleteLabel')),
+                                ),
+                              ],
+                            ),
+                            if ((supplier['phone']?.toString().isNotEmpty ??
+                                    false) ||
+                                (supplier['address']?.toString().isNotEmpty ??
+                                    false)) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '${supplier['phone'] ?? '-'}${(supplier['address']?.toString().isNotEmpty ?? false) ? ' • ${supplier['address']}' : ''}',
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            Text(
+                              'Recent buying rates',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            if (recentPurchases.isEmpty)
+                              const Text(
+                                'No recent purchases found for this supplier.',
+                              )
+                            else
+                              Column(
+                                children: recentPurchases.map((purchase) {
+                                  return ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(
+                                      '${purchase['fuel_type_name'] ?? 'Fuel'} • ${purchase['quantity_liters'] ?? 0} liters',
+                                    ),
+                                    subtitle: Text(
+                                      'Buying rate ${_money(purchase['rate_per_liter'] as num?)} • ${_dateLabel(purchase['date']?.toString())}',
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInventorySection(_StationAdminBundle bundle, int stationId) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionCard(
+          title: 'Lubricant and inventory selling prices',
+          action: FilledButton.tonalIcon(
+            onPressed: () => _showPosProductDialog(stationId: stationId),
+            icon: const Icon(Icons.add_box_outlined),
+            label: const Text('Add item'),
+          ),
+          child: bundle.posProducts.isEmpty
+              ? const Text('No lubricant or inventory items configured yet.')
+              : Column(
+                  children: bundle.posProducts.map((product) {
+                    final productId = product['id'] as int?;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        (product['track_inventory'] as bool? ?? false)
+                            ? Icons.inventory_2_outlined
+                            : Icons.sell_outlined,
+                      ),
+                      title: Text(product['name']?.toString() ?? '-'),
+                      subtitle: Text(
+                        '${product['category'] ?? '-'} • ${product['module'] ?? '-'} • Selling ${_money(product['price'] as num?)} • Stock ${_money(product['stock_quantity'] as num?)} • ${(product['is_active'] as bool? ?? true) ? 'Active' : 'Inactive'}',
+                      ),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton(
+                            onPressed: () => _showPosProductDialog(
+                              stationId: stationId,
+                              product: product,
+                            ),
+                            child: Text(context.l10n.text('editLabel')),
+                          ),
+                          TextButton(
+                            onPressed: productId == null
+                                ? null
+                                : () => _performAction(
+                                      () async {
+                                        await ref
+                                            .read(
+                                              stationAdminRepositoryProvider,
+                                            )
+                                            .deletePosProduct(productId);
+                                      },
+                                      successMessage: context.l10n.text(
+                                        'deletedLabel',
+                                      ),
+                                    ),
+                            child: Text(context.l10n.text('deleteLabel')),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSettingsSection(_StationAdminBundle bundle, int stationId) {
     final template = bundle.documentTemplates.firstWhere(
       (item) => item['document_type'] == _selectedTemplateType,
@@ -1177,6 +1502,8 @@ class _StationAdminHomeScreenState
       (item) => item['id'] == _selectedNozzleId,
       orElse: () => const <String, dynamic>{},
     );
+    final currentReading =
+        (selectedNozzle['meter_reading'] as num?)?.toDouble() ?? 0;
 
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _selectedNozzleId == null
@@ -1196,9 +1523,7 @@ class _StationAdminHomeScreenState
                     ? null
                     : () => _showMeterAdjustmentDialog(
                           nozzleId: _selectedNozzleId!,
-                          currentReading:
-                              (selectedNozzle['meter_reading'] as num?)?.toDouble() ??
-                                  0,
+                          currentReading: currentReading,
                         ),
                 icon: const Icon(Icons.tune_outlined),
                 label: Text(context.l10n.text('recordMeterAdjustmentLabel')),
@@ -1237,14 +1562,18 @@ class _StationAdminHomeScreenState
                       runSpacing: 16,
                       children: [
                         _InlineInfo(
-                          label: context.l10n.text('currentMeter'),
-                          value: _money(selectedNozzle['meter_reading']),
+                          label: 'Old / current meter reading',
+                          value: _money(currentReading),
                         ),
                         _InlineInfo(
-                          label: context.l10n.text('openingMeter'),
+                          label: 'Current segment start',
                           value: _money(
                             selectedNozzle['current_segment_start_reading'],
                           ),
+                        ),
+                        const _InlineInfo(
+                          label: 'New adjusted reading',
+                          value: 'Enter below',
                         ),
                         _InlineInfo(
                           label: context.l10n.text('active'),
@@ -2572,8 +2901,10 @@ class _StationAdminHomeScreenState
   }) async {
     final meterAdjustmentSavedMessage =
         context.l10n.text('meterAdjustmentSavedMessage');
-    final newReadingController =
+    final oldReadingController =
         TextEditingController(text: currentReading.toStringAsFixed(0));
+    final newReadingController =
+        TextEditingController();
     final reasonController = TextEditingController();
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
@@ -2585,9 +2916,36 @@ class _StationAdminHomeScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: newReadingController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: context.l10n.text('currentMeter'))),
+              TextField(
+                controller: oldReadingController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Old / current meter reading',
+                  helperText:
+                      'Enter the reading observed on the meter at the time of reversal.',
+                ),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: reasonController, minLines: 2, maxLines: 3, decoration: InputDecoration(labelText: context.l10n.text('reasonLabel'))),
+              TextField(
+                controller: newReadingController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'New adjusted meter reading',
+                  helperText:
+                      'Enter the reading that should replace the old/current value.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                minLines: 2,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason for adjustment',
+                ),
+              ),
             ],
           ),
         ),
@@ -2601,10 +2959,295 @@ class _StationAdminHomeScreenState
     await _performAction(() async {
       await ref.read(stationAdminRepositoryProvider).adjustNozzleMeter(
             nozzleId,
+            oldReading: double.tryParse(oldReadingController.text.trim()) ?? 0,
             newReading: double.tryParse(newReadingController.text.trim()) ?? 0,
             reason: reasonController.text.trim(),
           );
     }, successMessage: meterAdjustmentSavedMessage);
+  }
+
+  Future<void> _showFuelPriceDialog({
+    required int stationId,
+    required Map<String, dynamic> fuelType,
+  }) async {
+    final priceController = TextEditingController(
+      text: ((fuelType['price_per_liter'] as num?)?.toDouble() ?? 0)
+          .toStringAsFixed(2),
+    );
+    final reasonController = TextEditingController();
+    final notesController = TextEditingController();
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Change ${fuelType['name'] ?? 'fuel'} price'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: priceController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'New selling price',
+                  helperText:
+                      'This is the station selling price. If managers are already on shift, they will capture boundary readings after the price change.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(labelText: 'Reason'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                minLines: 2,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Notes'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.text('cancelLabel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.l10n.text('saveLabel')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).createFuelPriceHistory(
+            stationId: stationId,
+            fuelTypeId: fuelType['id'] as int,
+            price: double.tryParse(priceController.text.trim()) ?? 0,
+            reason: reasonController.text.trim(),
+            notes: notesController.text.trim().isEmpty
+                ? null
+                : notesController.text.trim(),
+          );
+    }, successMessage: 'Fuel selling price updated.');
+  }
+
+  Future<void> _showSupplierDialog({
+    Map<String, dynamic>? supplier,
+  }) async {
+    final nameController =
+        TextEditingController(text: supplier?['name']?.toString() ?? '');
+    final codeController =
+        TextEditingController(text: supplier?['code']?.toString() ?? '');
+    final phoneController =
+        TextEditingController(text: supplier?['phone']?.toString() ?? '');
+    final addressController =
+        TextEditingController(text: supplier?['address']?.toString() ?? '');
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(supplier == null ? 'Add supplier' : 'Edit supplier'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Supplier name'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeController,
+                enabled: supplier == null,
+                decoration: const InputDecoration(labelText: 'Supplier code'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: addressController,
+                minLines: 2,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.text('cancelLabel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.l10n.text('saveLabel')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      final repo = ref.read(stationAdminRepositoryProvider);
+      if (supplier == null) {
+        await repo.createSupplier({
+          'name': nameController.text.trim(),
+          'code': codeController.text.trim(),
+          'phone': phoneController.text.trim().isEmpty
+              ? null
+              : phoneController.text.trim(),
+          'address': addressController.text.trim().isEmpty
+              ? null
+              : addressController.text.trim(),
+        });
+      } else {
+        await repo.updateSupplier(supplier['id'] as int, {
+          'name': nameController.text.trim(),
+          'phone': phoneController.text.trim().isEmpty
+              ? null
+              : phoneController.text.trim(),
+          'address': addressController.text.trim().isEmpty
+              ? null
+              : addressController.text.trim(),
+        });
+      }
+    }, successMessage: 'Supplier details saved.');
+  }
+
+  Future<void> _showPosProductDialog({
+    required int stationId,
+    Map<String, dynamic>? product,
+  }) async {
+    final nameController =
+        TextEditingController(text: product?['name']?.toString() ?? '');
+    final codeController =
+        TextEditingController(text: product?['code']?.toString() ?? '');
+    final categoryController = TextEditingController(
+      text: product?['category']?.toString() ?? 'Lubricant',
+    );
+    final moduleController = TextEditingController(
+      text: product?['module']?.toString() ?? 'lubricant',
+    );
+    final priceController = TextEditingController(
+      text: ((product?['price'] as num?)?.toDouble() ?? 0).toStringAsFixed(2),
+    );
+    final stockController = TextEditingController(
+      text:
+          ((product?['stock_quantity'] as num?)?.toDouble() ?? 0).toStringAsFixed(0),
+    );
+    bool trackInventory = product?['track_inventory'] as bool? ?? true;
+    bool isActive = product?['is_active'] as bool? ?? true;
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(product == null ? 'Add inventory item' : 'Edit inventory item'),
+          content: SizedBox(
+            width: 580,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Item name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: codeController,
+                    enabled: product == null,
+                    decoration: const InputDecoration(labelText: 'Item code'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: categoryController,
+                    decoration: const InputDecoration(labelText: 'Category'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: moduleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Module',
+                      helperText: 'Use values like lubricant or shop.',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration:
+                        const InputDecoration(labelText: 'Selling price'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: stockController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Stock quantity'),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: trackInventory,
+                    onChanged: (value) =>
+                        setLocalState(() => trackInventory = value),
+                    title: const Text('Track inventory'),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: isActive,
+                    onChanged: (value) => setLocalState(() => isActive = value),
+                    title: const Text('Active'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.l10n.text('saveLabel')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      final payload = {
+        'name': nameController.text.trim(),
+        'code': codeController.text.trim(),
+        'category': categoryController.text.trim(),
+        'module': moduleController.text.trim(),
+        'price': double.tryParse(priceController.text.trim()) ?? 0,
+        'stock_quantity': double.tryParse(stockController.text.trim()) ?? 0,
+        'track_inventory': trackInventory,
+        'is_active': isActive,
+        'station_id': stationId,
+      };
+      final repo = ref.read(stationAdminRepositoryProvider);
+      if (product == null) {
+        await repo.createPosProduct(payload);
+      } else {
+        await repo.updatePosProduct(product['id'] as int, payload);
+      }
+    }, successMessage: 'Inventory pricing saved.');
   }
 
   Future<void> _showCreateTankerDialog({
@@ -2928,6 +3571,9 @@ class _StationAdminBundle {
     required this.tanks,
     required this.dispensers,
     required this.nozzles,
+    required this.suppliers,
+    required this.purchases,
+    required this.posProducts,
     required this.invoiceProfile,
     required this.documentTemplates,
     required this.tankerSummary,
@@ -2945,6 +3591,9 @@ class _StationAdminBundle {
   final List<Map<String, dynamic>> tanks;
   final List<Map<String, dynamic>> dispensers;
   final List<Map<String, dynamic>> nozzles;
+  final List<Map<String, dynamic>> suppliers;
+  final List<Map<String, dynamic>> purchases;
+  final List<Map<String, dynamic>> posProducts;
   final Map<String, dynamic> invoiceProfile;
   final List<Map<String, dynamic>> documentTemplates;
   final Map<String, dynamic> tankerSummary;

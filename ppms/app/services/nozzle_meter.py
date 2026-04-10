@@ -20,6 +20,7 @@ def adjust_nozzle_meter(
     db: Session,
     *,
     nozzle: Nozzle,
+    old_reading: float,
     new_reading: float,
     reason: str,
     current_user: User,
@@ -41,9 +42,19 @@ def adjust_nozzle_meter(
             raise HTTPException(status_code=403, detail="Not authorized for this station")
     require_station_module_enabled(db, station_id, MODULE_NAME)
 
-    old_reading = nozzle.meter_reading or 0.0
     if new_reading == old_reading:
         raise HTTPException(status_code=400, detail="New meter reading must be different from the current reading")
+    if old_reading < 0:
+        raise HTTPException(status_code=400, detail="Old meter reading must be 0 or greater")
+    segment_start = float(nozzle.current_segment_start_reading or nozzle.meter_reading or 0.0)
+    if old_reading < segment_start:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Old meter reading cannot be lower than the current segment start "
+                f"({round(segment_start, 2)})."
+            ),
+        )
     organization_id = station.organization_id if station else None
 
     adjustment = MeterAdjustmentEvent(
@@ -69,6 +80,7 @@ def adjust_nozzle_meter(
         station_id=station_id,
         details={
             "nozzle_id": nozzle.id,
+            "stored_meter_before_adjustment": nozzle.meter_reading or 0.0,
             "old_reading": old_reading,
             "new_reading": new_reading,
             "reason": reason.strip(),
