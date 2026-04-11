@@ -6,10 +6,14 @@ import 'package:intl/intl.dart';
 
 import '../../app/localization/app_localizations.dart';
 import '../../app/session/session_controller.dart';
+import '../accountant/accountant_home_screen.dart';
+import '../manager/manager_home_screen.dart';
 import 'station_admin_repository.dart';
 
 enum StationAdminSection {
   overview,
+  operations,
+  finance,
   staff,
   forecourt,
   pricing,
@@ -32,6 +36,10 @@ class StationAdminHomeScreen extends ConsumerStatefulWidget {
 
   static StationAdminSection fromSlug(String? slug) {
     switch (slug) {
+      case 'operations':
+        return StationAdminSection.operations;
+      case 'finance':
+        return StationAdminSection.finance;
       case 'staff':
         return StationAdminSection.staff;
       case 'forecourt':
@@ -106,6 +114,7 @@ class _StationAdminHomeScreenState
       repo.listStationModules(stationId),
       repo.listRoles(),
       repo.listUsers(stationId: stationId),
+      repo.listCustomers(stationId: stationId),
       repo.listEmployeeProfiles(stationId: stationId),
       repo.listFuelTypes(),
       repo.listTanks(stationId: stationId),
@@ -127,19 +136,20 @@ class _StationAdminHomeScreenState
       stationModules: results[2] as List<Map<String, dynamic>>,
       roles: results[3] as List<Map<String, dynamic>>,
       users: results[4] as List<Map<String, dynamic>>,
-      employeeProfiles: results[5] as List<Map<String, dynamic>>,
-      fuelTypes: results[6] as List<Map<String, dynamic>>,
-      tanks: results[7] as List<Map<String, dynamic>>,
-      dispensers: results[8] as List<Map<String, dynamic>>,
-      nozzles: results[9] as List<Map<String, dynamic>>,
-      suppliers: results[10] as List<Map<String, dynamic>>,
-      purchases: results[11] as List<Map<String, dynamic>>,
-      posProducts: results[12] as List<Map<String, dynamic>>,
-      invoiceProfile: results[13] as Map<String, dynamic>,
-      documentTemplates: results[14] as List<Map<String, dynamic>>,
-      tankerSummary: results[15] as Map<String, dynamic>,
-      tankers: results[16] as List<Map<String, dynamic>>,
-      tankerTrips: results[17] as List<Map<String, dynamic>>,
+      customers: results[5] as List<Map<String, dynamic>>,
+      employeeProfiles: results[6] as List<Map<String, dynamic>>,
+      fuelTypes: results[7] as List<Map<String, dynamic>>,
+      tanks: results[8] as List<Map<String, dynamic>>,
+      dispensers: results[9] as List<Map<String, dynamic>>,
+      nozzles: results[10] as List<Map<String, dynamic>>,
+      suppliers: results[11] as List<Map<String, dynamic>>,
+      purchases: results[12] as List<Map<String, dynamic>>,
+      posProducts: results[13] as List<Map<String, dynamic>>,
+      invoiceProfile: results[14] as Map<String, dynamic>,
+      documentTemplates: results[15] as List<Map<String, dynamic>>,
+      tankerSummary: results[16] as Map<String, dynamic>,
+      tankers: results[17] as List<Map<String, dynamic>>,
+      tankerTrips: results[18] as List<Map<String, dynamic>>,
     );
 
     _selectedNozzleId ??=
@@ -275,6 +285,10 @@ class _StationAdminHomeScreenState
     switch (section) {
       case StationAdminSection.overview:
         return context.l10n.text('overview');
+      case StationAdminSection.operations:
+        return 'Operations';
+      case StationAdminSection.finance:
+        return 'Finance';
       case StationAdminSection.staff:
         return context.l10n.text('staffManagement');
       case StationAdminSection.forecourt:
@@ -298,6 +312,10 @@ class _StationAdminHomeScreenState
     switch (section) {
       case StationAdminSection.overview:
         return 'dashboard';
+      case StationAdminSection.operations:
+        return 'operations';
+      case StationAdminSection.finance:
+        return 'finance';
       case StationAdminSection.staff:
         return 'staff';
       case StationAdminSection.forecourt:
@@ -321,6 +339,10 @@ class _StationAdminHomeScreenState
     switch (section) {
       case StationAdminSection.overview:
         return context.l10n.text('stationAdminSubtitle');
+      case StationAdminSection.operations:
+        return 'Run live shift operations, receiving, dips, expenses, credit, and close checks from the station admin side.';
+      case StationAdminSection.finance:
+        return 'Manage ledgers, payments, expenses, and payroll without leaving the station admin workspace.';
       case StationAdminSection.staff:
         return 'Create staff, assign access roles, update titles, and manage payroll basics.';
       case StationAdminSection.forecourt:
@@ -358,6 +380,22 @@ class _StationAdminHomeScreenState
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionControllerProvider).session;
+    if (_selectedSection == StationAdminSection.operations) {
+      return Column(
+        children: [
+          _buildEmbeddedWorkflowHeader(),
+          const Expanded(child: ManagerHomeScreen()),
+        ],
+      );
+    }
+    if (_selectedSection == StationAdminSection.finance) {
+      return Column(
+        children: [
+          _buildEmbeddedWorkflowHeader(),
+          const Expanded(child: AccountantHomeScreen()),
+        ],
+      );
+    }
     return FutureBuilder<_StationAdminBundle>(
       future: _bundleFuture,
       builder: (context, snapshot) {
@@ -384,6 +422,38 @@ class _StationAdminHomeScreenState
           ],
         );
       },
+    );
+  }
+
+  Widget _buildEmbeddedWorkflowHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      child: Row(
+        children: [
+          FilledButton.tonalIcon(
+            onPressed: () => _openSection(StationAdminSection.overview),
+            icon: const Icon(Icons.arrow_back_outlined),
+            label: const Text('Back to dashboard'),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _sectionLabel(_selectedSection),
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _sectionDescription(_selectedSection),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -419,25 +489,28 @@ class _StationAdminHomeScreenState
           spacing: 16,
           runSpacing: 16,
           children: [
+            _WorkflowCard(
+              title: _sectionLabel(StationAdminSection.operations),
+              description: _sectionDescription(StationAdminSection.operations),
+              onOpen: () => _openSection(StationAdminSection.operations),
+            ),
+            _WorkflowCard(
+              title: _sectionLabel(StationAdminSection.finance),
+              description: _sectionDescription(StationAdminSection.finance),
+              onOpen: () => _openSection(StationAdminSection.finance),
+            ),
             for (final section in StationAdminSection.values
-                .where((item) => item != StationAdminSection.overview))
+                .where(
+                  (item) =>
+                      item != StationAdminSection.overview &&
+                      item != StationAdminSection.operations &&
+                      item != StationAdminSection.finance,
+                ))
               _WorkflowCard(
                 title: _sectionLabel(section),
                 description: _sectionDescription(section),
                 onOpen: () => _openSection(section),
               ),
-            _WorkflowCard(
-              title: context.l10n.text('managerWorkspace'),
-              description:
-                  'Open live manager operations if you need to work the active shift from the admin side.',
-              onOpen: () => context.go('/workspace/manager'),
-            ),
-            _WorkflowCard(
-              title: context.l10n.text('accountantWorkspace'),
-              description:
-                  'Open the finance workspace when you need ledger, payment, or payroll operations.',
-              onOpen: () => context.go('/workspace/accountant'),
-            ),
           ],
         ),
       ),
@@ -509,6 +582,10 @@ class _StationAdminHomeScreenState
     switch (_selectedSection) {
       case StationAdminSection.overview:
         return _buildOverviewSection(bundle);
+      case StationAdminSection.operations:
+        return const SizedBox.shrink();
+      case StationAdminSection.finance:
+        return const SizedBox.shrink();
       case StationAdminSection.staff:
         return _buildStaffSection(bundle, stationId);
       case StationAdminSection.forecourt:
@@ -605,6 +682,52 @@ class _StationAdminHomeScreenState
         ),
         const SizedBox(height: 24),
         _SectionCard(
+          title: 'Station control center',
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () => _openSection(StationAdminSection.staff),
+                icon: const Icon(Icons.groups_outlined),
+                label: Text(
+                  'Staff ${bundle.users.length}/${bundle.employeeProfiles.length}',
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _openSection(StationAdminSection.forecourt),
+                icon: const Icon(Icons.local_gas_station_outlined),
+                label: Text(
+                  'Forecourt ${bundle.tanks.length} tanks / ${bundle.nozzles.length} nozzles',
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _openSection(StationAdminSection.pricing),
+                icon: const Icon(Icons.price_change_outlined),
+                label: Text('Fuel prices ${bundle.fuelTypes.length} types'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _openSection(StationAdminSection.tanker),
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: Text(
+                  'Tanker ${tanker['in_progress_trip_count'] ?? 0} active trips',
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/workspace/manager'),
+                icon: const Icon(Icons.manage_accounts_outlined),
+                label: const Text('Open manager operations'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => context.go('/workspace/accountant'),
+                icon: const Icon(Icons.account_balance_outlined),
+                label: const Text('Open accountant finance'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        _SectionCard(
           title: context.l10n.text('stationSnapshot'),
           child: Wrap(
             spacing: 16,
@@ -672,6 +795,114 @@ class _StationAdminHomeScreenState
                   ],
                 ),
         ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: 'Trip operations',
+          child: bundle.tankerTrips.isEmpty
+              ? const Text('Create a trip to start tanker operations.')
+              : Column(
+                  children: bundle.tankerTrips.take(10).map((trip) {
+                    final deliveries =
+                        (trip['deliveries'] as List<dynamic>? ?? const [])
+                            .cast<dynamic>();
+                    final canComplete =
+                        (trip['status']?.toString() ?? '') != 'settled' &&
+                            (trip['status']?.toString() ?? '') !=
+                                'partially_settled';
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${trip['trip_type']} • ${trip['status']} • ${trip['settlement_status'] ?? '-'}',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 16,
+                              children: [
+                                _InlineInfo(
+                                  label: 'Loaded',
+                                  value:
+                                      '${_money(trip['loaded_quantity'])} ${context.l10n.text('litersLabel')}',
+                                ),
+                                _InlineInfo(
+                                  label: 'Delivered',
+                                  value:
+                                      '${_money(trip['total_quantity'])} ${context.l10n.text('litersLabel')}',
+                                ),
+                                _InlineInfo(
+                                  label: 'Remaining',
+                                  value:
+                                      '${_money(trip['leftover_quantity'])} ${context.l10n.text('litersLabel')}',
+                                ),
+                                _InlineInfo(
+                                  label: 'Net profit',
+                                  value: _money(trip['net_profit']),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.tonalIcon(
+                                  onPressed: () => _showTankerDeliveryDialog(
+                                    trip: trip,
+                                    bundle: bundle,
+                                  ),
+                                  icon: const Icon(Icons.local_shipping_outlined),
+                                  label: const Text('Add delivery'),
+                                ),
+                                FilledButton.tonalIcon(
+                                  onPressed: deliveries.isEmpty
+                                      ? null
+                                      : () => _showTankerPaymentDialog(
+                                            trip: trip,
+                                            deliveries: deliveries
+                                                .map(
+                                                  (item) =>
+                                                      Map<String, dynamic>.from(
+                                                    item as Map,
+                                                  ),
+                                                )
+                                                .toList(),
+                                          ),
+                                  icon: const Icon(Icons.payments_outlined),
+                                  label: const Text('Record payment'),
+                                ),
+                                FilledButton.tonalIcon(
+                                  onPressed: () =>
+                                      _showTankerExpenseDialog(trip: trip),
+                                  icon: const Icon(Icons.receipt_long_outlined),
+                                  label: const Text('Add expense'),
+                                ),
+                                FilledButton.tonalIcon(
+                                  onPressed: canComplete
+                                      ? () => _showTankerCompleteDialog(
+                                            trip: trip,
+                                            tanks: bundle.tanks,
+                                          )
+                                      : null,
+                                  icon: const Icon(Icons.task_alt_outlined),
+                                  label: const Text('Settle trip'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 16),
+        _buildTankerOperationsCard(bundle),
       ],
     );
   }
@@ -1616,21 +1847,40 @@ class _StationAdminHomeScreenState
   }
 
   Widget _buildTankerSection(_StationAdminBundle bundle, int stationId) {
+    return _buildTankerSectionV2(bundle, stationId);
+  }
+
+  Widget _buildTankerSectionV2(_StationAdminBundle bundle, int stationId) {
     final summary = bundle.tankerSummary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionCard(
           title: context.l10n.text('tankerWorkspace'),
-          action: FilledButton.tonalIcon(
-            onPressed: bundle.fuelTypes.isEmpty
-                ? null
-                : () => _showCreateTankerDialog(
-                      stationId: stationId,
-                      fuelTypes: bundle.fuelTypes,
-                    ),
-            icon: const Icon(Icons.local_shipping_outlined),
-            label: Text(context.l10n.text('createTankerLabel')),
+          action: Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: bundle.fuelTypes.isEmpty
+                    ? null
+                    : () => _showCreateTankerDialog(
+                          stationId: stationId,
+                          fuelTypes: bundle.fuelTypes,
+                        ),
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: Text(context.l10n.text('createTankerLabel')),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: bundle.tankers.isEmpty
+                    ? null
+                    : () => _showCreateTankerTripDialog(
+                          stationId: stationId,
+                          bundle: bundle,
+                        ),
+                icon: const Icon(Icons.route_outlined),
+                label: const Text('Create trip'),
+              ),
+            ],
           ),
           child: summary.isEmpty
               ? Text(context.l10n.text('noDataYet'))
@@ -1656,6 +1906,18 @@ class _StationAdminHomeScreenState
                     _MetricCard(
                       title: context.l10n.text('completedTripsLabel'),
                       value: '${summary['completed_trip_count'] ?? 0}',
+                      width: 180,
+                    ),
+                    _MetricCard(
+                      title: 'Remaining tanker fuel',
+                      value: _money(summary['total_leftover_quantity']),
+                      subtitle: context.l10n.text('litersLabel'),
+                      width: 180,
+                    ),
+                    _MetricCard(
+                      title: 'Purchase value',
+                      value: _money(summary['total_purchase_value']),
+                      subtitle: 'Loaded trip cost',
                       width: 180,
                     ),
                   ],
@@ -1701,6 +1963,679 @@ class _StationAdminHomeScreenState
         ),
       ],
     );
+  }
+
+  Widget _buildTankerOperationsCard(_StationAdminBundle bundle) {
+    return _SectionCard(
+      title: 'Trip operations',
+      child: bundle.tankerTrips.isEmpty
+          ? const Text('Create a trip to start tanker operations.')
+          : Column(
+              children: bundle.tankerTrips.take(10).map((trip) {
+                final deliveries =
+                    (trip['deliveries'] as List<dynamic>? ?? const [])
+                        .cast<dynamic>();
+                final canComplete =
+                    (trip['status']?.toString() ?? '') != 'settled' &&
+                        (trip['status']?.toString() ?? '') !=
+                            'partially_settled';
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${trip['trip_type']} • ${trip['status']} • ${trip['settlement_status'] ?? '-'}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: [
+                            _InlineInfo(
+                              label: 'Loaded',
+                              value:
+                                  '${_money(trip['loaded_quantity'])} ${context.l10n.text('litersLabel')}',
+                            ),
+                            _InlineInfo(
+                              label: 'Delivered',
+                              value:
+                                  '${_money(trip['total_quantity'])} ${context.l10n.text('litersLabel')}',
+                            ),
+                            _InlineInfo(
+                              label: 'Remaining',
+                              value:
+                                  '${_money(trip['leftover_quantity'])} ${context.l10n.text('litersLabel')}',
+                            ),
+                            _InlineInfo(
+                              label: 'Net profit',
+                              value: _money(trip['net_profit']),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: () => _showTankerDeliveryDialog(
+                                trip: trip,
+                                bundle: bundle,
+                              ),
+                              icon: const Icon(Icons.local_shipping_outlined),
+                              label: const Text('Add delivery'),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: deliveries.isEmpty
+                                  ? null
+                                  : () => _showTankerPaymentDialog(
+                                        trip: trip,
+                                        deliveries: deliveries
+                                            .map(
+                                              (item) =>
+                                                  Map<String, dynamic>.from(
+                                                item as Map,
+                                              ),
+                                            )
+                                            .toList(),
+                                      ),
+                              icon: const Icon(Icons.payments_outlined),
+                              label: const Text('Record payment'),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: () =>
+                                  _showTankerExpenseDialog(trip: trip),
+                              icon: const Icon(Icons.receipt_long_outlined),
+                              label: const Text('Add expense'),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: canComplete
+                                  ? () => _showTankerCompleteDialog(
+                                        trip: trip,
+                                        tanks: bundle.tanks,
+                                      )
+                                  : null,
+                              icon: const Icon(Icons.task_alt_outlined),
+                              label: const Text('Settle trip'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  Future<void> _showCreateTankerTripDialog({
+    required int stationId,
+    required _StationAdminBundle bundle,
+  }) async {
+    int? tankerId =
+        bundle.tankers.isNotEmpty ? bundle.tankers.first['id'] as int : null;
+    String tripType = 'supplier_to_customer';
+    int? supplierId =
+        bundle.suppliers.isNotEmpty ? bundle.suppliers.first['id'] as int : null;
+    int? linkedTankId =
+        bundle.tanks.isNotEmpty ? bundle.tanks.first['id'] as int : null;
+    int? driverUserId;
+    final destinationController = TextEditingController();
+    final notesController = TextEditingController();
+    final quantityController = TextEditingController();
+    final rateController = TextEditingController();
+
+    if (!mounted || tankerId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('Create tanker trip'),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<int>(
+                    initialValue: tankerId,
+                    items: bundle.tankers
+                        .map(
+                          (item) => DropdownMenuItem<int>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setLocalState(() => tankerId = value),
+                    decoration: const InputDecoration(labelText: 'Tanker'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: tripType,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'supplier_to_station',
+                        child: Text('supplier_to_station'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'supplier_to_customer',
+                        child: Text('supplier_to_customer'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'mixed_delivery',
+                        child: Text('mixed_delivery'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setLocalState(() => tripType = value ?? tripType),
+                    decoration: const InputDecoration(labelText: 'Trip type'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: supplierId,
+                    items: bundle.suppliers
+                        .map(
+                          (item) => DropdownMenuItem<int?>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setLocalState(() => supplierId = value),
+                    decoration: const InputDecoration(labelText: 'Supplier'),
+                  ),
+                  const SizedBox(height: 12),
+                  if (tripType == 'supplier_to_station')
+                    DropdownButtonFormField<int?>(
+                      initialValue: linkedTankId,
+                      items: bundle.tanks
+                          .map(
+                            (item) => DropdownMenuItem<int?>(
+                              value: item['id'] as int,
+                              child: Text(item['name']?.toString() ?? '-'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setLocalState(() => linkedTankId = value),
+                      decoration:
+                          const InputDecoration(labelText: 'Destination tank'),
+                    )
+                  else
+                    TextField(
+                      controller: destinationController,
+                      decoration:
+                          const InputDecoration(labelText: 'Destination name'),
+                    ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: driverUserId,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('No driver linked'),
+                      ),
+                      ...bundle.users.map(
+                        (user) => DropdownMenuItem<int?>(
+                          value: user['id'] as int,
+                          child: Text(user['full_name']?.toString() ?? '-'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setLocalState(() => driverUserId = value),
+                    decoration: const InputDecoration(labelText: 'Driver'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: quantityController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Loaded quantity',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: rateController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration:
+                        const InputDecoration(labelText: 'Purchase rate'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Notes'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+
+    final selectedTanker = bundle.tankers.firstWhere(
+      (item) => item['id'] == tankerId,
+      orElse: () => const <String, dynamic>{},
+    );
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).createTankerTrip({
+        'tanker_id': tankerId,
+        'station_id': stationId,
+        'supplier_id': supplierId,
+        'trip_type': tripType,
+        'linked_tank_id': linkedTankId,
+        'destination_name': destinationController.text.trim().isEmpty
+            ? null
+            : destinationController.text.trim(),
+        'notes': notesController.text.trim().isEmpty
+            ? null
+            : notesController.text.trim(),
+        'fuel_type_id': selectedTanker['fuel_type_id'],
+        'loaded_quantity': double.tryParse(quantityController.text.trim()) ?? 0,
+        'purchase_rate': double.tryParse(rateController.text.trim()) ?? 0,
+        'driver_assignments': driverUserId == null
+            ? <Map<String, dynamic>>[]
+            : [
+                {
+                  'user_id': driverUserId,
+                  'assignment_role': 'driver',
+                },
+              ],
+      });
+    }, successMessage: 'Tanker trip created.');
+  }
+
+  Future<void> _showTankerDeliveryDialog({
+    required Map<String, dynamic> trip,
+    required _StationAdminBundle bundle,
+  }) async {
+    int? customerId;
+    final destinationController = TextEditingController();
+    final quantityController = TextEditingController();
+    final rateController = TextEditingController();
+    final paidController = TextEditingController(text: '0');
+    String saleType = 'cash';
+    final loads =
+        (trip['compartment_loads'] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+    int? loadId = loads.isNotEmpty ? loads.first['id'] as int : null;
+    int? fuelTypeId =
+        loads.isNotEmpty ? loads.first['fuel_type_id'] as int : null;
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('Add tanker delivery'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<int?>(
+                    initialValue: customerId,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('Outside customer / pump'),
+                      ),
+                      ...bundle.customers.map(
+                        (customer) => DropdownMenuItem<int?>(
+                          value: customer['id'] as int,
+                          child: Text(customer['name']?.toString() ?? '-'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => setLocalState(() => customerId = value),
+                    decoration: const InputDecoration(labelText: 'Customer'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: destinationController,
+                    decoration:
+                        const InputDecoration(labelText: 'Destination name'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: loadId,
+                    items: loads
+                        .map(
+                          (load) => DropdownMenuItem<int?>(
+                            value: load['id'] as int,
+                            child: Text(
+                              '${load['compartment_id']} • ${_money(load['remaining_quantity'])} remaining',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setLocalState(() {
+                        loadId = value;
+                        final selected = loads.firstWhere(
+                          (item) => item['id'] == value,
+                          orElse: () => const <String, dynamic>{},
+                        );
+                        fuelTypeId = selected['fuel_type_id'] as int?;
+                      });
+                    },
+                    decoration:
+                        const InputDecoration(labelText: 'Compartment load'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: quantityController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Quantity'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: rateController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Sale rate'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: saleType,
+                    items: const [
+                      DropdownMenuItem(value: 'cash', child: Text('cash')),
+                      DropdownMenuItem(value: 'credit', child: Text('credit')),
+                    ],
+                    onChanged: (value) =>
+                        setLocalState(() => saleType = value ?? saleType),
+                    decoration: const InputDecoration(labelText: 'Sale type'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: paidController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Paid amount'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).addTankerTripDelivery(
+        trip['id'] as int,
+        {
+          'customer_id': customerId,
+          'fuel_type_id': fuelTypeId,
+          'compartment_load_id': loadId,
+          'destination_name': destinationController.text.trim().isEmpty
+              ? null
+              : destinationController.text.trim(),
+          'quantity': double.tryParse(quantityController.text.trim()) ?? 0,
+          'fuel_rate': double.tryParse(rateController.text.trim()) ?? 0,
+          'sale_type': saleType,
+          'paid_amount': double.tryParse(paidController.text.trim()) ?? 0,
+        },
+      );
+    }, successMessage: 'Tanker delivery added.');
+  }
+
+  Future<void> _showTankerPaymentDialog({
+    required Map<String, dynamic> trip,
+    required List<Map<String, dynamic>> deliveries,
+  }) async {
+    int? deliveryId =
+        deliveries.isNotEmpty ? deliveries.first['id'] as int : null;
+    final amountController = TextEditingController();
+    final referenceController = TextEditingController();
+    if (!mounted || deliveryId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('Record tanker payment'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: deliveryId,
+                  items: deliveries
+                      .map(
+                        (item) => DropdownMenuItem<int>(
+                          value: item['id'] as int,
+                          child: Text(
+                            '${item['destination_name'] ?? 'Customer'} • Outstanding ${_money(item['outstanding_amount'])}',
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setLocalState(() => deliveryId = value),
+                  decoration: const InputDecoration(labelText: 'Delivery'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Amount'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: referenceController,
+                  decoration: const InputDecoration(labelText: 'Reference'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).addTankerTripPayment(
+        trip['id'] as int,
+        deliveryId!,
+        {
+          'amount': double.tryParse(amountController.text.trim()) ?? 0,
+          'reference_no': referenceController.text.trim().isEmpty
+              ? null
+              : referenceController.text.trim(),
+        },
+      );
+    }, successMessage: 'Tanker payment recorded.');
+  }
+
+  Future<void> _showTankerExpenseDialog({
+    required Map<String, dynamic> trip,
+  }) async {
+    final typeController = TextEditingController();
+    final amountController = TextEditingController();
+    final notesController = TextEditingController();
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add tanker trip expense'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: typeController,
+                decoration: const InputDecoration(labelText: 'Expense type'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Amount'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                minLines: 2,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Notes'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.text('cancelLabel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).addTankerTripExpense(
+        trip['id'] as int,
+        {
+          'expense_type': typeController.text.trim(),
+          'amount': double.tryParse(amountController.text.trim()) ?? 0,
+          'notes': notesController.text.trim().isEmpty
+              ? null
+              : notesController.text.trim(),
+        },
+      );
+    }, successMessage: 'Tanker trip expense saved.');
+  }
+
+  Future<void> _showTankerCompleteDialog({
+    required Map<String, dynamic> trip,
+    required List<Map<String, dynamic>> tanks,
+  }) async {
+    final reasonController = TextEditingController();
+    int? tankId = tanks.isNotEmpty ? tanks.first['id'] as int : null;
+    final quantityController = TextEditingController(
+      text: _money(trip['leftover_quantity'] as num?),
+    );
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('Settle tanker trip'),
+          content: SizedBox(
+            width: 560,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: reasonController,
+                  decoration: const InputDecoration(labelText: 'Reason'),
+                ),
+                const SizedBox(height: 12),
+                if ((trip['leftover_quantity'] as num? ?? 0) > 0) ...[
+                  DropdownButtonFormField<int?>(
+                    initialValue: tankId,
+                    items: tanks
+                        .map(
+                          (item) => DropdownMenuItem<int?>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setLocalState(() => tankId = value),
+                    decoration: const InputDecoration(
+                      labelText: 'Dump leftover to tank',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: quantityController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Transfer quantity',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.l10n.text('cancelLabel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Complete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).completeTankerTrip(
+        trip['id'] as int,
+        {
+          'reason': reasonController.text.trim().isEmpty
+              ? null
+              : reasonController.text.trim(),
+          'transfer_to_tank_id': tankId,
+          'transfer_quantity': double.tryParse(quantityController.text.trim()),
+        },
+      );
+    }, successMessage: 'Tanker trip settled.');
   }
 
   Future<void> _showUserDialog({
@@ -3605,6 +4540,7 @@ class _StationAdminBundle {
     required this.stationModules,
     required this.roles,
     required this.users,
+    required this.customers,
     required this.employeeProfiles,
     required this.fuelTypes,
     required this.tanks,
@@ -3625,6 +4561,7 @@ class _StationAdminBundle {
   final List<Map<String, dynamic>> stationModules;
   final List<Map<String, dynamic>> roles;
   final List<Map<String, dynamic>> users;
+  final List<Map<String, dynamic>> customers;
   final List<Map<String, dynamic>> employeeProfiles;
   final List<Map<String, dynamic>> fuelTypes;
   final List<Map<String, dynamic>> tanks;

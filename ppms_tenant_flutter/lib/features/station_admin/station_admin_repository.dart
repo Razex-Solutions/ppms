@@ -94,6 +94,21 @@ class StationAdminRepository {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> listCustomers({
+    required int stationId,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/customers/',
+      queryParameters: {
+        'station_id': stationId,
+        'limit': 200,
+      },
+    );
+    return (response.data ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> createUser(Map<String, dynamic> payload) async {
     final response =
         await _dio.post<Map<String, dynamic>>('/users/', data: payload);
@@ -423,6 +438,59 @@ class StationAdminRepository {
   Future<Map<String, dynamic>> createTanker(Map<String, dynamic> payload) async {
     final response =
         await _dio.post<Map<String, dynamic>>('/tankers/', data: payload);
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> createTankerTrip(
+    Map<String, dynamic> payload,
+  ) async {
+    final response =
+        await _dio.post<Map<String, dynamic>>('/tankers/trips', data: payload);
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> addTankerTripDelivery(
+    int tripId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/tankers/trips/$tripId/deliveries',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> addTankerTripPayment(
+    int tripId,
+    int deliveryId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/tankers/trips/$tripId/deliveries/$deliveryId/payments',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> addTankerTripExpense(
+    int tripId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/tankers/trips/$tripId/expenses',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> completeTankerTrip(
+    int tripId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/tankers/trips/$tripId/complete',
+      data: payload,
+    );
     return response.data ?? <String, dynamic>{};
   }
 
