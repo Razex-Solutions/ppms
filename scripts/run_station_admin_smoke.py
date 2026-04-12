@@ -465,6 +465,7 @@ def smoke_tanker_flow(ctx: SmokeContext, suffix: str) -> None:
     supplier = first(suppliers, lambda item: str(item.get("code")) == "SUP-PSO")
     tank = first(tanks, lambda item: str(item.get("code")) == "HQ-T1")
     customer = first(customers, lambda item: str(item.get("code")) == "TANKER-CUST")
+    load_fuel_type_id = int(tank["fuel_type_id"])
     compartments = ctx.client.get(f"/tankers/{tanker['id']}/compartments")
     compartment = compartments[0]
 
@@ -474,14 +475,14 @@ def smoke_tanker_flow(ctx: SmokeContext, suffix: str) -> None:
             "tanker_id": tanker["id"],
             "station_id": ctx.station_id,
             "supplier_id": supplier["id"],
-            "fuel_type_id": tanker["fuel_type_id"],
+            "fuel_type_id": load_fuel_type_id,
             "trip_type": "mixed_delivery",
             "destination_name": f"Smoke Route {suffix}",
             "notes": f"station admin smoke {suffix}",
             "compartment_loads": [
                 {
                     "compartment_id": compartment["id"],
-                    "fuel_type_id": tanker["fuel_type_id"],
+                    "fuel_type_id": load_fuel_type_id,
                     "loaded_quantity": 10,
                     "purchase_rate": 100,
                 }
@@ -495,7 +496,7 @@ def smoke_tanker_flow(ctx: SmokeContext, suffix: str) -> None:
         f"/tankers/trips/{trip_id}/deliveries",
         {
             "customer_id": customer["id"],
-            "fuel_type_id": tanker["fuel_type_id"],
+            "fuel_type_id": load_fuel_type_id,
             "compartment_load_id": load_id,
             "destination_name": f"Smoke Pump {suffix}",
             "quantity": 4,

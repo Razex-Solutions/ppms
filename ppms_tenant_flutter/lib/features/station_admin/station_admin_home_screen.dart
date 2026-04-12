@@ -2079,6 +2079,8 @@ class _StationAdminHomeScreenState
   }) async {
     int? tankerId =
         bundle.tankers.isNotEmpty ? bundle.tankers.first['id'] as int : null;
+    int? fuelTypeId =
+        bundle.fuelTypes.isNotEmpty ? bundle.fuelTypes.first['id'] as int : null;
     String tripType = 'supplier_to_customer';
     int? supplierId =
         bundle.suppliers.isNotEmpty ? bundle.suppliers.first['id'] as int : null;
@@ -2135,6 +2137,25 @@ class _StationAdminHomeScreenState
                     onChanged: (value) =>
                         setLocalState(() => tripType = value ?? tripType),
                     decoration: const InputDecoration(labelText: 'Trip type'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: bundle.fuelTypes.any(
+                      (item) => item['id'] == fuelTypeId,
+                    )
+                        ? fuelTypeId
+                        : null,
+                    items: bundle.fuelTypes
+                        .map(
+                          (item) => DropdownMenuItem<int?>(
+                            value: item['id'] as int,
+                            child: Text(item['name']?.toString() ?? '-'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setLocalState(() => fuelTypeId = value),
+                    decoration: const InputDecoration(labelText: 'Load fuel type'),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int?>(
@@ -2236,10 +2257,6 @@ class _StationAdminHomeScreenState
     );
     if (confirmed != true) return;
 
-    final selectedTanker = bundle.tankers.firstWhere(
-      (item) => item['id'] == tankerId,
-      orElse: () => const <String, dynamic>{},
-    );
     await _performAction(() async {
       await ref.read(stationAdminRepositoryProvider).createTankerTrip({
         'tanker_id': tankerId,
@@ -2253,7 +2270,7 @@ class _StationAdminHomeScreenState
         'notes': notesController.text.trim().isEmpty
             ? null
             : notesController.text.trim(),
-        'fuel_type_id': selectedTanker['fuel_type_id'],
+        'fuel_type_id': fuelTypeId,
         'loaded_quantity': double.tryParse(quantityController.text.trim()) ?? 0,
         'purchase_rate': double.tryParse(rateController.text.trim()) ?? 0,
         'driver_assignments': driverUserId == null
@@ -4233,8 +4250,6 @@ class _StationAdminHomeScreenState
     final nameController = TextEditingController();
     final capacityController = TextEditingController();
     final ownerNameController = TextEditingController();
-    int? fuelTypeId =
-        fuelTypes.isNotEmpty ? fuelTypes.first['id'] as int : null;
     String ownershipType = 'owned';
     final compartmentCodeControllers = <TextEditingController>[
       TextEditingController(text: 'C1'),
@@ -4276,13 +4291,6 @@ class _StationAdminHomeScreenState
                   ),
                   const SizedBox(height: 12),
                   TextField(controller: ownerNameController, decoration: InputDecoration(labelText: context.l10n.text('ownerNameLabel'))),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: fuelTypeId,
-                    items: fuelTypes.map((item) => DropdownMenuItem<int>(value: item['id'] as int, child: Text(item['name']?.toString() ?? '-'))).toList(),
-                    onChanged: (value) => setLocalState(() => fuelTypeId = value),
-                    decoration: InputDecoration(labelText: context.l10n.text('fuelType')),
-                  ),
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -4342,7 +4350,7 @@ class _StationAdminHomeScreenState
         ),
       ),
     );
-    if (confirmed != true || fuelTypeId == null) return;
+    if (confirmed != true) return;
 
     final compartments = <Map<String, dynamic>>[];
     for (var i = 0; i < compartmentCodeControllers.length; i++) {
@@ -4367,7 +4375,6 @@ class _StationAdminHomeScreenState
             : ownerNameController.text.trim(),
         'status': 'active',
         'station_id': stationId,
-        'fuel_type_id': fuelTypeId,
         'compartments': compartments,
       });
     }, successMessage: settingsSavedMessage);

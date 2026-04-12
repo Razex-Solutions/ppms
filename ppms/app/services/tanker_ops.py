@@ -105,8 +105,8 @@ def _recompute_trip_financials(trip: TankerTrip) -> None:
     distinct_fuel_type_ids = {item.fuel_type_id for item in trip.compartment_loads}
     if len(distinct_fuel_type_ids) == 1:
         trip.fuel_type_id = next(iter(distinct_fuel_type_ids))
-    elif trip.fuel_type_id is None and distinct_fuel_type_ids:
-        trip.fuel_type_id = sorted(distinct_fuel_type_ids)[0]
+    else:
+        trip.fuel_type_id = None
 
 
 def build_tanker_workspace_summary(

@@ -39,7 +39,7 @@ class TankerCreate(BaseModel):
     owner_name: str | None = None
     status: str = "active"
     station_id: int
-    fuel_type_id: int
+    fuel_type_id: int | None = None
     compartments: list[TankerCompartmentCreate] = []
 
 
