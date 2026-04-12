@@ -1,0 +1,12 @@
+{
+  "name": "ppms-playwright",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "playwright test",
+    "test:station-admin": "playwright test tests/station-admin-smoke.spec.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

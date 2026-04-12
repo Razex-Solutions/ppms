@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/config/app_environment.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../app/session/session_controller.dart';
 import '../accountant/accountant_home_screen.dart';
@@ -406,7 +407,19 @@ class _StationAdminHomeScreenState
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Text(context.l10n.text('loadFailed')),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(context.l10n.text('loadFailed')),
+                  if (AppEnvironment.enableE2E && snapshot.hasError) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      snapshot.error.toString(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
+              ),
             ),
           );
         }

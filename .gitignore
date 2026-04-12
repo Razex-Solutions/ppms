@@ -42,6 +42,11 @@ ppms_flutter/windows/runner/x64/
 
 # Node support console build output
 support_console/node_modules/
+playwright/node_modules/
+playwright/playwright-report/
+playwright/test-results/
+logs/
+scripts/station_admin_smoke_last.json
 support_console/.next/
 support_console/out/
 support_console/.env*.local
