@@ -1,6 +1,6 @@
 # StationAdmin Current Test Data
 
-This file reflects the current local database state prepared for StationAdmin testing on `2026-04-12`.
+This file reflects the current local database state prepared for StationAdmin testing on `2026-04-15`.
 
 ## Login
 
@@ -44,7 +44,7 @@ This file reflects the current local database state prepared for StationAdmin te
 
 | Fuel type ID | Name | Current station selling price | Latest reason |
 | --- | --- | ---: | --- |
-| `1` | Petrol | `100` | `price change` |
+| `1` | Petrol | `1` | `Playwright UI smoke price update 289289` |
 | `2` | Diesel | `300` | `ch` |
 | `3` | High Octane | no station price yet | none |
 
@@ -54,7 +54,7 @@ This file reflects the current local database state prepared for StationAdmin te
 
 | Tank ID | Name | Code | Fuel | Capacity | Current volume | Active |
 | --- | --- | --- | --- | ---: | ---: | --- |
-| `1` | Petrol Tank 1 | `HQ-T1` | Petrol | `20000` | `11570` | Yes |
+| `1` | Petrol Tank 1 | `HQ-T1` | Petrol | `20000` | `11588` | Yes |
 | `2` | Diesel Tank 1 | `HQ-T2` | Diesel | `20000` | `14000` | Yes |
 | `8` | Tank 3 | `HQ-T3` | High Octane | `25000` | `0` | Yes |
 
@@ -74,6 +74,7 @@ This file reflects the current local database state prepared for StationAdmin te
 | `2` | `HQ-D1-N2` | Diesel | `HQ-T2` | `98110` | Yes |
 | `3` | `HQ-D2-N1` | Petrol | `HQ-T1` | `110640` | Yes |
 | `4` | `HQ-D2-N2` | Diesel | `HQ-T2` | `87725` | Yes |
+| `13` | `D7-N1` | High Octane | `HQ-T3` | `0` | Yes |
 | `14` | `D7-N2` | High Octane | `HQ-T3` | `50000` | Yes |
 
 ## Current Suppliers
@@ -91,13 +92,16 @@ This file reflects the current local database state prepared for StationAdmin te
 | --- | --- | ---: | ---: | ---: | --- |
 | Lubricant 20W50 1L | Lubricants | `0` | `1800` | `24` | Yes |
 | 2T Oil 500ml | Lubricants | `0` | `650` | `40` | Yes |
+| UI Lube 766154 | Lubricant | `950` | `1250` | `12` | Yes |
+| UI Lube 919299 | Lubricant | `950` | `1250` | `12` | Yes |
+| UI Lube 835016 | Lubricant | `0` | `1250` | `0` | Yes |
 
 ## Current Customers
 
 | Customer | Code | Credit limit | Outstanding | Tanker outstanding |
 | --- | --- | ---: | ---: | ---: |
 | Smoke Customer | `F-SMOKE-CUST` | `9000` | `700` | `0` |
-| Tanker Customer | `TANKER-CUST` | `0` | `0` | `480000` |
+| Tanker Customer | `TANKER-CUST` | `0` | `0` | `482400` |
 | Pump A | `CUST-PUMP-A` | `500000` | `85450` | `0` |
 | Pump B | `CUST-PUMP-B` | `350000` | `93000` | `0` |
 
@@ -106,6 +110,7 @@ This file reflects the current local database state prepared for StationAdmin te
 - Business name: `Main Station`
 - Legal name: `Main Station`
 - Invoice prefix: `HQ`
+- Sale invoice notes: empty
 
 ## Current Document Templates For Station 3
 
@@ -121,9 +126,16 @@ Expected active templates:
 
 | Event ID | Nozzle ID | Old reading | New reading | Reason |
 | --- | --- | ---: | ---: | --- |
+| `11` | `1` | `125121` | `125120` | `station admin smoke restore 1776024041` |
+| `10` | `1` | `125120` | `125121` | `station admin smoke 1776024041` |
+| `9` | `1` | `125121` | `125120` | `station admin smoke restore 1776018134` |
+| `8` | `1` | `125120` | `125121` | `station admin smoke 1776018134` |
+| `7` | `1` | `125121` | `125120` | `station admin smoke restore 1776017724` |
+| `6` | `1` | `125120` | `125121` | `station admin smoke 1776017724` |
+| `5` | `1` | `125121` | `125120` | `station admin smoke restore 1776017703` |
+| `4` | `1` | `125120` | `125121` | `station admin smoke 1776017703` |
 | `3` | `14` | `35000` | `50000` | `change` |
 | `2` | `14` | `0` | `35000` | `chnage` |
-| `1` | `1` | `125120` | `125120` | `smoke adjustment visibility` |
 
 ## Current Tanker Data
 
@@ -135,12 +147,15 @@ Expected active templates:
 | `2` | Fleet Tanker 2 | `TK-9002` | owned | `10000` | active |
 | `3` | Smoke tanker | `SMOKE-TKR-1775717460` | owned | `2000` | active |
 | `4` | Smoke tanker | `SMOKE-TKR-1775717495` | owned | `2000` | active |
-| `5` | empty-name tanker | `THE-123` | owned | `50000` | active |
+| `5` | empty name | `THE-123` | owned | `50000` | active |
 
 ### Trips
 
 | Trip ID | Tanker | Type | Status | Settlement | Loaded | Delivered | Remaining | Net profit |
 | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| `6` | `1` | mixed_delivery | partially_settled | partial | `10` | `4` | `0` | `590` |
+| `5` | `1` | mixed_delivery | partially_settled | partial | `10` | `4` | `0` | `590` |
+| `4` | `1` | mixed_delivery | partially_settled | partial | `10` | `4` | `0` | `590` |
 | `3` | `4` | supplier_to_station | active | paid | `300` | `0` | `180` | `0` |
 | `2` | `3` | supplier_to_station | active | paid | `300` | `0` | `0` | `0` |
 | `1` | `2` | mixed_delivery | partially_settled | partial | `4000` | `3000` | `0` | `30000` |
@@ -149,13 +164,35 @@ Expected active templates:
 
 | Delivery ID | Trip | Customer | Destination | Quantity | Fuel rate | Sale type | Paid | Outstanding |
 | --- | --- | --- | --- | ---: | ---: | --- | ---: | ---: |
+| `4` | `6` | Tanker Customer | `Smoke Pump 1776024041` | `4` | `260` | credit | `240` | `800` |
+| `3` | `5` | Tanker Customer | `Smoke Pump 1776018134` | `4` | `260` | credit | `240` | `800` |
+| `2` | `4` | Tanker Customer | `Smoke Pump 1776017724` | `4` | `260` | credit | `240` | `800` |
 | `1` | `1` | Tanker Customer | `Pump Route` | `3000` | `260` | credit | `300000` | `480000` |
 
 ### Later Payments
 
 | Payment ID | Delivery | Amount | Reference |
 | --- | --- | ---: | --- |
+| `4` | `4` | `240` | `SA-SMOKE-1776024041` |
+| `3` | `3` | `240` | `SA-SMOKE-1776018134` |
+| `2` | `2` | `240` | `SA-SMOKE-1776017724` |
 | `1` | `1` | `100000` | `REC-1` |
+
+### Compartments
+
+| Compartment ID | Tanker | Name | Capacity |
+| --- | --- | --- | ---: |
+| `1` | `1` | Compartment 1 | `5000` |
+| `2` | `1` | Compartment 2 | `5000` |
+| `3` | `2` | Compartment 1 | `5000` |
+| `4` | `2` | Compartment 2 | `5000` |
+| `5` | `3` | Compartment 1 | `2000` |
+| `6` | `4` | Compartment 1 | `2000` |
+| `7` | `5` | Compartment 1 | `10000` |
+| `8` | `5` | Compartment 2 | `20000` |
+| `9` | `5` | Compartment 3 | `10000` |
+| `10` | `5` | Compartment 4 | `5000` |
+| `11` | `5` | Compartment 5 | `5000` |
 
 ## Recommended StationAdmin Test Sequence
 
@@ -216,19 +253,18 @@ Current forecourt counts:
 
 - tanks = `3`
 - dispensers = `3`
-- nozzles = `5`
+- nozzles = `6`
 
-Create one new high octane nozzle on existing dispenser if the UI allows:
+Safer check now:
 
-- choose `Dispenser 3`
-- fuel = `High Octane`
-- tank = `HQ-T3`
-- meter reading = `0`
+- verify both High Octane nozzles are present on `Dispenser 3`
+- `D7-N1` should be `0`
+- `D7-N2` should be `50000`
 
 Expected:
 
-- nozzle count becomes `6`
-- new nozzle appears under station forecourt
+- nozzle count stays `6`
+- both High Octane rows remain visible and correctly mapped to `HQ-T3`
 
 If you edit any existing tank or nozzle:
 
@@ -239,22 +275,22 @@ If you edit any existing tank or nozzle:
 
 Current starting values:
 
-- Petrol = `100`
+- Petrol = `1`
 - Diesel = `300`
 - High Octane = no station price
 
-Test change:
+Recommended safer change:
 
-- fuel type = `High Octane`
-- new selling price = `350`
+- fuel type = `Diesel`
+- new selling price = `301`
 - reason = `station admin test`
 - notes = `doc verification`
 
 Expected:
 
-- High Octane gets a current selling price of `350`
+- Diesel gets a current selling price of `301`
 - a new price history row appears at the top
-- manager rate-boundary logic will use this later when High Octane is sold in a live shift
+- manager rate-boundary logic will use this later for that fuel type in a live shift
 
 ### 5. Suppliers
 
@@ -280,6 +316,9 @@ Current items:
 
 - Lubricant 20W50 1L
 - 2T Oil 500ml
+- UI Lube 766154
+- UI Lube 919299
+- UI Lube 835016
 
 Create one new item:
 
@@ -325,29 +364,32 @@ Document templates:
 
 Current known test nozzle:
 
-- nozzle `D7-N2`
-- current meter = `50000`
+- nozzle `HQ-D1-N1`
+- current meter = `125120`
 
 Test adjustment:
 
-- nozzle = `D7-N2`
-- old/current meter reading = `50000`
-- new adjusted meter reading = `51000`
+- nozzle = `HQ-D1-N1`
+- old/current meter reading = `125120`
+- new adjusted meter reading = `125130`
 - reason = `station admin meter test`
 
 Expected:
 
-- nozzle live meter becomes `51000`
+- nozzle live meter becomes `125130`
 - a new meter adjustment event appears at the top of history
 - newest event should show:
-  - old = `50000`
-  - new = `51000`
+  - old = `125120`
+  - new = `125130`
   - reason = `station admin meter test`
 
 ### 9. Tanker operations
 
-Current tanker trip count in the screen should reflect:
+Current tanker trip count in the screen should reflect at least:
 
+- trip `6`
+- trip `5`
+- trip `4`
 - trip `3`
 - trip `2`
 - trip `1`
