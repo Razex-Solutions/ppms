@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../app/config/app_environment.dart';
 import '../../app/localization/app_localizations.dart';
 import '../../app/session/session_controller.dart';
+import '../../app/utils/file_download.dart';
 import '../accountant/accountant_home_screen.dart';
 import '../manager/manager_home_screen.dart';
 import 'station_admin_repository.dart';
@@ -1641,6 +1643,41 @@ class _StationAdminHomeScreenState
     }, successMessage: 'Report export created.');
   }
 
+  Future<void> _downloadReportExport(Map<String, dynamic> job) async {
+    final jobId = job['id'] as int?;
+    final fileName = job['file_name']?.toString() ?? 'report_export';
+    final contentType =
+        job['content_type']?.toString() ?? 'application/octet-stream';
+    if (jobId == null) return;
+    try {
+      final Uint8List bytes = await ref
+          .read(stationAdminRepositoryProvider)
+          .downloadReportExport(jobId);
+      final savedPath = await saveDownload(
+        fileName: fileName,
+        bytes: bytes,
+        contentType: contentType,
+      );
+      if (!mounted) return;
+      setState(() {
+        _actionMessage = savedPath == null
+            ? 'Export download started.'
+            : 'Export saved to $savedPath';
+        _actionError = null;
+      });
+    } on DioException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _actionError = error.response?.data is Map<String, dynamic>
+            ? (error.response?.data as Map<String, dynamic>)['detail']
+                    ?.toString() ??
+                'Download failed.'
+            : 'Download failed.';
+        _actionMessage = null;
+      });
+    }
+  }
+
   Widget _buildReportsSection(_StationAdminBundle bundle, int stationId) {
     final range = _resolveRange(_selectedRange);
     return FutureBuilder<List<dynamic>>(
@@ -1830,6 +1867,11 @@ class _StationAdminHomeScreenState
                           title: Text(job['file_name']?.toString() ?? '-'),
                           subtitle: Text(
                             '${job['status'] ?? '-'} • ${job['format'] ?? '-'} • ${_dateLabel(job['created_at']?.toString())}',
+                          ),
+                          trailing: TextButton.icon(
+                            onPressed: () => _downloadReportExport(job),
+                            icon: const Icon(Icons.download_for_offline_outlined),
+                            label: const Text('Download'),
                           ),
                         );
                       }).toList(),

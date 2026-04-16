@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:typed_data';
 
 import '../../app/session/session_controller.dart';
 
@@ -650,6 +651,15 @@ class StationAdminRepository {
     return (response.data ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+  }
+
+  Future<Uint8List> downloadReportExport(int jobId) async {
+    final response = await _dio.get<List<int>>(
+      '/report-exports/$jobId/download',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final bytes = response.data ?? const <int>[];
+    return Uint8List.fromList(bytes);
   }
 
   Future<Map<String, dynamic>> getCustomerLedgerDocument(int customerId) async {
