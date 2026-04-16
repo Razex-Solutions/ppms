@@ -435,6 +435,11 @@ Expected:
 - trip count increases by `1`
 - new trip appears in tanker operations
 - trip starts open/active
+- use the `Trip operations` card for:
+  - `Add delivery`
+  - `Record payment`
+  - `Add expense`
+  - `Settle trip`
 
 Then add delivery only if you create a customer-facing trip.
 
@@ -462,6 +467,7 @@ Expected:
 
 - tanker delivery appears
 - tanker customer tanker outstanding increases by `52000`
+- the delivery should now appear under the selected trip inside `Trip operations`
 
 Then record payment:
 
@@ -471,6 +477,7 @@ Then record payment:
 Expected:
 
 - outstanding reduces by `20000`
+- the payment action should be used from the same trip’s `Trip operations` card
 
 Then add expense:
 
@@ -480,6 +487,7 @@ Then add expense:
 Expected:
 
 - trip expense list/value updates
+- the trip can then be settled from the same `Trip operations` card
 
 ### 10. Operations and Finance embedded pages
 

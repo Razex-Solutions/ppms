@@ -2634,6 +2634,8 @@ class _StationAdminHomeScreenState
                   }).toList(),
                 ),
         ),
+        const SizedBox(height: 16),
+        _buildTankerOperationsCard(bundle),
       ],
     );
   }
