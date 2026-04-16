@@ -335,7 +335,7 @@ Expected:
 - item count becomes `3`
 - row shows buying `900`
 - row shows selling `1200`
-- row shows stock `15`
+- row shows stock `15` #add more options in pos modules
 
 ### 7. Settings / branding / invoice / document templates
 
