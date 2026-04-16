@@ -337,7 +337,7 @@ Expected:
 - row shows selling `1200`
 - row shows stock `15` #add more options in pos modules
 
-### 7. Settings / branding / invoice / document templates
+### 7. Settings / branding / reports / documents / templates
 
 Current invoice profile baseline:
 
@@ -359,6 +359,33 @@ Document templates:
 
 - station 3 should already have `5` default templates
 - if you open and update one template name or active flag, that exact template row should update without affecting the others
+
+Reports:
+
+- open `Reports`
+- run `Daily closing`
+- then switch to `Customer balances`
+- then create one `CSV` export
+
+Expected:
+
+- report payload loads on screen, not an empty placeholder
+- `Rows` and preview content update when you change the selected report
+- one new export job appears under recent export jobs
+
+Documents:
+
+- open `Documents`
+- choose `Customer ledger statement`
+- choose `Pump A`
+- then switch to `Supplier ledger statement`
+- choose `PSO Supply`
+
+Expected:
+
+- a printable document preview loads for each selection
+- document number and recipient fields are populated
+- dispatch diagnostics section loads with live counts
 
 ### 8. Meter reversal / adjustment
 

@@ -577,6 +577,146 @@ class StationAdminRepository {
   Future<void> deletePosProduct(int productId) async {
     await _dio.delete('/pos-products/$productId');
   }
+
+  Future<Map<String, dynamic>> getReportCatalog() async {
+    final response = await _dio.get<Map<String, dynamic>>('/reports/catalog');
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> runReport({
+    required String reportKey,
+    required int stationId,
+    DateTime? reportDate,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
+    final endpoint = switch (reportKey) {
+      'daily_closing' => '/reports/daily-closing',
+      'shift_variance' => '/reports/shift-variance',
+      'stock_movement' => '/reports/stock-movement',
+      'customer_balances' => '/reports/customer-balances',
+      'supplier_balances' => '/reports/supplier-balances',
+      'staff_payroll_summary' => '/reports/staff-payroll-summary',
+      'exception_variance' => '/reports/exception-variance',
+      'tanker_profit' => '/reports/tanker-profit',
+      'tanker_deliveries' => '/reports/tanker-deliveries',
+      'tanker_expenses' => '/reports/tanker-expenses',
+      _ => throw ArgumentError('Unsupported report key: $reportKey'),
+    };
+    final response = await _dio.get<Map<String, dynamic>>(
+      endpoint,
+      queryParameters: _query({
+        'station_id': stationId,
+        'report_date': reportDate?.toIso8601String().split('T').first,
+        'from_date': fromDate?.toIso8601String().split('T').first,
+        'to_date': toDate?.toIso8601String().split('T').first,
+      }),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> createReportExport({
+    required String reportType,
+    required String format,
+    required int stationId,
+    DateTime? reportDate,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/report-exports/',
+      data: {
+        'report_type': reportType,
+        'format': format,
+        'station_id': stationId,
+        'report_date': reportDate?.toIso8601String().split('T').first,
+        'from_date': fromDate?.toIso8601String().split('T').first,
+        'to_date': toDate?.toIso8601String().split('T').first,
+      },
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> listReportExports({
+    String? reportType,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/report-exports/',
+      queryParameters: _query({
+        'report_type': reportType,
+        'limit': 50,
+      }),
+    );
+    return (response.data ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> getCustomerLedgerDocument(int customerId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/financial-documents/customer-ledgers/$customerId',
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> sendCustomerLedgerDocument(
+    int customerId,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/financial-documents/customer-ledgers/$customerId/send',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> getSupplierLedgerDocument({
+    required int supplierId,
+    required int stationId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/financial-documents/supplier-ledgers/$supplierId',
+      queryParameters: {'station_id': stationId},
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> sendSupplierLedgerDocument({
+    required int supplierId,
+    required int stationId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/financial-documents/supplier-ledgers/$supplierId/send',
+      queryParameters: {'station_id': stationId},
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> listDocumentDispatches({
+    String? status,
+    String? channel,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/financial-documents/dispatches',
+      queryParameters: _query({
+        'status': status,
+        'channel': channel,
+        'limit': 50,
+      }),
+    );
+    return (response.data ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> getDocumentDispatchDiagnostics() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/financial-documents/dispatches/diagnostics',
+    );
+    return response.data ?? <String, dynamic>{};
+  }
 }
 
 final stationAdminRepositoryProvider = Provider<StationAdminRepository>((ref) {

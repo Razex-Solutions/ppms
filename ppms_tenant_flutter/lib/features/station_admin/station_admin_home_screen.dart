@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +22,8 @@ enum StationAdminSection {
   pricing,
   suppliers,
   inventory,
+  reports,
+  documents,
   settings,
   meter,
   tanker,
@@ -51,6 +55,10 @@ class StationAdminHomeScreen extends ConsumerStatefulWidget {
         return StationAdminSection.suppliers;
       case 'inventory':
         return StationAdminSection.inventory;
+      case 'reports':
+        return StationAdminSection.reports;
+      case 'documents':
+        return StationAdminSection.documents;
       case 'settings':
         return StationAdminSection.settings;
       case 'meter':
@@ -78,6 +86,12 @@ class _StationAdminHomeScreenState
   int? _selectedNozzleId;
   String? _selectedTemplateType;
   int? _selectedPricingFuelTypeId;
+  String _selectedReportKey = 'daily_closing';
+  String _selectedDocumentKind = 'customer_ledger';
+  int? _selectedCustomerId;
+  int? _selectedSupplierId;
+  int _reportsRefreshTick = 0;
+  int _documentsRefreshTick = 0;
   String? _actionMessage;
   String? _actionError;
 
@@ -158,6 +172,10 @@ class _StationAdminHomeScreenState
     _selectedPricingFuelTypeId ??= bundle.fuelTypes.isNotEmpty
         ? bundle.fuelTypes.first['id'] as int
         : null;
+    _selectedCustomerId ??=
+        bundle.customers.isNotEmpty ? bundle.customers.first['id'] as int : null;
+    _selectedSupplierId ??=
+        bundle.suppliers.isNotEmpty ? bundle.suppliers.first['id'] as int : null;
     _selectedTemplateType ??= bundle.documentTemplates.isNotEmpty
         ? bundle.documentTemplates.first['document_type'] as String?
         : null;
@@ -300,6 +318,10 @@ class _StationAdminHomeScreenState
         return 'Suppliers';
       case StationAdminSection.inventory:
         return 'Inventory pricing';
+      case StationAdminSection.reports:
+        return 'Reports';
+      case StationAdminSection.documents:
+        return 'Documents';
       case StationAdminSection.settings:
         return context.l10n.text('settingsLabel');
       case StationAdminSection.meter:
@@ -327,6 +349,10 @@ class _StationAdminHomeScreenState
         return 'suppliers';
       case StationAdminSection.inventory:
         return 'inventory';
+      case StationAdminSection.reports:
+        return 'reports';
+      case StationAdminSection.documents:
+        return 'documents';
       case StationAdminSection.settings:
         return 'settings';
       case StationAdminSection.meter:
@@ -354,6 +380,10 @@ class _StationAdminHomeScreenState
         return 'Manage supplier master records and review recent purchase cost context by supplier and fuel.';
       case StationAdminSection.inventory:
         return 'Manage lubricant and other shop item selling prices, stock, and inventory behavior.';
+      case StationAdminSection.reports:
+        return 'Run station reports, check live report output, and create CSV or PDF export jobs.';
+      case StationAdminSection.documents:
+        return 'Preview printable statements and vouchers, and verify document dispatch activity for the station.';
       case StationAdminSection.settings:
         return 'Update branding, modules, invoice settings, and document templates.';
       case StationAdminSection.meter:
@@ -609,6 +639,10 @@ class _StationAdminHomeScreenState
         return _buildSuppliersSection(bundle);
       case StationAdminSection.inventory:
         return _buildInventorySection(bundle, stationId);
+      case StationAdminSection.reports:
+        return _buildReportsSection(bundle, stationId);
+      case StationAdminSection.documents:
+        return _buildDocumentsSection(bundle, stationId);
       case StationAdminSection.settings:
         return _buildSettingsSection(bundle, stationId);
       case StationAdminSection.meter:
@@ -725,6 +759,16 @@ class _StationAdminHomeScreenState
                 label: Text(
                   'Tanker ${tanker['in_progress_trip_count'] ?? 0} active trips',
                 ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _openSection(StationAdminSection.reports),
+                icon: const Icon(Icons.assessment_outlined),
+                label: const Text('Open reports'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _openSection(StationAdminSection.documents),
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('Open documents'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => context.go('/workspace/manager'),
@@ -1546,6 +1590,579 @@ class _StationAdminHomeScreenState
                 ),
         ),
       ],
+    );
+  }
+
+  String _reportDisplayName(String key) {
+    switch (key) {
+      case 'daily_closing':
+        return 'Daily closing';
+      case 'shift_variance':
+        return 'Shift variance';
+      case 'stock_movement':
+        return 'Stock movement';
+      case 'customer_balances':
+        return 'Customer balances';
+      case 'supplier_balances':
+        return 'Supplier balances';
+      case 'staff_payroll_summary':
+        return 'Staff payroll summary';
+      case 'exception_variance':
+        return 'Exception variance';
+      case 'tanker_profit':
+        return 'Tanker profit';
+      case 'tanker_deliveries':
+        return 'Tanker deliveries';
+      case 'tanker_expenses':
+        return 'Tanker expenses';
+      default:
+        return key;
+    }
+  }
+
+  Future<void> _createReportExport({
+    required int stationId,
+    required String format,
+  }) async {
+    final range = _resolveRange(_selectedRange);
+    await _performAction(() async {
+      await ref.read(stationAdminRepositoryProvider).createReportExport(
+            reportType: _selectedReportKey,
+            format: format,
+            stationId: stationId,
+            reportDate:
+                _selectedReportKey == 'daily_closing' ? range.start : null,
+            fromDate:
+                _selectedReportKey == 'daily_closing' ? null : range.start,
+            toDate: _selectedReportKey == 'daily_closing' ? null : range.end,
+          );
+      if (!mounted) return;
+      setState(() => _reportsRefreshTick++);
+    }, successMessage: 'Report export created.');
+  }
+
+  Widget _buildReportsSection(_StationAdminBundle bundle, int stationId) {
+    final range = _resolveRange(_selectedRange);
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait<dynamic>([
+        ref.read(stationAdminRepositoryProvider).getReportCatalog(),
+        ref.read(stationAdminRepositoryProvider).runReport(
+              reportKey: _selectedReportKey,
+              stationId: stationId,
+              reportDate:
+                  _selectedReportKey == 'daily_closing' ? range.start : null,
+              fromDate:
+                  _selectedReportKey == 'daily_closing' ? null : range.start,
+              toDate: _selectedReportKey == 'daily_closing' ? null : range.end,
+            ),
+        ref.read(stationAdminRepositoryProvider).listReportExports(
+              reportType: _reportsRefreshTick >= 0 ? _selectedReportKey : null,
+            ),
+      ]),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final data = snapshot.data ?? const <dynamic>[];
+        final catalog =
+            data.isNotEmpty ? Map<String, dynamic>.from(data[0] as Map) : const <String, dynamic>{};
+        final report =
+            data.length > 1 ? Map<String, dynamic>.from(data[1] as Map) : const <String, dynamic>{};
+        final exportJobs = data.length > 2
+            ? (data[2] as List<dynamic>)
+                .map((item) => Map<String, dynamic>.from(item as Map))
+                .toList()
+            : const <Map<String, dynamic>>[];
+        final reports = (catalog['reports'] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+        final reportItems = (report['items'] as List<dynamic>? ?? const [])
+            .map((item) => item is Map
+                ? Map<String, dynamic>.from(item)
+                : <String, dynamic>{'value': item})
+            .toList();
+        final reportJson =
+            const JsonEncoder.withIndent('  ').convert(report.isEmpty ? <String, dynamic>{} : report);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionCard(
+              title: 'Operational and finance reports',
+              action: Wrap(
+                spacing: 8,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: () => _createReportExport(
+                      stationId: stationId,
+                      format: 'csv',
+                    ),
+                    icon: const Icon(Icons.table_chart_outlined),
+                    label: const Text('Export CSV'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _createReportExport(
+                      stationId: stationId,
+                      format: 'pdf',
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: const Text('Export PDF'),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: reports.any(
+                      (item) => item['key'] == _selectedReportKey,
+                    )
+                        ? _selectedReportKey
+                        : null,
+                    items: reports
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: item['key']?.toString(),
+                            child: Text(
+                              '${_reportDisplayName(item['key']?.toString() ?? '')} • ${item['family'] ?? '-'}',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _selectedReportKey = value);
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Report',
+                      helperText:
+                          'Run the current station report and verify the live output before exporting.',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      _MetricCard(
+                        title: 'Range',
+                        value: _rangeLabel(_selectedRange),
+                        subtitle: _selectedReportKey == 'daily_closing'
+                            ? _dateLabel(range.start.toIso8601String())
+                            : '${_dateLabel(range.start.toIso8601String())} to ${_dateLabel(range.end.toIso8601String())}',
+                      ),
+                      _MetricCard(
+                        title: 'Rows',
+                        value: '${report['count'] ?? reportItems.length}',
+                        subtitle: _reportDisplayName(_selectedReportKey),
+                      ),
+                      _MetricCard(
+                        title: 'Latest export jobs',
+                        value: '${exportJobs.length}',
+                        subtitle: 'For this report type',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _SectionCard(
+              title: 'Report preview',
+              child: report.isEmpty
+                  ? const Text('No report payload returned for this selection.')
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (reportItems.isNotEmpty) ...[
+                          Text(
+                            'First rows',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          ...reportItems.take(5).map((item) {
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.analytics_outlined),
+                              title: Text(item['name']?.toString() ?? item['title']?.toString() ?? item['code']?.toString() ?? item['customer_name']?.toString() ?? item['supplier_name']?.toString() ?? item['trip_id']?.toString() ?? 'Report row'),
+                              subtitle: Text(
+                                item.entries
+                                    .take(4)
+                                    .map((entry) => '${entry.key}: ${entry.value}')
+                                    .join(' • '),
+                              ),
+                            );
+                          }),
+                          const Divider(height: 24),
+                        ],
+                        Text(
+                          'Full payload',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: SelectableText(
+                            reportJson,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontFamily: 'monospace',
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 16),
+            _SectionCard(
+              title: 'Recent export jobs',
+              child: exportJobs.isEmpty
+                  ? const Text('No export jobs created yet for this report.')
+                  : Column(
+                      children: exportJobs.map((job) {
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.download_outlined),
+                          title: Text(job['file_name']?.toString() ?? '-'),
+                          subtitle: Text(
+                            '${job['status'] ?? '-'} • ${job['format'] ?? '-'} • ${_dateLabel(job['created_at']?.toString())}',
+                          ),
+                        );
+                      }).toList(),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _sendDocument({
+    required int stationId,
+    required bool isCustomer,
+    required int entityId,
+  }) async {
+    final channelController = TextEditingController(text: 'email');
+    final recipientNameController = TextEditingController();
+    final recipientContactController = TextEditingController();
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Send document'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: channelController,
+                decoration: const InputDecoration(
+                  labelText: 'Channel',
+                  helperText: 'Use email, whatsapp, sms, or print_queue.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: recipientNameController,
+                decoration: const InputDecoration(labelText: 'Recipient name'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: recipientContactController,
+                decoration:
+                    const InputDecoration(labelText: 'Recipient contact'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.text('cancelLabel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.l10n.text('saveLabel')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _performAction(() async {
+      final payload = {
+        'channel': channelController.text.trim(),
+        'format': 'pdf',
+        'recipient_name': recipientNameController.text.trim().isEmpty
+            ? null
+            : recipientNameController.text.trim(),
+        'recipient_contact': recipientContactController.text.trim().isEmpty
+            ? null
+            : recipientContactController.text.trim(),
+      };
+      final repo = ref.read(stationAdminRepositoryProvider);
+      if (isCustomer) {
+        await repo.sendCustomerLedgerDocument(entityId, payload);
+      } else {
+        await repo.sendSupplierLedgerDocument(
+          supplierId: entityId,
+          stationId: stationId,
+          payload: payload,
+        );
+      }
+      if (!mounted) return;
+      setState(() => _documentsRefreshTick++);
+    }, successMessage: 'Document dispatch queued.');
+  }
+
+  Widget _buildDocumentsSection(_StationAdminBundle bundle, int stationId) {
+    final isCustomerDocument = _selectedDocumentKind == 'customer_ledger';
+    final selectedCustomer = bundle.customers.firstWhere(
+      (item) => item['id'] == _selectedCustomerId,
+      orElse: () => const <String, dynamic>{},
+    );
+    final selectedSupplier = bundle.suppliers.firstWhere(
+      (item) => item['id'] == _selectedSupplierId,
+      orElse: () => const <String, dynamic>{},
+    );
+
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait<dynamic>([
+        if (isCustomerDocument && _selectedCustomerId != null)
+          ref
+              .read(stationAdminRepositoryProvider)
+              .getCustomerLedgerDocument(_selectedCustomerId!)
+        else if (!isCustomerDocument && _selectedSupplierId != null)
+          ref.read(stationAdminRepositoryProvider).getSupplierLedgerDocument(
+                supplierId: _selectedSupplierId!,
+                stationId: stationId,
+              )
+        else
+          Future.value(const <String, dynamic>{}),
+        ref.read(stationAdminRepositoryProvider).listDocumentDispatches(),
+        ref
+            .read(stationAdminRepositoryProvider)
+            .getDocumentDispatchDiagnostics(),
+      ]),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final data = snapshot.data ?? const <dynamic>[];
+        final document =
+            data.isNotEmpty ? Map<String, dynamic>.from(data[0] as Map) : const <String, dynamic>{};
+        final dispatches = data.length > 1
+            ? (data[1] as List<dynamic>)
+                .map((item) => Map<String, dynamic>.from(item as Map))
+                .toList()
+            : const <Map<String, dynamic>>[];
+        final diagnostics =
+            data.length > 2 ? Map<String, dynamic>.from(data[2] as Map) : const <String, dynamic>{};
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionCard(
+              title: 'Printable station documents',
+              action: FilledButton.tonalIcon(
+                onPressed: (isCustomerDocument && _selectedCustomerId != null) ||
+                        (!isCustomerDocument && _selectedSupplierId != null)
+                    ? () => _sendDocument(
+                          stationId: stationId,
+                          isCustomer: isCustomerDocument,
+                          entityId: isCustomerDocument
+                              ? _selectedCustomerId!
+                              : _selectedSupplierId!,
+                        )
+                    : null,
+                icon: const Icon(Icons.send_outlined),
+                label: const Text('Send / dispatch'),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedDocumentKind,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'customer_ledger',
+                        child: Text('Customer ledger statement'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'supplier_ledger',
+                        child: Text('Supplier ledger statement'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _selectedDocumentKind = value);
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Document type',
+                      helperText:
+                          'Use this page to preview printable statements and verify dispatch flow.',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (isCustomerDocument)
+                    DropdownButtonFormField<int>(
+                      initialValue: bundle.customers.any(
+                        (item) => item['id'] == _selectedCustomerId,
+                      )
+                          ? _selectedCustomerId
+                          : null,
+                      items: bundle.customers
+                          .map(
+                            (item) => DropdownMenuItem<int>(
+                              value: item['id'] as int,
+                              child: Text(
+                                '${item['name']} • Outstanding ${_money(item['outstanding_balance'] as num?)}',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _selectedCustomerId = value);
+                      },
+                      decoration: const InputDecoration(labelText: 'Customer'),
+                    )
+                  else
+                    DropdownButtonFormField<int>(
+                      initialValue: bundle.suppliers.any(
+                        (item) => item['id'] == _selectedSupplierId,
+                      )
+                          ? _selectedSupplierId
+                          : null,
+                      items: bundle.suppliers
+                          .map(
+                            (item) => DropdownMenuItem<int>(
+                              value: item['id'] as int,
+                              child: Text(
+                                '${item['name']} • Payable ${_money(item['payable_balance'] as num?)}',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _selectedSupplierId = value);
+                      },
+                      decoration: const InputDecoration(labelText: 'Supplier'),
+                    ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      _MetricCard(
+                        title: 'Document number',
+                        value: document['document_number']?.toString() ?? '-',
+                        subtitle: document['document_type']?.toString() ?? '-',
+                      ),
+                      _MetricCard(
+                        title: 'Recipient',
+                        value: document['recipient_name']?.toString() ??
+                            (isCustomerDocument
+                                ? selectedCustomer['name']?.toString() ?? '-'
+                                : selectedSupplier['name']?.toString() ?? '-'),
+                        subtitle: document['recipient_contact']?.toString() ?? '-',
+                      ),
+                      _MetricCard(
+                        title: 'Dispatches',
+                        value: '${diagnostics['total'] ?? dispatches.length}',
+                        subtitle: 'Total station document dispatches',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _SectionCard(
+              title: 'Document preview',
+              child: document.isEmpty
+                  ? const Text('No printable document is available for the current selection.')
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          document['title']?.toString() ?? '-',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Generated ${_dateLabel(document['generated_at']?.toString())} • Total ${_money(document['total_amount'] as num?)} • Balance ${_money(document['balance'] as num?)}',
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: SelectableText(
+                            document['rendered_html']?.toString() ?? '',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 16),
+            _SectionCard(
+              title: 'Dispatch queue and diagnostics',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      _MetricCard(
+                        title: 'Dead letter',
+                        value: '${diagnostics['dead_letter'] ?? 0}',
+                        subtitle: 'Failed dispatches',
+                      ),
+                      _MetricCard(
+                        title: 'By status',
+                        value: '${(diagnostics['by_status'] as Map?)?.length ?? 0}',
+                        subtitle: 'Status buckets',
+                      ),
+                      _MetricCard(
+                        title: 'By channel',
+                        value: '${(diagnostics['by_channel'] as Map?)?.length ?? 0}',
+                        subtitle: 'Delivery channels',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (dispatches.isEmpty)
+                    const Text('No document dispatches recorded yet.')
+                  else
+                    ...dispatches.take(10).map((dispatch) {
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.local_printshop_outlined),
+                        title: Text(
+                          '${dispatch['document_type'] ?? '-'} • ${dispatch['output_format'] ?? '-'}',
+                        ),
+                        subtitle: Text(
+                          '${dispatch['status'] ?? '-'} • ${dispatch['channel'] ?? '-'} • ${dispatch['recipient_name'] ?? '-'}',
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
