@@ -1271,8 +1271,6 @@ class _StationAdminHomeScreenState
       (item) => item['id'] == _selectedPricingFuelTypeId,
       orElse: () => const <String, dynamic>{},
     );
-    final currentPrice =
-        (selectedFuelType['price_per_liter'] as num?)?.toDouble();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _selectedPricingFuelTypeId == null
@@ -1283,6 +1281,9 @@ class _StationAdminHomeScreenState
               ),
       builder: (context, snapshot) {
         final history = snapshot.data ?? const <Map<String, dynamic>>[];
+        final currentPrice = history.isNotEmpty
+            ? (history.first['price'] as num?)?.toDouble()
+            : (selectedFuelType['price_per_liter'] as num?)?.toDouble();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4118,6 +4119,12 @@ class _StationAdminHomeScreenState
     required int stationId,
     Map<String, dynamic>? product,
   }) async {
+    const moduleOptions = <String, String>{
+      'service_station': 'Service station',
+      'mart': 'Mart / shop',
+      'tyre_shop': 'Tyre shop',
+      'other': 'Other',
+    };
     final nameController =
         TextEditingController(text: product?['name']?.toString() ?? '');
     final codeController =
@@ -4125,9 +4132,10 @@ class _StationAdminHomeScreenState
     final categoryController = TextEditingController(
       text: product?['category']?.toString() ?? 'Lubricant',
     );
-    final moduleController = TextEditingController(
-      text: product?['module']?.toString() ?? 'lubricant',
-    );
+    String moduleValue = product?['module']?.toString() ?? 'service_station';
+    if (!moduleOptions.containsKey(moduleValue)) {
+      moduleValue = 'service_station';
+    }
     final buyingPriceController = TextEditingController(
       text: ((product?['buying_price'] as num?)?.toDouble() ?? 0)
           .toStringAsFixed(2),
@@ -4170,11 +4178,24 @@ class _StationAdminHomeScreenState
                     decoration: const InputDecoration(labelText: 'Category'),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: moduleController,
+                  DropdownButtonFormField<String>(
+                    initialValue: moduleValue,
+                    items: moduleOptions.entries
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setLocalState(() => moduleValue = value);
+                    },
                     decoration: const InputDecoration(
                       labelText: 'Module',
-                      helperText: 'Use values like lubricant or shop.',
+                      helperText:
+                          'Choose the inventory area this item belongs to.',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -4237,7 +4258,7 @@ class _StationAdminHomeScreenState
         'name': nameController.text.trim(),
         'code': codeController.text.trim(),
         'category': categoryController.text.trim(),
-        'module': moduleController.text.trim(),
+        'module': moduleValue,
         'buying_price': double.tryParse(buyingPriceController.text.trim()) ?? 0,
         'price': double.tryParse(priceController.text.trim()) ?? 0,
         'stock_quantity': double.tryParse(stockController.text.trim()) ?? 0,

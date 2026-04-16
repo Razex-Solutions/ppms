@@ -324,7 +324,7 @@ Create one new item:
 
 - name = `Coolant 1L`
 - category = `Lubricants`
-- module = `lubricant`
+- module = `Service station`
 - buying price = `900`
 - selling price = `1200`
 - stock = `15`
