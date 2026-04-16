@@ -2,6 +2,7 @@ import csv
 import io
 import json
 from datetime import date
+import textwrap
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -124,31 +125,116 @@ def _render_csv(report_type: str, data: dict) -> str:
     return output.getvalue()
 
 
-def _render_pdf(report_type: str, data: dict) -> str:
-    lines = [f"{report_type.replace('_', ' ').title()}"]
-    for key, value in data.items():
-        if key == "items":
-            continue
-        lines.append(f"{key}: {value}")
-    items = data.get("items", [])
-    if items:
+def _humanize_key(key: str) -> str:
+    return key.replace("_", " ").strip().title()
+
+
+def _stringify_value(value) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=True)
+    return str(value)
+
+
+def _wrap_line(text: str, width: int = 90) -> list[str]:
+    if not text:
+        return [""]
+    return textwrap.wrap(
+        text,
+        width=width,
+        replace_whitespace=False,
+        drop_whitespace=False,
+        break_long_words=True,
+        break_on_hyphens=False,
+    ) or [text]
+
+
+def _build_report_lines(report_type: str, data: dict) -> list[str]:
+    lines = [report_type.replace("_", " ").title(), ""]
+
+    summary_items = [(key, value) for key, value in data.items() if key != "items"]
+    if summary_items:
+        lines.append("Summary")
+        lines.append("-" * 88)
+        for key, value in summary_items:
+            label = _humanize_key(str(key))
+            lines.extend(_wrap_line(f"{label}: {_stringify_value(value)}"))
         lines.append("")
-        lines.append("Items:")
-        for item in items:
-            lines.append(" | ".join(f"{k}={v}" for k, v in item.items()))
-    text_lines = []
-    for line in lines:
-        clean = str(line).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-        text_lines.append(f"({clean}) Tj")
-        text_lines.append("T*")
-    text_stream = "BT /F1 10 Tf 40 780 Td " + " ".join(text_lines) + " ET"
+
+    items = data.get("items", [])
+    lines.append("Items")
+    lines.append("-" * 88)
+    if not items:
+        lines.append("No rows")
+        return lines
+
+    for index, item in enumerate(items, start=1):
+        lines.append(f"Row {index}")
+        for key, value in item.items():
+            label = _humanize_key(str(key))
+            lines.extend(_wrap_line(f"  {label}: {_stringify_value(value)}"))
+        lines.append("")
+    return lines
+
+
+def _escape_pdf_text(text: str) -> str:
+    return (
+        text.replace("\\", "\\\\")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+    )
+
+
+def _render_pdf(report_type: str, data: dict) -> str:
+    lines = _build_report_lines(report_type, data)
+    max_lines_per_page = 48
+    pages = [
+        lines[index : index + max_lines_per_page]
+        for index in range(0, len(lines), max_lines_per_page)
+    ] or [[]]
+
     objects = [
         "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-        "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
-        "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj",
-        "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj",
-        f"5 0 obj << /Length {len(text_stream.encode('utf-8'))} >> stream\n{text_stream}\nendstream endobj",
     ]
+    page_object_ids: list[int] = []
+    next_object_id = 3
+
+    for page_lines in pages:
+        page_object_id = next_object_id
+        font_object_id = next_object_id + 1
+        content_object_id = next_object_id + 2
+        page_object_ids.append(page_object_id)
+
+        text_lines = ["BT /F1 10 Tf 40 780 Td 14 TL"]
+        for line in page_lines:
+            clean = _escape_pdf_text(line)
+            text_lines.append(f"({clean}) Tj")
+            text_lines.append("T*")
+        text_lines.append("ET")
+        text_stream = " ".join(text_lines)
+
+        objects.append(
+            f"{page_object_id} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            f"/Resources << /Font << /F1 {font_object_id} 0 R >> >> /Contents {content_object_id} 0 R >> endobj"
+        )
+        objects.append(
+            f"{font_object_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj"
+        )
+        objects.append(
+            f"{content_object_id} 0 obj << /Length {len(text_stream.encode('utf-8'))} >> stream\n"
+            f"{text_stream}\nendstream endobj"
+        )
+        next_object_id += 3
+
+    kids = " ".join(f"{page_id} 0 R" for page_id in page_object_ids)
+    objects.insert(
+        1,
+        f"2 0 obj << /Type /Pages /Kids [{kids}] /Count {len(page_object_ids)} >> endobj",
+    )
+
     pdf = "%PDF-1.4\n"
     offsets = []
     for obj in objects:
